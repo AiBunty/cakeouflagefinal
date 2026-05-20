@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 720" role="img" aria-labelledby="title">
+  <title id="title">Piping detail artwork</title>
+  <rect width="900" height="720" fill="#3a121b"/>
+  <circle cx="760" cy="110" r="130" fill="#ffffff" opacity="0.08"/>
+  <rect x="180" y="172" width="540" height="376" rx="34" fill="#fff0f4"/>
+  <path d="M220 278c42-42 84-42 126 0 42 42 84 42 126 0 42-42 84-42 126 0 42 42 84 42 126 0" fill="none" stroke="#f09db1" stroke-width="20" stroke-linecap="round"/>
+  <path d="M220 366c42-42 84-42 126 0 42 42 84 42 126 0 42-42 84-42 126 0 42 42 84 42 126 0" fill="none" stroke="#ffd4df" stroke-width="20" stroke-linecap="round"/>
+  <path d="M220 452c42-42 84-42 126 0 42 42 84 42 126 0 42-42 84-42 126 0 42 42 84 42 126 0" fill="none" stroke="#f4b5c4" stroke-width="20" stroke-linecap="round"/>
+</svg>

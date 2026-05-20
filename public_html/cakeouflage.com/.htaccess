@@ -1,0 +1,22 @@
+RewriteEngine On
+
+# Canonical host: redirect www to bare domain.
+RewriteCond %{HTTP_HOST} ^www\.cakeouflage\.com$ [NC]
+RewriteRule ^ https://cakeouflage.com%{REQUEST_URI} [R=301,L]
+
+# Canonical path: redirect legacy subfolder URLs to root paths.
+RewriteRule ^Cakeouflage-E-commerce/?$ / [R=301,L]
+RewriteRule ^Cakeouflage-E-commerce/(.*)$ /$1 [R=301,L]
+
+# Canonical path: normalize direct /index.php requests to home.
+RewriteCond %{THE_REQUEST} \s/+index\.php(?:[\s?]|$) [NC]
+RewriteRule ^index\.php$ / [R=301,L]
+
+# Force app routing for /shop to avoid host-level redirect loops.
+RewriteRule ^shop/?$ index.php [L,QSA]
+
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+RewriteRule ^ index.php [L,QSA]

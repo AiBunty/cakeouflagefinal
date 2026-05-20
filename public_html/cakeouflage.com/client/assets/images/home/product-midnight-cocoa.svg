@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" role="img" aria-labelledby="title">
+  <title id="title">Midnight cocoa product artwork</title>
+  <rect width="800" height="600" fill="#2f141b"/>
+  <ellipse cx="400" cy="440" rx="190" ry="42" fill="#16080c" opacity="0.3"/>
+  <rect x="250" y="270" width="300" height="135" rx="24" fill="#6b3a42"/>
+  <rect x="290" y="190" width="220" height="96" rx="20" fill="#8a5057"/>
+  <path d="M290 225c30-18 58-18 86 0 29 18 58 18 86 0 28-18 57-18 86 0" fill="none" stroke="#f5d0d7" stroke-width="10" stroke-linecap="round"/>
+</svg>

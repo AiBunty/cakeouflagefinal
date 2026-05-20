@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 720" role="img" aria-labelledby="title">
+  <title id="title">Kitchen prep artwork</title>
+  <rect width="900" height="720" fill="#f8f1ed"/>
+  <rect x="0" y="500" width="900" height="220" fill="#ecd9d0"/>
+  <rect x="110" y="180" width="290" height="260" rx="26" fill="#fffaf8"/>
+  <rect x="500" y="140" width="290" height="300" rx="26" fill="#fffaf8"/>
+  <circle cx="255" cy="308" r="74" fill="#ffd6c5"/>
+  <circle cx="645" cy="280" r="86" fill="#f8d8de"/>
+  <path d="M204 320c18-78 92-96 120-28 18 44-2 92-60 112-44-14-70-44-60-84z" fill="#fff5ef"/>
+  <rect x="300" y="555" width="300" height="26" rx="13" fill="#c89075"/>
+  <circle cx="390" cy="555" r="32" fill="#ffe9ef"/>
+  <circle cx="510" cy="555" r="32" fill="#fff4dc"/>
+</svg>

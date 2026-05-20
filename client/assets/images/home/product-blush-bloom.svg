@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" role="img" aria-labelledby="title">
+  <title id="title">Blush bloom product artwork</title>
+  <rect width="800" height="600" fill="#fff6f8"/>
+  <ellipse cx="400" cy="440" rx="190" ry="42" fill="#e5bcc7" opacity="0.45"/>
+  <rect x="250" y="270" width="300" height="135" rx="24" fill="#fffdfd"/>
+  <rect x="290" y="185" width="220" height="98" rx="20" fill="#ffe5ec"/>
+  <circle cx="332" cy="164" r="14" fill="#efb0c2"/>
+  <circle cx="400" cy="138" r="16" fill="#ffd36c"/>
+  <circle cx="468" cy="164" r="14" fill="#efb0c2"/>
+</svg>

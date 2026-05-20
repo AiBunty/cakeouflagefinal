@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 720" role="img" aria-labelledby="title">
+  <title id="title">Signature cake frame</title>
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fef7f9"/>
+      <stop offset="100%" stop-color="#f3c4d0"/>
+    </linearGradient>
+  </defs>
+  <rect width="720" height="720" fill="url(#bg)"/>
+  <circle cx="530" cy="160" r="120" fill="#ffffff" opacity="0.35"/>
+  <ellipse cx="360" cy="560" rx="180" ry="46" fill="#d8a9b8" opacity="0.35"/>
+  <rect x="210" y="352" width="300" height="154" rx="26" fill="#fffafc"/>
+  <rect x="250" y="250" width="220" height="122" rx="24" fill="#ffe5ec"/>
+  <path d="M250 290c35-32 70-32 105 0s70 32 105 0" fill="none" stroke="#f0a7b7" stroke-width="14" stroke-linecap="round"/>
+  <circle cx="300" cy="238" r="18" fill="#e29cb0"/>
+  <circle cx="360" cy="215" r="16" fill="#ffd36c"/>
+  <circle cx="420" cy="238" r="18" fill="#e29cb0"/>
+  <circle cx="270" cy="420" r="14" fill="#f5c5d0"/>
+  <circle cx="450" cy="448" r="14" fill="#f5c5d0"/>
+</svg>

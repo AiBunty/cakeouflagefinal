@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 960" role="img" aria-labelledby="title desc">
+  <title id="title">Cakeouflage hero poster</title>
+  <desc id="desc">Editorial placeholder artwork with cakes, desserts and soft premium styling.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2a1018"/>
+      <stop offset="45%" stop-color="#6b2038"/>
+      <stop offset="100%" stop-color="#f3d7de"/>
+    </linearGradient>
+    <linearGradient id="cake" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fff4f6"/>
+      <stop offset="100%" stop-color="#f6c8d3"/>
+    </linearGradient>
+  </defs>
+  <rect width="1600" height="960" fill="url(#bg)"/>
+  <circle cx="1320" cy="120" r="200" fill="#ffffff" opacity="0.08"/>
+  <circle cx="240" cy="760" r="180" fill="#f8d8de" opacity="0.15"/>
+  <ellipse cx="1040" cy="690" rx="330" ry="90" fill="#2a1018" opacity="0.18"/>
+  <rect x="880" y="470" width="330" height="180" rx="30" fill="url(#cake)"/>
+  <rect x="930" y="340" width="230" height="150" rx="28" fill="#ffe7ed"/>
+  <rect x="980" y="255" width="130" height="105" rx="24" fill="#fff7f9"/>
+  <circle cx="1045" cy="225" r="18" fill="#ffd372"/>
+  <circle cx="965" cy="410" r="18" fill="#f5aab9"/>
+  <circle cx="1122" cy="390" r="14" fill="#f5aab9"/>
+  <circle cx="1045" cy="530" r="22" fill="#ffd9e3"/>
+  <path d="M430 720c34-88 93-145 176-172 80-27 165-17 255 29-79 13-142 41-188 84-47 43-80 89-97 138-75-13-124-39-146-79z" fill="#fff0f4" opacity="0.95"/>
+  <circle cx="536" cy="565" r="48" fill="#fffafc"/>
+  <circle cx="620" cy="532" r="42" fill="#ffd7df"/>
+  <circle cx="701" cy="582" r="50" fill="#f7bdcb"/>
+  <circle cx="792" cy="545" r="42" fill="#fff3f6"/>
+  <path d="M365 770c65-12 126-10 185 8 58 18 108 48 150 91H285c20-42 47-75 80-99z" fill="#ffffff" opacity="0.12"/>
+</svg>

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 720" role="img" aria-labelledby="title">
+  <title id="title">Birthday cake collection</title>
+  <rect width="900" height="720" fill="#fff6f8"/>
+  <circle cx="710" cy="110" r="120" fill="#ffe2ea"/>
+  <ellipse cx="450" cy="545" rx="240" ry="55" fill="#e9bbc7" opacity="0.45"/>
+  <rect x="255" y="338" width="390" height="165" rx="26" fill="#fffdfd"/>
+  <rect x="300" y="230" width="300" height="130" rx="24" fill="#f8d0da"/>
+  <circle cx="375" cy="206" r="16" fill="#ffd36c"/>
+  <circle cx="450" cy="184" r="18" fill="#f4abbc"/>
+  <circle cx="525" cy="206" r="16" fill="#ffd36c"/>
+  <path d="M300 270c50-28 100-28 150 0s100 28 150 0" fill="none" stroke="#ffffff" stroke-width="16" stroke-linecap="round"/>
+</svg>

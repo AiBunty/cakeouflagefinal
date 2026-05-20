@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" role="img" aria-labelledby="title">
+  <title id="title">Party swirl cupcake box artwork</title>
+  <rect width="800" height="600" fill="#fff7f0"/>
+  <ellipse cx="400" cy="452" rx="220" ry="38" fill="#e2c4a5" opacity="0.4"/>
+  <g transform="translate(140 170)">
+    <path d="M60 170h110l-14 96H74z" fill="#b46d53"/>
+    <path d="M26 136c0-42 33-75 74-75s74 33 74 75" fill="#ffd4df"/>
+  </g>
+  <g transform="translate(350 150)">
+    <path d="M60 190h110l-14 96H74z" fill="#ca8b6d"/>
+    <path d="M26 156c0-42 33-75 74-75s74 33 74 75" fill="#fff3f7"/>
+  </g>
+  <g transform="translate(560 170)">
+    <path d="M60 170h110l-14 96H74z" fill="#8f4d43"/>
+    <path d="M26 136c0-42 33-75 74-75s74 33 74 75" fill="#f6bfce"/>
+  </g>
+</svg>
