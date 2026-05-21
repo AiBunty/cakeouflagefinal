@@ -19,8 +19,40 @@ final class ApiController
 {
     private const DEFAULT_PAGE_SIZE = 24;
     private static $couponSchemaEnsured = false;
+    private static $topperSchemaEnsured = false;
     private static $bankAlertSchemaEnsured = false;
     private static $byocQuoteSchemaEnsured = false;
+    private static $productsColumnMap = null;
+
+    /** @return array<string, bool> */
+    private static function productsColumnMap(PDO $pdo): array
+    {
+        if (is_array(self::$productsColumnMap)) {
+            return self::$productsColumnMap;
+        }
+
+        try {
+            $stmt = $pdo->query('SELECT DATABASE()');
+            $schema = (string)($stmt ? $stmt->fetchColumn() : '');
+            if ($schema === '') {
+                self::$productsColumnMap = [];
+                return self::$productsColumnMap;
+            }
+
+            $check = $pdo->prepare('SELECT column_name FROM information_schema.columns WHERE table_schema = :schema AND table_name = "products"');
+            $check->bindValue(':schema', $schema);
+            $check->execute();
+            $map = [];
+            foreach ($check->fetchAll(PDO::FETCH_COLUMN) as $columnName) {
+                $map[(string)$columnName] = true;
+            }
+            self::$productsColumnMap = $map;
+        } catch (Throwable $e) {
+            self::$productsColumnMap = [];
+        }
+
+        return self::$productsColumnMap;
+    }
 
     /** Get PDO or send 503 JSON and return null. */
     private static function db(): ?\PDO
@@ -61,187 +93,66 @@ final class ApiController
         ];
     }
 
-    public function health(): void
+    private function otpRecentlyRequested(PDO $pdo, string $email): bool
     {
+        $stmt = $pdo->prepare('SELECT COUNT(*) FROM otp_verifications WHERE email = :email AND created_at > NOW() - INTERVAL 60 SECOND');
+        $stmt->execute(['email' => $email]);
+        return (int)($stmt->fetchColumn() ?: 0) > 0;
+    }
+
+    public function banners(): void
+    {
+        $pdo = self::db();
+        if (!$pdo) {
+            return;
+        }
+
+        $placement = trim((string)($_GET['placement'] ?? ''));
+        if ($placement === '') {
+            Response::json([
+                'success' => false,
+                'message' => 'Placement required',
+            ], 422);
+            return;
+        }
+
+        $stmt = $pdo->prepare(
+            'SELECT * FROM banners WHERE placement = :placement AND is_active = 1 ORDER BY sort_order ASC'
+        );
+        $stmt->execute(['placement' => $placement]);
+
         Response::json([
             'success' => true,
-            'message' => 'ok',
-            'data' => [
-                'app' => Env::get('BAKERY_NAME', 'Cakeouflage'),
-                'timestamp' => date(DATE_ATOM),
-            ],
+            'data' => $stmt->fetchAll(),
         ]);
     }
 
-    public function healthDb(): void
+    public function siteTopOffer(): void
     {
+        $pdo = self::db();
+        if (!$pdo) {
+            return;
+        }
+
         try {
-            $pdo = Database::getConnection();
-            $pdo->query('SELECT 1');
-            $databaseName = (string)($pdo->query('SELECT DATABASE()')->fetchColumn() ?: Env::get('DB_NAME', 'unknown'));
+            ob_start();
+            include __DIR__ . '/../Views/partials/top-offer-banner.php';
+            $html = (string) ob_get_clean();
 
             Response::json([
                 'success' => true,
-                'message' => 'database connected',
                 'data' => [
-                    'connected' => true,
-                    'database' => $databaseName,
-                    'timestamp' => date(DATE_ATOM),
+                    'html' => $html,
                 ],
             ]);
-            return;
         } catch (Throwable $e) {
             Response::json([
                 'success' => false,
-                'message' => 'database connection failed',
-                'data' => [
-                    'connected' => false,
-                    'timestamp' => date(DATE_ATOM),
-                ],
-            ], 503);
-            return;
+                'message' => 'Unable to load site offer banner',
+            ], 500);
         }
     }
 
-public function banners(): void
-{
-    $pdo = self::db();
-    if (!$pdo) return;
-
-    $placement = $_GET['placement'] ?? '';
-
-    if (!$placement) {
-        Response::json([
-            'success' => false,
-            'message' => 'Placement required'
-        ], 422);
-        return;
-    }
-
-    $stmt = $pdo->prepare("
-        SELECT * FROM banners 
-        WHERE placement = :placement 
-        AND is_active = 1
-        ORDER BY sort_order ASC
-    ");
-
-    $stmt->execute([
-        'placement' => $placement
-    ]);
-
-    $data = $stmt->fetchAll();
-
-    Response::json([
-        'success' => true,
-        'data' => $data
-    ]);
-}
-public function bannerUpdate($id): void
-{
-    $pdo = self::db();
-    if (!$pdo) return;
-
-    // 🔥 JSON read
-    $input = json_decode(file_get_contents("php://input"), true);
-
-    if (!$input) {
-        Response::json([
-            "success" => false,
-            "message" => "Invalid input"
-        ], 400);
-        return;
-    }
-
-    // 🔥 only required fields
-    $title = $input['title'] ?? null;
-    $image = $input['image_url'] ?? null;
-
-    if (!$title && !$image) {
-        Response::json([
-            "success" => false,
-            "message" => "Nothing to update"
-        ], 400);
-        return;
-    }
-
-    $sql = "UPDATE banners SET 
-                title = COALESCE(:title, title),
-                image_url = COALESCE(:image, image_url),
-                updated_at = NOW()
-            WHERE id = :id";
-
-    $stmt = $pdo->prepare($sql);
-
-    $stmt->execute([
-        'title' => $title,
-        'image' => $image,
-        'id' => $id
-    ]);
-
-    Response::json([
-        "success" => true,
-        "message" => "Banner updated"
-    ]);
-}
-
-public function siteTopOffer(): void
-{
-    $pdo = self::db();
-    if (!$pdo) return;
-
-    try {
-        $stmt = $pdo->query("\n            SELECT\n                b.title,\n                b.subtitle,\n                b.cta_label,\n                b.cta_url,\n                b.ends_at,\n                b.linked_coupon_id,\n                c.code AS coupon_code,\n                c.is_active AS coupon_is_active,\n                c.is_deleted AS coupon_is_deleted,\n                c.starts_at AS coupon_starts_at,\n                c.ends_at AS coupon_ends_at\n            FROM banners b\n            LEFT JOIN coupons c ON c.id = b.linked_coupon_id\n            WHERE b.placement = 'site_top_offer'\n              AND b.is_active = 1\n              AND (b.starts_at IS NULL OR b.starts_at <= NOW())\n              AND (b.ends_at IS NULL OR b.ends_at >= NOW())\n            ORDER BY b.id DESC\n            LIMIT 1\n        ");
-        $banner = $stmt ? $stmt->fetch(PDO::FETCH_ASSOC) : false;
-
-        $isVisible = false;
-        if (is_array($banner)) {
-            $linkedCouponId = isset($banner['linked_coupon_id']) ? (int) $banner['linked_coupon_id'] : 0;
-            if ($linkedCouponId > 0) {
-                $couponActive = (int)($banner['coupon_is_active'] ?? 0) === 1;
-                $couponDeleted = (int)($banner['coupon_is_deleted'] ?? 0) === 1;
-                $couponCode = trim((string)($banner['coupon_code'] ?? ''));
-                $couponStarts = trim((string)($banner['coupon_starts_at'] ?? ''));
-                $couponEnds = trim((string)($banner['coupon_ends_at'] ?? ''));
-                $couponStartsTs = $couponStarts !== '' ? strtotime($couponStarts) : false;
-                $couponEndsTs = $couponEnds !== '' ? strtotime($couponEnds) : false;
-                $nowTs = time();
-                // FIXED: Handle NULL start/end times for open-ended coupons
-                $couponWindowValid = true;
-                if ($couponStarts !== '') {
-                    $couponWindowValid = $couponWindowValid && ($nowTs >= $couponStartsTs);
-                }
-                if ($couponEnds !== '') {
-                    $couponWindowValid = $couponWindowValid && ($nowTs <= $couponEndsTs);
-                }
-                $isVisible = $couponActive && !$couponDeleted && $couponWindowValid && $couponCode !== '';
-            }
-        }
-
-        if (!$isVisible || !is_array($banner)) {
-            Response::json([
-                'success' => true,
-                'data' => null,
-            ]);
-            return;
-        }
-
-        ob_start();
-        include __DIR__ . '/../Views/partials/top-offer-banner.php';
-        $html = (string) ob_get_clean();
-
-        Response::json([
-            'success' => true,
-            'data' => [
-                'html' => $html,
-            ],
-        ]);
-    } catch (Throwable $e) {
-        Response::json([
-            'success' => false,
-            'message' => 'Unable to load site offer banner',
-        ], 500);
-    }
-}
     public function products(): void
     {
         $pdo = self::db();
@@ -263,6 +174,11 @@ public function siteTopOffer(): void
             return;
         }
         $params = [];
+        $productsColumns = self::productsColumnMap($pdo);
+        $hasIsVegColumn = isset($productsColumns['is_veg']);
+        $hasIsBestsellerColumn = isset($productsColumns['is_bestseller']);
+        $hasIsChefSpecialColumn = isset($productsColumns['is_chef_special']);
+        $hasReviewCountColumn = isset($productsColumns['review_count']);
         $effectivePriceSql = 'COALESCE(NULLIF(p.starting_price, 0), pv_min.min_price, p.base_price, 0)';
         $where = [
             'p.deleted_at IS NULL',
@@ -288,7 +204,7 @@ public function siteTopOffer(): void
         }
 
         $isVegParam = $_GET['is_veg'] ?? '';
-        if ($isVegParam !== '' && in_array((string)$isVegParam, ['0', '1'], true)) {
+        if ($hasIsVegColumn && $isVegParam !== '' && in_array((string)$isVegParam, ['0', '1'], true)) {
             $where[] = 'p.is_veg = :is_veg';
             $params['is_veg'] = (int)$isVegParam;
         }
@@ -320,7 +236,14 @@ public function siteTopOffer(): void
                 $sortSql = $effectivePriceSql . ' DESC';
                 break;
             case 'popular':
-                $sortSql = 'p.is_bestseller DESC, p.review_count DESC';
+                $popularSortParts = [];
+                if ($hasIsBestsellerColumn) {
+                    $popularSortParts[] = 'p.is_bestseller DESC';
+                }
+                if ($hasReviewCountColumn) {
+                    $popularSortParts[] = 'p.review_count DESC';
+                }
+                $sortSql = !empty($popularSortParts) ? implode(', ', $popularSortParts) : 'p.created_at DESC';
                 break;
             default:
                 $sortSql = 'p.created_at DESC';
@@ -353,6 +276,10 @@ public function siteTopOffer(): void
         $countStmt->execute();
         $total = (int)$countStmt->fetchColumn();
 
+        $isVegSelectSql = $hasIsVegColumn ? 'p.is_veg' : 'NULL AS is_veg';
+        $isBestsellerSelectSql = $hasIsBestsellerColumn ? 'p.is_bestseller' : '0 AS is_bestseller';
+        $isChefSpecialSelectSql = $hasIsChefSpecialColumn ? 'p.is_chef_special' : '0 AS is_chef_special';
+
         $sql = "
             SELECT
                 p.id,
@@ -364,9 +291,9 @@ public function siteTopOffer(): void
                 pi_hover.image_url AS hover_image_raw,
                 p.availability_status,
                 p.dietary_tag,
-                p.is_veg,
-                p.is_bestseller,
-                p.is_chef_special,
+            {$isVegSelectSql},
+                {$isBestsellerSelectSql},
+                {$isChefSpecialSelectSql},
                 c.name AS category_name,
                 c.slug AS category_slug,
                 v.id AS default_variant_id,
@@ -929,6 +856,21 @@ public function siteTopOffer(): void
     }
 }
 
+    public function toppers(): void
+    {
+        try {
+            $pdo = self::db();
+            if (!$pdo) { Response::json(['success' => false, 'error' => 'DB unavailable'], 503); return; }
+            $this->ensureTopperSchema($pdo);
+            $stmt = $pdo->query('SELECT id, name, price, description FROM cake_toppers WHERE is_active = 1 ORDER BY sort_order ASC, id ASC');
+            Response::json(['success' => true, 'data' => $stmt->fetchAll(\PDO::FETCH_ASSOC)]);
+        } catch (\Throwable $e) {
+            Response::json(['success' => false, 'error' => $e->getMessage()], 500);
+        }
+    }
+
+
+
     public function cartAddItem(): void
 {
     try {
@@ -951,6 +893,8 @@ public function siteTopOffer(): void
         $productId = (int)($input['product_id'] ?? 0);
         $variantId = isset($input['variant_id']) ? (int)$input['variant_id'] : 0;
         $quantity = max(1, (int)($input['quantity'] ?? 1));
+        $cakeMessage = substr(trim((string)($input['cake_message'] ?? '')), 0, 200);
+        $topperId    = isset($input['topper_id']) && (int)$input['topper_id'] > 0 ? (int)$input['topper_id'] : null;
 
         if ($productId <= 0) {
             throw new \Exception("product_id missing");
@@ -996,8 +940,23 @@ public function siteTopOffer(): void
             ? (float)$variant['discount_price']
             : (float)$variant['price'];
 
+        // Validate topper and resolve price
+        $topperPrice = 0.00;
+        $topperNameSnapshot = null;
+        if ($topperId !== null) {
+            $tpStmt = $pdo->prepare('SELECT id, name, price FROM cake_toppers WHERE id = :id AND is_active = 1 LIMIT 1');
+            $tpStmt->execute(['id' => $topperId]);
+            $topperRow = $tpStmt->fetch(PDO::FETCH_ASSOC);
+            if ($topperRow) {
+                $topperPrice = (float)$topperRow['price'];
+                $topperNameSnapshot = $topperRow['name'];
+            } else {
+                $topperId = null; // invalid/inactive topper — silently ignore
+            }
+        }
+
         // 🔥 CHECK existing
-        $existingStmt = $pdo->prepare('SELECT id, quantity FROM cart_items WHERE cart_id = :cart_id AND product_id = :product_id AND variant_id = :variant_id LIMIT 1');
+        $existingStmt = $pdo->prepare('SELECT id, quantity, topper_price FROM cart_items WHERE cart_id = :cart_id AND product_id = :product_id AND variant_id = :variant_id LIMIT 1');
         $existingStmt->execute([
             'cart_id' => $cartId,
             'product_id' => $productId,
@@ -1007,36 +966,49 @@ public function siteTopOffer(): void
 
         if ($existing) {
             $newQty = (int)$existing['quantity'] + $quantity;
+            $existingTopperPrice = (float)($existing['topper_price'] ?? 0);
 
             $updateStmt = $pdo->prepare('
                 UPDATE cart_items 
-                SET quantity = :quantity, unit_price = :unit_price, line_total = :line_total 
+                SET quantity = :quantity, unit_price = :unit_price, line_total = :line_total,
+                    cake_message = :cake_message, topper_id = :topper_id,
+                    topper_name_snapshot = :topper_name_snapshot, topper_price = :topper_price
                 WHERE id = :id
             ');
 
             $updateStmt->execute([
-                'quantity' => $newQty,
-                'unit_price' => $unitPrice,
-                'line_total' => $unitPrice * $newQty,
-                'id' => $existing['id'],
+                'quantity'             => $newQty,
+                'unit_price'          => $unitPrice,
+                'line_total'          => ($unitPrice + $topperPrice) * $newQty,
+                'cake_message'        => $cakeMessage !== '' ? $cakeMessage : null,
+                'topper_id'           => $topperId,
+                'topper_name_snapshot'=> $topperNameSnapshot,
+                'topper_price'        => $topperPrice,
+                'id'                  => $existing['id'],
             ]);
 
         } else {
 
             $insertStmt = $pdo->prepare('
                 INSERT INTO cart_items 
-                (cart_id, product_id, variant_id, quantity, unit_price, line_total) 
+                (cart_id, product_id, variant_id, quantity, unit_price, line_total,
+                 cake_message, topper_id, topper_name_snapshot, topper_price) 
                 VALUES 
-                (:cart_id, :product_id, :variant_id, :quantity, :unit_price, :line_total)
+                (:cart_id, :product_id, :variant_id, :quantity, :unit_price, :line_total,
+                 :cake_message, :topper_id, :topper_name_snapshot, :topper_price)
             ');
 
             $insertStmt->execute([
-                'cart_id' => $cartId,
-                'product_id' => $productId,
-                'variant_id' => $variantId,
-                'quantity' => $quantity,
-                'unit_price' => $unitPrice,
-                'line_total' => $unitPrice * $quantity,
+                'cart_id'             => $cartId,
+                'product_id'          => $productId,
+                'variant_id'          => $variantId,
+                'quantity'            => $quantity,
+                'unit_price'          => $unitPrice,
+                'line_total'          => ($unitPrice + $topperPrice) * $quantity,
+                'cake_message'        => $cakeMessage !== '' ? $cakeMessage : null,
+                'topper_id'           => $topperId,
+                'topper_name_snapshot'=> $topperNameSnapshot,
+                'topper_price'        => $topperPrice,
             ]);
         }
 
@@ -1061,7 +1033,7 @@ public function siteTopOffer(): void
         $input = $this->readJsonInput();
         $quantity = max(1, (int)($input['quantity'] ?? 1));
 
-        $stmt = $pdo->prepare('SELECT id, unit_price FROM cart_items WHERE id = :id AND cart_id = :cart_id LIMIT 1');
+        $stmt = $pdo->prepare('SELECT id, unit_price, topper_price FROM cart_items WHERE id = :id AND cart_id = :cart_id LIMIT 1');
         $stmt->execute(['id' => (int)$itemId, 'cart_id' => $cartId]);
         $item = $stmt->fetch(PDO::FETCH_ASSOC);
         if (!$item) {
@@ -1069,10 +1041,11 @@ public function siteTopOffer(): void
             return;
         }
 
+        $effectivePrice = (float)$item['unit_price'] + (float)($item['topper_price'] ?? 0);
         $updateStmt = $pdo->prepare('UPDATE cart_items SET quantity = :quantity, line_total = :line_total, updated_at = NOW() WHERE id = :id');
         $updateStmt->execute([
             'quantity' => $quantity,
-            'line_total' => round((float)$item['unit_price'] * $quantity, 2),
+            'line_total' => round($effectivePrice * $quantity, 2),
             'id' => (int)$itemId,
         ]);
 
@@ -1482,27 +1455,35 @@ $orderStmt->execute([
 
             $orderId = (int)$pdo->lastInsertId();
 
+            $customisationNote = substr(trim((string)($input['customisation_note'] ?? '')), 0, 500) ?: null;
+
             $itemStmt = $pdo->prepare(
                 'INSERT INTO order_items (
                     order_id, product_id, variant_id, product_name_snapshot, variant_snapshot,
-                    unit_price, quantity, line_total, customisation_note
+                    unit_price, quantity, line_total, customisation_note,
+                    cake_message, topper_id, topper_name_snapshot, topper_price_snapshot
                 ) VALUES (
                     :order_id, :product_id, :variant_id, :product_name_snapshot, :variant_snapshot,
-                    :unit_price, :quantity, :line_total, :customisation_note
+                    :unit_price, :quantity, :line_total, :customisation_note,
+                    :cake_message, :topper_id, :topper_name_snapshot, :topper_price_snapshot
                 )'
             );
 
             foreach ($items as $item) {
                 $itemStmt->execute([
-                    'order_id' => $orderId,
-                    'product_id' => $item['product_id'],
-                    'variant_id' => $item['variant_id'],
-                    'product_name_snapshot' => $item['product_name'],
-                    'variant_snapshot' => $item['variant_label'],
-                    'unit_price' => $item['unit_price'],
-                    'quantity' => $item['quantity'],
-                    'line_total' => $item['line_total'],
-                    'customisation_note' => null,
+                    'order_id'             => $orderId,
+                    'product_id'           => $item['product_id'],
+                    'variant_id'           => $item['variant_id'],
+                    'product_name_snapshot'=> $item['product_name'],
+                    'variant_snapshot'     => $item['variant_label'],
+                    'unit_price'           => $item['unit_price'],
+                    'quantity'             => $item['quantity'],
+                    'line_total'           => $item['line_total'],
+                    'customisation_note'   => $customisationNote,
+                    'cake_message'         => $item['cake_message'] ?? null,
+                    'topper_id'            => isset($item['topper_id']) && $item['topper_id'] > 0 ? (int)$item['topper_id'] : null,
+                    'topper_name_snapshot' => $item['topper_name_snapshot'] ?? null,
+                    'topper_price_snapshot'=> (float)($item['topper_price'] ?? 0),
                 ]);
             }
 
@@ -3909,6 +3890,58 @@ AND user_id = :user_id
         self::$couponSchemaEnsured = true;
     }
 
+    /**
+     * Ensure the cake_toppers table, topper/note columns on products, cart_items,
+     * and order_items all exist. Safe to call even if columns already exist.
+     */
+    private function ensureTopperSchema(PDO $pdo): void
+    {
+        if (self::$topperSchemaEnsured) {
+            return;
+        }
+
+        // Core toppers lookup table
+        $pdo->exec('CREATE TABLE IF NOT EXISTS cake_toppers (
+            id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            name VARCHAR(100) NOT NULL,
+            price DECIMAL(8,2) NOT NULL DEFAULT 0.00,
+            description VARCHAR(255) NULL,
+            is_active TINYINT(1) NOT NULL DEFAULT 1,
+            sort_order INT NOT NULL DEFAULT 0,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            UNIQUE KEY uq_topper_name (name)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+
+        // Default toppers (INSERT IGNORE respects the unique key on name)
+        $pdo->exec("INSERT IGNORE INTO cake_toppers (name, price, sort_order) VALUES
+            ('No Topper', 0.00, 1),
+            ('Happy Birthday', 0.00, 2),
+            ('Happy Anniversary', 0.00, 3),
+            ('Happy Wedding', 0.00, 4),
+            ('Baby Shower', 0.00, 5),
+            ('Custom Message', 0.00, 6)");
+
+        // products flags
+        try { $pdo->exec('ALTER TABLE products ADD COLUMN IF NOT EXISTS topper_enabled TINYINT(1) NOT NULL DEFAULT 1'); } catch (\Throwable $e) {}
+        try { $pdo->exec('ALTER TABLE products ADD COLUMN IF NOT EXISTS note_enabled TINYINT(1) NOT NULL DEFAULT 1'); } catch (\Throwable $e) {}
+
+        // cart_items topper fields
+        try { $pdo->exec('ALTER TABLE cart_items ADD COLUMN IF NOT EXISTS cake_message VARCHAR(200) NULL'); } catch (\Throwable $e) {}
+        try { $pdo->exec('ALTER TABLE cart_items ADD COLUMN IF NOT EXISTS topper_id INT UNSIGNED NULL'); } catch (\Throwable $e) {}
+        try { $pdo->exec('ALTER TABLE cart_items ADD COLUMN IF NOT EXISTS topper_name_snapshot VARCHAR(100) NULL'); } catch (\Throwable $e) {}
+        try { $pdo->exec('ALTER TABLE cart_items ADD COLUMN IF NOT EXISTS topper_price DECIMAL(8,2) NOT NULL DEFAULT 0.00'); } catch (\Throwable $e) {}
+
+        // order_items topper fields
+        try { $pdo->exec('ALTER TABLE order_items ADD COLUMN IF NOT EXISTS cake_message VARCHAR(200) NULL'); } catch (\Throwable $e) {}
+        try { $pdo->exec('ALTER TABLE order_items ADD COLUMN IF NOT EXISTS topper_id INT UNSIGNED NULL'); } catch (\Throwable $e) {}
+        try { $pdo->exec('ALTER TABLE order_items ADD COLUMN IF NOT EXISTS topper_name_snapshot VARCHAR(100) NULL'); } catch (\Throwable $e) {}
+        try { $pdo->exec('ALTER TABLE order_items ADD COLUMN IF NOT EXISTS topper_price_snapshot DECIMAL(8,2) NOT NULL DEFAULT 0.00'); } catch (\Throwable $e) {}
+
+        self::$topperSchemaEnsured = true;
+    }
+
     private function ensureBankAlertSchema(PDO $pdo): void
     {
         if (self::$bankAlertSchemaEnsured) {
@@ -4112,6 +4145,8 @@ AND user_id = :user_id
     /** @return array<string, mixed> */
     private function buildCartResponse(PDO $pdo, int $cartId): array
     {
+        $this->ensureTopperSchema($pdo);
+
         $stmt = $pdo->prepare(
             'SELECT
                 ci.id,
@@ -4120,6 +4155,10 @@ AND user_id = :user_id
                 ci.quantity,
                 ci.unit_price,
                 ci.line_total,
+                ci.cake_message,
+                ci.topper_id,
+                ci.topper_name_snapshot,
+                ci.topper_price,
                 p.name AS product_name,
                 p.slug AS product_slug,
                 p.featured_image,
@@ -4351,20 +4390,26 @@ $deliveryFee = (float)$slab['delivery_fee'];
         return;
     }
 
+    if ($this->otpRecentlyRequested($pdo, $email)) {
+        Response::json([
+            'success' => false,
+            'message' => 'Please wait 60 seconds before requesting a new OTP.',
+        ], 429);
+        return;
+    }
+
     $otp = (string)random_int(100000, 999999);
-    $expiresAt = date('Y-m-d H:i:s', time() + 300);
 
     $pdo->prepare('DELETE FROM otp_verifications WHERE email = :email')
         ->execute(['email' => $email]);
 
     $stmt = $pdo->prepare(
         'INSERT INTO otp_verifications (email, otp, expires_at)
-         VALUES (:email, :otp, :expires_at)'
+         VALUES (:email, :otp, NOW() + INTERVAL 5 MINUTE)'
     );
     $stmt->execute([
         'email' => $email,
         'otp' => $otp,
-        'expires_at' => $expiresAt,
     ]);
 
     try {

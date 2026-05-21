@@ -151,11 +151,14 @@ $collection_id_value = ($collection_id !== NULL && $collection_id != 0) ? "'$col
 $is_chef_special = isset($_POST['is_chef_special']) ? 1 : 0;
 $dietary_tag     = in_array($_POST['dietary_tag'] ?? '', ['regular','eggless','vegan','sugar_free','healthy'], true) ? $_POST['dietary_tag'] : 'regular';
 $is_veg          = (isset($_POST['is_veg']) && $_POST['is_veg'] === '0') ? 0 : 1;
+$topper_enabled  = isset($_POST['topper_enabled']) ? 1 : 0;
+$note_enabled    = isset($_POST['note_enabled']) ? 1 : 0;
 
   $sql = "INSERT INTO products 
-(name, slug, sku, starting_price, collection_category_id, subcategory_id, child_category_id, featured_image, short_description, is_chef_special, dietary_tag, is_veg, created_at)
+(name, slug, sku, starting_price, collection_category_id, subcategory_id, child_category_id, featured_image, short_description, is_chef_special, dietary_tag, is_veg, topper_enabled, note_enabled, created_at)
 VALUES 
-('$name', '$slug', '$sku', '$base_price', $collection_id_value, $subcategory_id_value, $child_id_value, '$db_image_path', '$description', $is_chef_special, '$dietary_tag', $is_veg, NOW())";
+('$name', '$slug', '$sku', '$base_price', $collection_id_value, $subcategory_id_value, $child_id_value, '$db_image_path', '$description', $is_chef_special, '$dietary_tag', $is_veg, $topper_enabled, $note_enabled, NOW())";
+
 
     if ($conn->query($sql) === TRUE) {
    $product_id = $conn->insert_id;
@@ -342,17 +345,15 @@ include "layout.php";
 </div>
 
 <div class="form-group">
-<label>Veg / Non-Veg</label>
-<div style="display:flex;gap:24px;align-items:center;margin-top:6px;">
-  <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
-    <input type="radio" name="is_veg" value="1" checked>
-    <span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:12px;height:12px;border-radius:50%;background:#138808;display:inline-block;"></span> Veg</span>
-  </label>
-  <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
-    <input type="radio" name="is_veg" value="0">
-    <span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:12px;height:12px;border-radius:50%;background:#ee0000;display:inline-block;"></span> Non-Veg</span>
-  </label>
+<label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" name="is_veg" value="0"> Non-Veg (uncheck = Veg)</label>
 </div>
+
+<div class="form-group">
+<label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" name="topper_enabled" value="1" checked> Enable Topper Selection on PDP</label>
+</div>
+
+<div class="form-group">
+<label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" name="note_enabled" value="1" checked> Enable Note on the Cake on PDP</label>
 </div>
 
 <div class="form-group">

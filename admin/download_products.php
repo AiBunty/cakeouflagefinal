@@ -36,7 +36,9 @@ $productSql = "
         p.name          AS product_name,
         p.is_chef_special,
         p.dietary_tag,
-        p.is_veg
+        p.is_veg,
+        p.topper_enabled,
+        p.note_enabled
     FROM products p
     LEFT JOIN categories parent_cat ON parent_cat.id = p.collection_category_id
     LEFT JOIN categories sub_cat    ON sub_cat.id    = p.subcategory_id
@@ -73,9 +75,9 @@ $sheet = $spreadsheet->getActiveSheet();
 $headers = array_merge(
     ['Category', 'Subcategory', 'Product Name'],
     $weightHeaders,
-    ["Chef's Special (0/1)", 'Dietary Type', 'Veg (1=Yes/0=No)']
+    ["Chef's Special (0/1)", 'Dietary Type', 'Veg (1=Yes/0=No)', 'Topper Enabled (0/1)', 'Note Enabled (0/1)']
 );
-$totalCols = count($headers); // should be 17
+$totalCols = count($headers); // should be 19
 
 foreach ($headers as $colIdx => $label) {
     $sheet->setCellValue([$colIdx + 1, 1], $label);
@@ -97,6 +99,8 @@ for ($i = 0; $i < 11; $i++) {
 $colWidths[] = 14;
 $colWidths[] = 16;
 $colWidths[] = 14;
+$colWidths[] = 16;
+$colWidths[] = 16;
 
 foreach ($colWidths as $idx => $width) {
     $letter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($idx + 1);
@@ -128,7 +132,9 @@ if ($result) {
 
         $sheet->setCellValue([$colNum++, $rowNum], (int)$row['is_chef_special']);
         $sheet->setCellValue([$colNum++, $rowNum], $dietary);
-        $sheet->setCellValue([$colNum,   $rowNum], (int)$row['is_veg']);
+        $sheet->setCellValue([$colNum++, $rowNum], (int)$row['is_veg']);
+        $sheet->setCellValue([$colNum++, $rowNum], (int)($row['topper_enabled'] ?? 1));
+        $sheet->setCellValue([$colNum,   $rowNum], (int)($row['note_enabled'] ?? 1));
 
         $rowNum++;
     }

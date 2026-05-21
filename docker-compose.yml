@@ -1,58 +1,35 @@
-version: "3.8"
-
 services:
-  app:
+  web:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: cakeouflage_app
+    container_name: cakeouflage-web
     ports:
-      - "8888:80"
+      - "8080:80"
     volumes:
-      - .:/var/www/html
-      - ./uploads:/var/www/html/uploads
+      - ./:/var/www/html
     environment:
-      APP_ENV: development
-    networks:
-      - cakeouflage-e-commerce-1_default
+      APP_ENV: production
+      APP_DEBUG: "false"
+      TZ: Asia/Kolkata
     depends_on:
       - db
 
   db:
-    image: mysql:8.0
-    container_name: cakeouflage_mysql
-    ports:
-      - "3306:3306"
+    image: mariadb:10.6.25
+    container_name: cakeouflage-db
+    restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: rootpassword
-      MYSQL_DATABASE: cakeouflage_dev
-      MYSQL_USER: root
-      MYSQL_PASSWORD: rootpassword
+      MARIADB_ROOT_PASSWORD: root
+      MARIADB_DATABASE: cakeouflage-3530373538ac
+      MARIADB_USER: cakeouflage-3530373538ac
+      MARIADB_PASSWORD: 3btoum4iwi
+      TZ: Asia/Kolkata
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
     volumes:
-      - cakeouflage_mysql_data:/var/lib/mysql
-      - ./sdb-77_hosting_stackcp_net.sql:/docker-entrypoint-initdb.d/init.sql:ro
-    networks:
-      - cakeouflage-e-commerce-1_default
-
-  phpmyadmin:
-    image: phpmyadmin/phpmyadmin
-    container_name: cakeouflage_phpmyadmin
-    ports:
-      - "8080:80"
-    environment:
-      PMA_HOST: cakeouflage_mysql
-      PMA_PORT: 3306
-      MYSQL_ROOT_PASSWORD: rootpassword
-    networks:
-      - cakeouflage-e-commerce-1_default
-    depends_on:
-      - db
+      - db_data:/var/lib/mysql
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./database/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
 
 volumes:
-  cakeouflage_mysql_data:
-    external: true
-    name: cakeouflage-e-commerce-1_mysql_data
-
-networks:
-  cakeouflage-e-commerce-1_default:
-    external: true
+  db_data:

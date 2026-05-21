@@ -1,19 +1,19 @@
 <?php return array(
     'root' => array(
         'name' => 'cakeouflage/ecommerce',
-        'pretty_version' => '1.0.0+no-version-set',
-        'version' => '1.0.0.0',
-        'reference' => null,
+        'pretty_version' => 'dev-main',
+        'version' => 'dev-main',
+        'reference' => '605068a1f165440aa3164392486559dd4d287459',
         'type' => 'project',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
-        'dev' => false,
+        'dev' => true,
     ),
     'versions' => array(
         'cakeouflage/ecommerce' => array(
-            'pretty_version' => '1.0.0+no-version-set',
-            'version' => '1.0.0.0',
-            'reference' => null,
+            'pretty_version' => 'dev-main',
+            'version' => 'dev-main',
+            'reference' => '605068a1f165440aa3164392486559dd4d287459',
             'type' => 'project',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),

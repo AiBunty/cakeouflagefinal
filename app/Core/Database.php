@@ -43,29 +43,82 @@ final class Database
             return self::$pdo;
         }
 
-        $host     = Env::get('DB_HOST',     'localhost');
-        $port     = Env::get('DB_PORT',     '3306');
-        $dbName   = Env::get('DB_NAME',     '') ?: Env::get('DB_DATABASE', 'cakeouflage');
-        $user     = Env::get('DB_USER',     '') ?: Env::get('DB_USERNAME', 'root');
-        $password = Env::get('DB_PASSWORD', '');
-        $charset  = Env::get('DB_CHARSET',  'utf8mb4');
+        $host = Env::get('DB_HOST', '')
+            ?: Env::get('DB_HOST_LIVE', 'localhost');
+        $port = Env::get('DB_PORT', '')
+            ?: Env::get('DB_PORT_LIVE', '3306');
+        $dbName = Env::get('DB_NAME', '')
+            ?: Env::get('DB_DATABASE', '')
+            ?: Env::get('DB_NAME_LIVE', '')
+            ?: Env::get('DB_DATABASE_LIVE', 'cakeouflage');
+        $user = Env::get('DB_USER', '')
+            ?: Env::get('DB_USERNAME', '')
+            ?: Env::get('DB_USER_LIVE', '')
+            ?: Env::get('DB_USERNAME_LIVE', 'root');
+        $password = Env::get('DB_PASSWORD', '')
+            ?: Env::get('DB_PASS', '')
+            ?: Env::get('DB_PASSWORD_LIVE', '')
+            ?: Env::get('DB_PASS_LIVE', '');
+        $charset = Env::get('DB_CHARSET', '')
+            ?: Env::get('DB_CHARSET_LIVE', 'utf8mb4');
         $connectTimeout = max(2, (int)Env::get('DB_CONNECT_TIMEOUT', '5'));
 
-        $dsn = "mysql:host={$host};port={$port};dbname={$dbName};charset={$charset}";
+        $candidates = [
+            [
+                'host' => (string)$host,
+                'port' => (string)$port,
+                'db' => (string)$dbName,
+                'user' => (string)$user,
+                'pass' => (string)$password,
+            ],
+        ];
 
-        try {
-            self::$pdo = new PDO($dsn, $user, $password, [
-                PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-                PDO::ATTR_EMULATE_PREPARES   => false,
-                PDO::ATTR_TIMEOUT            => $connectTimeout,
-            ]);
-        } catch (PDOException $e) {
+        $isDockerRuntime = is_file('/.dockerenv') || getenv('APP_USE_DOCKER_DB') === '1';
+        $hostLower = strtolower(trim((string)$host));
+        if ($isDockerRuntime && ($hostLower === '' || $hostLower === 'localhost' || $hostLower === '127.0.0.1')) {
+            $candidates[] = [
+                'host' => 'db',
+                'port' => '3306',
+                'db' => 'cakeouflage_local',
+                'user' => 'cakeouflage',
+                'pass' => 'cakeouflage',
+            ];
+            $candidates[] = [
+                'host' => 'db',
+                'port' => '3306',
+                'db' => 'cakeouflage_local',
+                'user' => 'root',
+                'pass' => 'root',
+            ];
+        }
+
+        $lastException = null;
+        foreach ($candidates as $candidate) {
+            $dsn = 'mysql:host=' . $candidate['host']
+                . ';port=' . $candidate['port']
+                . ';dbname=' . $candidate['db']
+                . ';charset=' . $charset;
+
+            try {
+                self::$pdo = new PDO($dsn, $candidate['user'], $candidate['pass'], [
+                    PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+                    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                    PDO::ATTR_EMULATE_PREPARES   => false,
+                    PDO::ATTR_TIMEOUT            => $connectTimeout,
+                ]);
+                break;
+            } catch (PDOException $e) {
+                $lastException = $e;
+            }
+        }
+
+        if (!(self::$pdo instanceof PDO)) {
             // Throw so callers can handle gracefully — do not leak credentials in message
             $msg = (defined('APP_DEBUG') && APP_DEBUG)
-                ? $e->getMessage()
+                ? (($lastException instanceof PDOException) ? $lastException->getMessage() : 'Database connection failed.')
                 : 'Database connection failed.';
-            throw new \RuntimeException($msg, (int)$e->getCode(), $e);
+            $code = ($lastException instanceof PDOException) ? (int)$lastException->getCode() : 0;
+            throw new \RuntimeException($msg, $code, $lastException);
         }
 
         return self::$pdo;

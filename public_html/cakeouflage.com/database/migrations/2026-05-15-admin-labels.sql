@@ -1,2 +1,0 @@
-ALTER TABLE admins
-ADD COLUMN IF NOT EXISTS department_label VARCHAR(40) NULL AFTER role;

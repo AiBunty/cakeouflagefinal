@@ -121,44 +121,88 @@ function find_active_admin_for_login(mysqli $conn, string $login): ?array
   return $row ?: null;
 }
 
-function store_admin_otp(mysqli $conn, string $email, string $otp): bool
+/**
+ * Store an OTP for the given email.
+ * Returns 'ok', 'cooldown' (too soon after last request), or 'error'.
+ * Expiry is computed entirely in MySQL to avoid PHP/MySQL timezone mismatch.
+ */
+function store_admin_otp(mysqli $conn, string $email, string $otp): string
 {
-  $expiresAt = date('Y-m-d H:i:s', time() + 300);
+  // Server-side cooldown: deny if an OTP was issued less than 60 seconds ago
+  $coolStmt = $conn->prepare('SELECT created_at FROM otp_verifications WHERE email = ? ORDER BY created_at DESC LIMIT 1');
+  if ($coolStmt) {
+    $coolStmt->bind_param('s', $email);
+    $coolStmt->execute();
+    $coolResult = $coolStmt->get_result();
+    $coolRow    = $coolResult ? $coolResult->fetch_assoc() : null;
+    $coolStmt->close();
+    if ($coolRow && (time() - strtotime((string)$coolRow['created_at'])) < 60) {
+      return 'cooldown';
+    }
+  }
 
   $deleteStmt = $conn->prepare('DELETE FROM otp_verifications WHERE email = ?');
   if (!$deleteStmt) {
-    return false;
+    return 'error';
   }
   $deleteStmt->bind_param('s', $email);
   $deleteStmt->execute();
   $deleteStmt->close();
 
-  $insertStmt = $conn->prepare('INSERT INTO otp_verifications (email, otp, expires_at) VALUES (?, ?, ?)');
+  // Use MySQL's own clock so expiry is always consistent with verify's NOW() check
+  $insertStmt = $conn->prepare('INSERT INTO otp_verifications (email, otp, expires_at) VALUES (?, ?, NOW() + INTERVAL 5 MINUTE)');
   if (!$insertStmt) {
-    return false;
+    return 'error';
   }
-  $insertStmt->bind_param('sss', $email, $otp, $expiresAt);
+  $insertStmt->bind_param('ss', $email, $otp);
   $ok = $insertStmt->execute();
   $insertStmt->close();
-  return (bool) $ok;
+  return $ok ? 'ok' : 'error';
 }
 
-function verify_admin_otp(mysqli $conn, string $email, string $otp): bool
+/**
+ * Verify an OTP. Returns true on success.
+ * $reason is set to: 'ok' | 'expired' | 'locked' (too many attempts) | 'invalid' | 'error'
+ */
+function verify_admin_otp(mysqli $conn, string $email, string $otp, string &$reason = ''): bool
 {
-  $stmt = $conn->prepare('SELECT id FROM otp_verifications WHERE email = ? AND otp = ? AND expires_at > NOW() LIMIT 1');
+  // Fetch the active (unexpired) OTP row for this email
+  $stmt = $conn->prepare('SELECT id, otp, attempt_count FROM otp_verifications WHERE email = ? AND expires_at > NOW() ORDER BY created_at DESC LIMIT 1');
   if (!$stmt) {
+    $reason = 'error';
     return false;
   }
-  $stmt->bind_param('ss', $email, $otp);
+  $stmt->bind_param('s', $email);
   $stmt->execute();
   $result = $stmt->get_result();
-  $row = $result ? $result->fetch_assoc() : null;
+  $row    = $result ? $result->fetch_assoc() : null;
   $stmt->close();
 
   if (!$row) {
+    $reason = 'expired';
     return false;
   }
 
+  // Brute-force protection: max 5 failed attempts per OTP
+  if ((int)$row['attempt_count'] >= 5) {
+    $reason = 'locked';
+    return false;
+  }
+
+  // Compare OTP value
+  if ($row['otp'] !== $otp) {
+    $upd = $conn->prepare('UPDATE otp_verifications SET attempt_count = attempt_count + 1 WHERE id = ?');
+    if ($upd) {
+      $rowId = (int)$row['id'];
+      $upd->bind_param('i', $rowId);
+      $upd->execute();
+      $upd->close();
+    }
+    $reason = 'invalid';
+    return false;
+  }
+
+  // Correct — delete all OTPs for this email and allow login
   $del = $conn->prepare('DELETE FROM otp_verifications WHERE email = ?');
   if ($del) {
     $del->bind_param('s', $email);
@@ -166,6 +210,7 @@ function verify_admin_otp(mysqli $conn, string $email, string $otp): bool
     $del->close();
   }
 
+  $reason = 'ok';
   return true;
 }
 
@@ -193,7 +238,7 @@ if ($adminCount === 0) {
 }
 
   // OTP login flow
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = trim((string) ($_POST['action'] ?? 'send_otp'));
     $login = trim((string) ($_POST['login'] ?? ''));
 
@@ -212,25 +257,31 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
           $otp = preg_replace('/\D+/', '', (string) ($_POST['otp'] ?? '')) ?? '';
           if (strlen($otp) !== 6) {
             $error = 'Enter a valid 6-digit OTP.';
-          } elseif (!verify_admin_otp($conn, $adminEmail, $otp)) {
-            $error = 'Invalid or expired OTP. Please request a new OTP.';
           } else {
-            $_SESSION['admin'] = (int) $admin['id'];
-            $_SESSION['admin_id'] = (int) $admin['id'];
-            $_SESSION['admin_name'] = $admin['full_name'];
-            $_SESSION['admin_role'] = $admin['role'];
-            $_SESSION['admin_department_label'] = $admin['department_label'] ?? '';
-            unset($_SESSION['admin_login_identifier']);
-            admin_load_permissions($conn, (int) $admin['id']);
+            $verifyReason = '';
+            if (!verify_admin_otp($conn, $adminEmail, $otp, $verifyReason)) {
+              if ($verifyReason === 'locked') {
+                $error = 'Too many failed attempts. Please request a new OTP.';
+              } else {
+                $error = 'Invalid or expired OTP. Please request a new OTP.';
+              }
+            } else {
+              $_SESSION['admin'] = (int) $admin['id'];
+              $_SESSION['admin_id'] = (int) $admin['id'];
+              $_SESSION['admin_name'] = $admin['full_name'];
+              $_SESSION['admin_role'] = $admin['role'];
+              $_SESSION['admin_department_label'] = $admin['department_label'] ?? '';
+              unset($_SESSION['admin_login_identifier']);
+              admin_load_permissions($conn, (int) $admin['id']);
 
-            header('Location: dashboard.php');
-            exit;
+              header('Location: dashboard.php');
+              exit;
+            }
           }
         } else {
           $otp = (string) random_int(100000, 999999);
-          if (!store_admin_otp($conn, $adminEmail, $otp)) {
-            $error = 'Unable to generate OTP right now. Please try again.';
-          } else {
+          $storeResult = store_admin_otp($conn, $adminEmail, $otp);
+          if ($storeResult === 'ok') {
             try {
               \App\Services\MailService::sendOtp($adminEmail, $otp, $admin['full_name'] ?? 'Admin');
               $info = 'OTP sent to ' . htmlspecialchars($adminEmail, ENT_QUOTES, 'UTF-8') . '. It is valid for 5 minutes.';
@@ -238,9 +289,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
               error_log('Admin OTP send failed for ' . $adminEmail . ': ' . $e->getMessage());
               $error = 'Unable to send OTP email right now. Please try again.';
             }
+          } elseif ($storeResult === 'cooldown') {
+            $error = 'Please wait 60 seconds before requesting a new OTP.';
+          } else {
+            $error = 'Unable to generate OTP right now. Please try again.';
           }
         }
-        }
+      }
     }
 }
 

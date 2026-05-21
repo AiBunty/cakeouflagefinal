@@ -20,6 +20,99 @@
 		return;
 	}
 
+	const phoneFieldEnhancer = () => {
+		const forms = Array.from(document.querySelectorAll('form'));
+		forms.forEach((form) => {
+			const phoneInputs = Array.from(form.querySelectorAll('input[type="tel"]'));
+			phoneInputs.forEach((input, index) => {
+				if (input.dataset.countryEnhanced === '1') {
+					return;
+				}
+
+				const parent = input.parentElement;
+				if (!parent) {
+					return;
+				}
+
+				if (parent.querySelector('select[name*="country_code"], select[id*="CountryCode"], select[id*="countryCode"]')) {
+					input.dataset.countryEnhanced = '1';
+					return;
+				}
+
+				const existingSelectInForm = form.querySelector('select[name*="country_code"][data-for-input="' + (input.name || ('phone_' + index)) + '"]');
+				if (existingSelectInForm) {
+					input.dataset.countryEnhanced = '1';
+					return;
+				}
+
+				const select = document.createElement('select');
+				select.className = 'country-code-select';
+				select.setAttribute('aria-label', 'Country code');
+				select.dataset.forInput = input.name || ('phone_' + index);
+				select.name = (input.name || ('phone_' + index)) + '_country_code';
+				select.innerHTML = [
+					'<option value="+91" selected>+91 India</option>',
+					'<option value="+1">+1 US/CA</option>',
+					'<option value="+44">+44 UK</option>',
+					'<option value="+971">+971 UAE</option>',
+				].join('');
+
+				const inlineWrap = document.createElement('div');
+				inlineWrap.style.display = 'flex';
+				inlineWrap.style.gap = '8px';
+				inlineWrap.style.alignItems = 'center';
+				inlineWrap.style.width = '100%';
+
+				select.style.minWidth = '130px';
+				select.style.height = input.offsetHeight > 0 ? input.offsetHeight + 'px' : '44px';
+				select.style.padding = '0 10px';
+				select.style.border = '1px solid #d0d5dd';
+				select.style.borderRadius = '10px';
+
+				parent.insertBefore(inlineWrap, input);
+				inlineWrap.appendChild(select);
+				inlineWrap.appendChild(input);
+
+				if (!String(input.value || '').trim().startsWith('+')) {
+					input.placeholder = input.placeholder || '98765 43210';
+				}
+
+				input.dataset.countryEnhanced = '1';
+				input.dataset.countrySelectName = select.name;
+			});
+
+			if (form.dataset.phoneCountrySubmitBound === '1') {
+				return;
+			}
+
+			form.addEventListener('submit', () => {
+				Array.from(form.querySelectorAll('input[type="tel"][data-country-enhanced="1"]')).forEach((phoneInput) => {
+					const raw = String(phoneInput.value || '').trim();
+					if (!raw || raw.startsWith('+')) {
+						return;
+					}
+
+					const selectName = phoneInput.dataset.countrySelectName;
+					if (!selectName) {
+						return;
+					}
+
+					const codeSelect = form.querySelector('select[name="' + selectName + '"]');
+					const code = codeSelect ? String(codeSelect.value || '+91').trim() : '+91';
+					phoneInput.value = code + raw.replace(/^0+/, '');
+				});
+			});
+
+			form.dataset.phoneCountrySubmitBound = '1';
+		});
+	};
+
+	if (document.readyState === 'loading') {
+		document.addEventListener('DOMContentLoaded', phoneFieldEnhancer);
+	} else {
+		phoneFieldEnhancer();
+	}
+
 	if (document.querySelector('.site-top-offer')) {
 		return;
 	}

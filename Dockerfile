@@ -1,22 +1,34 @@
 FROM php:8.2-apache
 
-# Install PHP extensions needed by the app
-RUN docker-php-ext-install mysqli pdo pdo_mysql
+RUN a2enmod rewrite headers expires
 
-# Enable Apache rewrite module
-RUN a2enmod rewrite
+RUN apt-get update && apt-get install -y \
+    libzip-dev \
+    libpng-dev \
+    libjpeg62-turbo-dev \
+    libfreetype6-dev \
+    libonig-dev \
+    libxml2-dev \
+    libcurl4-openssl-dev \
+    default-mysql-client \
+    unzip \
+    curl \
+    git \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install -j$(nproc) \
+        pdo \
+        pdo_mysql \
+        mysqli \
+        mbstring \
+        curl \
+        gd \
+        zip \
+        opcache \
+    && rm -rf /var/lib/apt/lists/*
 
-# Allow .htaccess overrides
-RUN sed -i 's/AllowOverride None/AllowOverride All/g' /etc/apache2/apache2.conf
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-# Set working directory
+COPY .docker/apache/000-default.conf /etc/apache2/sites-available/000-default.conf
+COPY .docker/php/php-production.ini /usr/local/etc/php/conf.d/99-production.ini
+
 WORKDIR /var/www/html
-
-# Copy project files (volume mount will override in dev)
-COPY . /var/www/html/
-
-# Set permissions
-RUN chown -R www-data:www-data /var/www/html \
-    && chmod -R 755 /var/www/html/uploads
-
-EXPOSE 80

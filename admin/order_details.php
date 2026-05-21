@@ -127,6 +127,7 @@ function getStatus($s){
   <h2>Order Details</h2>
 
   <div style="display:flex; gap:8px; align-items:center;">
+    <a href="production_plan.php?order_id=<?= (int)$order['id'] ?>" class="btn-back" style="background:#5b1f3a; color:#fff;">🖨 Print Production Plan</a>
     <?php if ($canGenerateInvoice): ?>
       <a href="order_invoice.php?id=<?php echo (int)$order['id']; ?>" class="btn-back" style="background:#111;">🧾 Invoice</a>
     <?php else: ?>
@@ -185,9 +186,21 @@ function getStatus($s){
 
   <?php while($item = $items->fetch_assoc()): ?>
     <div class="item-row">
-      <span><?php echo $item['product_name_snapshot']; ?></span>
-      <span>x<?php echo $item['quantity']; ?></span>
+      <span><?php echo htmlspecialchars((string)($item['product_name_snapshot'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></span>
+      <span>x<?php echo (int)$item['quantity']; ?></span>
     </div>
+    <?php if (!empty($item['variant_snapshot'])): ?>
+      <div style="font-size:12px;color:#7a5060;margin-bottom:4px;">Variant: <?= htmlspecialchars((string)$item['variant_snapshot'], ENT_QUOTES, 'UTF-8') ?></div>
+    <?php endif; ?>
+    <?php if (!empty($item['cake_message'])): ?>
+      <div style="font-size:12px;color:#5b1f3a;background:#fff0f4;border-radius:6px;padding:4px 8px;margin-bottom:4px;">🎂 Note on Cake: <?= htmlspecialchars((string)$item['cake_message'], ENT_QUOTES, 'UTF-8') ?></div>
+    <?php endif; ?>
+    <?php if (!empty($item['topper_name_snapshot']) && $item['topper_name_snapshot'] !== 'No Topper'): ?>
+      <div style="font-size:12px;color:#5b1f3a;background:#fff0f4;border-radius:6px;padding:4px 8px;margin-bottom:4px;">🎀 Topper: <?= htmlspecialchars((string)$item['topper_name_snapshot'], ENT_QUOTES, 'UTF-8') ?><?= (float)($item['topper_price_snapshot'] ?? 0) > 0 ? ' (+₹' . number_format((float)$item['topper_price_snapshot'], 0) . ')' : '' ?></div>
+    <?php endif; ?>
+    <?php if (!empty($item['customisation_note'])): ?>
+      <div style="font-size:12px;color:#5b1f3a;background:#fff8f0;border-radius:6px;padding:4px 8px;margin-bottom:4px;">📝 Note: <?= htmlspecialchars((string)$item['customisation_note'], ENT_QUOTES, 'UTF-8') ?></div>
+    <?php endif; ?>
   <?php endwhile; ?>
 </div>
 

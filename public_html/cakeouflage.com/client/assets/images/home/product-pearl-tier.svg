@@ -1,9 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" role="img" aria-labelledby="title">
-  <title id="title">Pearl tier cake artwork</title>
-  <rect width="800" height="600" fill="#f8f6f6"/>
-  <ellipse cx="400" cy="448" rx="210" ry="42" fill="#d8cace" opacity="0.42"/>
-  <rect x="220" y="300" width="360" height="120" rx="20" fill="#fffdfd"/>
-  <rect x="270" y="210" width="260" height="100" rx="20" fill="#fff4f6"/>
-  <rect x="320" y="145" width="160" height="76" rx="18" fill="#ffffff"/>
-  <circle cx="400" cy="128" r="12" fill="#ffd36c"/>
-</svg>

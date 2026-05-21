@@ -4,6 +4,105 @@ require_permission_for_current_admin_page();
 
 $tz = new DateTimeZone('Asia/Kolkata');
 $now = new DateTimeImmutable('now', $tz);
+
+// ── Single-order print mode ──────────────────────────────────────────────────
+$singleOrderId = isset($_GET['order_id']) ? (int)$_GET['order_id'] : 0;
+if ($singleOrderId > 0) {
+    $oStmt = $conn->prepare('SELECT o.*, GROUP_CONCAT(oi.id) AS item_ids FROM orders o LEFT JOIN order_items oi ON oi.order_id = o.id WHERE o.id = ? GROUP BY o.id LIMIT 1');
+    $oStmt->bind_param('i', $singleOrderId);
+    $oStmt->execute();
+    $singleOrder = ($oStmt->get_result())->fetch_assoc();
+    $oStmt->close();
+
+    $singleItems = [];
+    if ($singleOrder) {
+        $iStmt = $conn->prepare('SELECT product_name_snapshot, variant_snapshot, quantity, unit_price, line_total, cake_message, topper_name_snapshot, topper_price_snapshot, customisation_note FROM order_items WHERE order_id = ? ORDER BY id ASC');
+        $iStmt->bind_param('i', $singleOrderId);
+        $iStmt->execute();
+        $iRes = $iStmt->get_result();
+        while ($iRes && ($iRow = $iRes->fetch_assoc())) {
+            $singleItems[] = $iRow;
+        }
+        $iStmt->close();
+    }
+    ?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Production Plan — Order #<?= (int)$singleOrderId ?></title>
+<style>
+  body { font-family: Arial, sans-serif; margin: 32px; color: #1d1115; }
+  h1 { color: #80001F; font-size: 22px; margin-bottom: 4px; }
+  .meta { font-size: 13px; color: #5a3044; margin-bottom: 20px; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+  th { background: #80001F; color: #fff; padding: 8px; text-align: left; font-size: 13px; }
+  td { padding: 8px; border-bottom: 1px solid #f0d7df; font-size: 13px; vertical-align: top; }
+  .note { background: #fff4f7; border-radius: 6px; padding: 4px 8px; font-size: 12px; color: #5b1f3a; margin-top: 4px; }
+  .signature { border-top: 1px dashed #ccc; margin-top: 30px; padding-top: 16px; display: flex; justify-content: space-between; font-size: 12px; color: #888; }
+  @media print { button, .no-print { display: none !important; } }
+</style>
+</head>
+<body>
+<div class="no-print" style="margin-bottom:16px;">
+  <button onclick="window.print()" style="background:#80001F;color:#fff;border:none;border-radius:8px;padding:8px 18px;cursor:pointer;font-size:14px;">🖨 Print</button>
+  &nbsp;
+  <a href="order_details.php?id=<?= (int)$singleOrderId ?>" style="font-size:13px;color:#80001F;">← Back to Order</a>
+</div>
+<h1>🎂 Production Sheet — #<?= htmlspecialchars((string)($singleOrder['order_number'] ?? ''), ENT_QUOTES, 'UTF-8') ?></h1>
+<div class="meta">
+  Customer: <strong><?= htmlspecialchars((string)($singleOrder['customer_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></strong>
+  &nbsp;|&nbsp; Phone: <strong><?= htmlspecialchars((string)($singleOrder['customer_phone'] ?? ''), ENT_QUOTES, 'UTF-8') ?></strong>
+  &nbsp;|&nbsp; Slot: <strong><?= htmlspecialchars((string)($singleOrder['scheduled_slot_label'] ?? $singleOrder['scheduled_slot'] ?? 'Not scheduled'), ENT_QUOTES, 'UTF-8') ?></strong>
+  &nbsp;|&nbsp; Printed: <?= $now->format('d M Y, h:i A') ?> IST
+</div>
+<?php if (empty($singleItems)): ?>
+  <p>No items found for this order.</p>
+<?php else: ?>
+<table>
+  <thead>
+    <tr>
+      <th>#</th>
+      <th>Item / Variant</th>
+      <th>Qty</th>
+      <th>Topper</th>
+      <th>Note on Cake</th>
+      <th>Special Instructions</th>
+      <th>✔ Done</th>
+    </tr>
+  </thead>
+  <tbody>
+    <?php foreach ($singleItems as $i => $itm): ?>
+    <tr>
+      <td><?= $i + 1 ?></td>
+      <td>
+        <strong><?= htmlspecialchars((string)($itm['product_name_snapshot'] ?? ''), ENT_QUOTES, 'UTF-8') ?></strong>
+        <?php if (!empty($itm['variant_snapshot'])): ?>
+          <br><small><?= htmlspecialchars((string)$itm['variant_snapshot'], ENT_QUOTES, 'UTF-8') ?></small>
+        <?php endif; ?>
+      </td>
+      <td><?= (int)$itm['quantity'] ?></td>
+      <td><?= !empty($itm['topper_name_snapshot']) && $itm['topper_name_snapshot'] !== 'No Topper' ? htmlspecialchars((string)$itm['topper_name_snapshot'], ENT_QUOTES, 'UTF-8') . ((float)($itm['topper_price_snapshot'] ?? 0) > 0 ? ' (+₹' . number_format((float)$itm['topper_price_snapshot'], 0) . ')' : '') : '—' ?></td>
+      <td><?= !empty($itm['cake_message']) ? htmlspecialchars((string)$itm['cake_message'], ENT_QUOTES, 'UTF-8') : '—' ?></td>
+      <td><?= !empty($itm['customisation_note']) ? htmlspecialchars((string)$itm['customisation_note'], ENT_QUOTES, 'UTF-8') : '—' ?></td>
+      <td style="text-align:center;font-size:18px;">☐</td>
+    </tr>
+    <?php endforeach; ?>
+  </tbody>
+</table>
+<?php endif; ?>
+<div class="signature">
+  <span>Baker: ___________________________</span>
+  <span>Quality Check: ___________________________</span>
+  <span>Dispatch: ___________________________</span>
+</div>
+</body>
+</html>
+<?php
+    exit;
+}
+// ── End single-order mode ────────────────────────────────────────────────────
+
 $cutoff = new DateTimeImmutable($now->format('Y-m-d') . ' 23:45:00', $tz);
 $defaultTargetDate = $now >= $cutoff
     ? $now->modify('+2 days')->format('Y-m-d')

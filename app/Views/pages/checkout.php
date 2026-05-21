@@ -168,10 +168,15 @@ $allowPartialPayment = isset($allowPartialPayment) ? (bool)$allowPartialPayment 
 
         <!-- Customisation note -->
         <div class="checkout-section card">
-          <h2 class="checkout-section__title">Cake Message / Notes</h2>
+          <h2 class="checkout-section__title">Order Customisation</h2>
+          <!-- Per-item cake note + topper summary (populated by JS) -->
+          <div id="checkoutItemCustomSummary" style="margin-bottom:12px;display:none;">
+            <p style="font-weight:600;font-size:.88rem;margin-bottom:6px;opacity:.7;">Your customisations per item:</p>
+            <div id="checkoutItemCustomList" style="font-size:.85rem;color:#5a4050;"></div>
+          </div>
           <label class="form-control">
-            <span class="form-label">Message on Cake or Order Notes (optional)</span>
-            <textarea name="customisation_note" rows="2" placeholder="e.g. \"Happy Birthday Priya!\" or any special requests"></textarea>
+            <span class="form-label">Special Instructions (optional)</span>
+            <textarea name="customisation_note" rows="2" placeholder="e.g. No nuts, extra candles, ring inside cake…"></textarea>
           </label>
         </div>
 
@@ -543,6 +548,22 @@ if (payAdvAmt)   payAdvAmt.textContent   = '(₹' + Math.ceil(total * 0.5) + ')'
     });
 
     document.getElementById("checkoutItemsList").innerHTML = html;
+
+    // Per-item customisation summary
+    const customLines = (cart.items || []).filter(i => i.cake_message || (i.topper_name_snapshot && i.topper_name_snapshot !== 'No Topper'));
+    const customSummaryEl = document.getElementById('checkoutItemCustomSummary');
+    const customListEl = document.getElementById('checkoutItemCustomList');
+    if (customListEl && customLines.length > 0) {
+      customListEl.innerHTML = customLines.map(i => {
+        let parts = [];
+        if (i.cake_message) parts.push('🎂 ' + i.cake_message);
+        if (i.topper_name_snapshot && i.topper_name_snapshot !== 'No Topper') {
+          parts.push('🎀 ' + i.topper_name_snapshot + (parseFloat(i.topper_price||0)>0 ? ' (+₹'+Math.round(i.topper_price)+')' : ''));
+        }
+        return `<div style="margin-bottom:4px;"><strong>${i.product_name}:</strong> ${parts.join(' | ')}</div>`;
+      }).join('');
+      if (customSummaryEl) customSummaryEl.style.display = 'block';
+    }
 
   } catch (err) {
     console.error("Cart load error:", err);

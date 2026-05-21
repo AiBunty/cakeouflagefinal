@@ -1,2 +1,0 @@
--- Legacy alias templates removed from the active catalog.
--- Keep this file empty so reseeds do not restore deprecated keys.

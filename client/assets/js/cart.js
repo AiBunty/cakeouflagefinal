@@ -62,6 +62,8 @@ document.addEventListener("DOMContentLoaded", () => {
                <a href="/Cakeouflage-E-commerce/product/${item.product_slug}" class="link-inline">
   View Product
 </a>
+                ${item.cake_message ? `<p style="font-size:.8rem;color:#7a6870;margin-top:3px;">🎂 ${item.cake_message}</p>` : ''}
+                ${item.topper_name_snapshot && item.topper_name_snapshot !== 'No Topper' ? `<p style="font-size:.8rem;color:#7a6870;margin-top:2px;">🎀 ${item.topper_name_snapshot}${parseFloat(item.topper_price||0) > 0 ? ' (+₹' + Math.round(item.topper_price) + ')' : ''}</p>` : ''}
               </div>
               <div class="cart-item__actions">
                 <div class="qty-stepper">
@@ -160,11 +162,12 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   window.CakeouflageCart = {
-    async addItem(productId, variantId, quantity = 1) {
+    async addItem(productId, variantId, quantity = 1, extras = {}) {
       const payload = await utils.apiPost("/api/cart/items", {
         product_id: productId,
         variant_id: variantId,
-        quantity
+        quantity,
+        ...extras
       });
       setCartCount(Number(payload.data?.item_count || 0));
       return payload;

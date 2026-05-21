@@ -29,7 +29,9 @@ $displayPrice   = $defaultVariant && !empty($defaultVariant['discount_price'])
 $rawMainImage = '';
 $categorySlug = (string)($product['category_slug'] ?? '');
 // Filter out blank image slots (e.g. admin saved a blank 2nd image field)
-$images = array_values(array_filter($images ?? [], fn($img) => trim((string)($img['image_url'] ?? '')) !== ''));
+$images = array_values(array_filter($images ?? [], function ($img) {
+  return trim((string)($img['image_url'] ?? '')) !== '';
+}));
 
 if (!empty($images)) {
   // first image only (sorted already)
@@ -231,6 +233,26 @@ $imgPath = $img['image_url'] ?? '';
 </div>
 
 <?php endif; ?>
+
+<!-- ── Customisation ── -->
+<div class="product-customise" style="margin:1rem 0 .5rem;">
+  <?php if (!empty($product['note_enabled'])): ?>
+  <div class="form-group" style="margin-bottom:.75rem;">
+    <label for="pdpCakeMsg" style="font-weight:600;font-size:.9rem;display:block;margin-bottom:6px;">🎂 Note on the Cake <small style="font-weight:400;opacity:.7;">(optional, max 200 chars)</small></label>
+    <input type="text" id="pdpCakeMsg" maxlength="200" placeholder="e.g. Happy Birthday Sarah!" style="width:100%;padding:8px 12px;border:1.5px solid #e5d5d9;border-radius:10px;font-size:.9rem;outline:none;" />
+    <span id="pdpCakeMsgCount" style="font-size:.72rem;opacity:.55;display:block;text-align:right;margin-top:3px;">0/200</span>
+  </div>
+  <?php endif; ?>
+  <?php if (!empty($product['topper_enabled'])): ?>
+  <div class="form-group" id="topperGroup" style="margin-bottom:.75rem;">
+    <label for="pdpTopper" style="font-weight:600;font-size:.9rem;display:block;margin-bottom:6px;">🎀 Select Topper <small style="font-weight:400;opacity:.7;">(optional)</small></label>
+    <select id="pdpTopper" style="width:100%;padding:8px 12px;border:1.5px solid #e5d5d9;border-radius:10px;font-size:.9rem;background:#fff;outline:none;">
+      <option value="">Loading…</option>
+    </select>
+    <span id="pdpTopperPriceNote" style="font-size:.78rem;color:#80001f;margin-top:4px;display:none;"></span>
+  </div>
+  <?php endif; ?>
+</div>
 
           <!-- Delivery strip -->
           <div class="pdp__delivery-strip">
@@ -436,6 +458,18 @@ $imgPath = $img['image_url'] ?? '';
 
   let selectedVariantId = <?= !empty($variants) ? (int)$variants[0]['id'] : 'null' ?>;
 
+  // ── Topper & customisation state ──────────────────────────────
+  const TOPPER_ENABLED = <?= !empty($product['topper_enabled']) ? 'true' : 'false' ?>;
+  const NOTE_ENABLED   = <?= !empty($product['note_enabled'])   ? 'true' : 'false' ?>;
+  let _currentTopper = { id: null, price: 0 };
+  let _currentVariantPrice = <?= !empty($variants) ? (float)($variants[0]['discount_price'] ?: $variants[0]['price']) : 0 ?>;
+
+  function _pdpUpdateTotalPrice() {
+    const base = _currentVariantPrice + _currentTopper.price;
+    document.getElementById('currentPrice').textContent = '₹' + Math.round(base).toLocaleString('en-IN');
+    document.getElementById('pdpMobilePrice').textContent = '₹' + Math.round(base).toLocaleString('en-IN');
+  }
+
   window.pdpSelectVariant = function (btn) {
     document.querySelectorAll('.variant-pill').forEach(b => {
       b.classList.remove('is-active');
@@ -449,8 +483,9 @@ $imgPath = $img['image_url'] ?? '';
     if (!v) return;
 
     const price = v.price;
-    document.getElementById('currentPrice').textContent = '₹' + Math.round(price).toLocaleString('en-IN');
-    document.getElementById('pdpMobilePrice').textContent = '₹' + Math.round(price).toLocaleString('en-IN');
+    _currentVariantPrice = price;
+    document.getElementById('currentPrice').textContent = '₹' + Math.round(_currentVariantPrice + _currentTopper.price).toLocaleString('en-IN');
+    document.getElementById('pdpMobilePrice').textContent = '₹' + Math.round(_currentVariantPrice + _currentTopper.price).toLocaleString('en-IN');
 
     const origEl = document.getElementById('origPrice');
     const saveEl = document.getElementById('savingsBadge');
@@ -485,10 +520,13 @@ $imgPath = $img['image_url'] ?? '';
   // ── Add to Cart ────────────────────────────────────────────────
   function doAddToCart() {
     const qty = parseInt(qtyInput?.value ?? 1, 10);
+    const cakeMsg = NOTE_ENABLED ? (document.getElementById('pdpCakeMsg')?.value ?? '').trim().substring(0, 200) : '';
+    const topperId = TOPPER_ENABLED ? (document.getElementById('pdpTopper')?.value || null) : null;
  window.CakeouflageCart.addItem(
   <?= (int)$product['id'] ?>,
   selectedVariantId,
-  qty
+  qty,
+  { cake_message: cakeMsg || undefined, topper_id: topperId || undefined }
 )
 .then(() => {
   const btn = document.getElementById('addToCartBtn');
@@ -506,6 +544,41 @@ $imgPath = $img['image_url'] ?? '';
 
   document.getElementById('addToCartBtn')?.addEventListener('click', doAddToCart);
   document.getElementById('pdpMobileAddBtn')?.addEventListener('click', doAddToCart);
+
+  // ── Char counter for cake message ──────────────────────────────
+  const pdpCakeMsg = document.getElementById('pdpCakeMsg');
+  const pdpCakeMsgCount = document.getElementById('pdpCakeMsgCount');
+  pdpCakeMsg?.addEventListener('input', function () {
+    if (pdpCakeMsgCount) pdpCakeMsgCount.textContent = this.value.length + '/200';
+  });
+
+  // ── Fetch & render toppers ─────────────────────────────────────
+  if (TOPPER_ENABLED) {
+    fetch('/api/toppers')
+      .then(r => r.json())
+      .then(d => {
+        const sel = document.getElementById('pdpTopper');
+        if (!sel || !d.success) return;
+        sel.innerHTML = '<option value="">— No Topper —</option>' + d.data.map(t =>
+          `<option value="${t.id}" data-price="${t.price}">${t.name}${parseFloat(t.price) > 0 ? ' (+\u20b9' + Math.round(t.price) + ')' : ''}</option>`
+        ).join('');
+        sel.addEventListener('change', function () {
+          const opt = this.options[this.selectedIndex];
+          const tp = parseFloat(opt?.dataset?.price ?? '0') || 0;
+          _currentTopper = { id: this.value || null, price: tp };
+          const note = document.getElementById('pdpTopperPriceNote');
+          if (note) {
+            if (tp > 0) { note.textContent = '+\u20b9' + Math.round(tp) + ' for topper'; note.style.display = 'block'; }
+            else { note.style.display = 'none'; }
+          }
+          _pdpUpdateTotalPrice();
+        });
+      })
+      .catch(() => {
+        const sel = document.getElementById('pdpTopper');
+        if (sel) sel.innerHTML = '<option value="">— No Topper —</option>';
+      });
+  }
 
   // ── Wishlist ───────────────────────────────────────────────────
   document.getElementById('pdpWishlistBtn')?.addEventListener('click', function () {

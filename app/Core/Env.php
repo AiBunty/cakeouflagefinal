@@ -40,6 +40,25 @@ final class Env
 
     public static function get(string $key, ?string $default = null): ?string
     {
-        return self::$vars[$key] ?? $_ENV[$key] ?? $default;
+        if (array_key_exists($key, self::$vars)) {
+            return self::$vars[$key];
+        }
+
+        if (array_key_exists($key, $_ENV)) {
+            $value = $_ENV[$key];
+            return is_scalar($value) ? (string)$value : $default;
+        }
+
+        $value = getenv($key);
+        if ($value !== false && $value !== '') {
+            return (string)$value;
+        }
+
+        if (defined($key)) {
+            $constantValue = constant($key);
+            return is_scalar($constantValue) ? (string)$constantValue : $default;
+        }
+
+        return $default;
     }
 }

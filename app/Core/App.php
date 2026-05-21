@@ -111,6 +111,7 @@ final class App
             ['method' => 'GET', 'path' => '/api/auth/me', 'handler' => [$api, 'authMe']],
             ['method' => 'POST', 'path' => '/api/auth/logout', 'handler' => [$api, 'authLogout']],
             ['method' => 'GET', 'path' => '/api/cart', 'handler' => [$api, 'cartGet']],
+            ['method' => 'GET', 'path' => '/api/toppers', 'handler' => [$api, 'toppers']],
             ['method' => 'POST', 'path' => '/api/cart/items', 'handler' => [$api, 'cartAddItem']],
             ['method' => 'PATCH', 'path' => '/api/cart/items/:id', 'handler' => [$api, 'cartUpdateItem']],
             ['method' => 'DELETE', 'path' => '/api/cart/items/:id', 'handler' => [$api, 'cartDeleteItem']],

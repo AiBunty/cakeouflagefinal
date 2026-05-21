@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Core\Database;
 use App\Core\Env;
 
 require_once __DIR__ . '/../../vendor/PHPMailer/src/PHPMailer.php';
@@ -15,6 +16,34 @@ class MailService
 {
     public static function sendOtp($email, $otp, $customerName = 'Customer')
     {
+        $safeName = trim((string)$customerName);
+        if ($safeName === '') {
+            $safeName = 'Customer';
+        }
+
+        $subject = 'Your OTP Code';
+        $textBody = "Hello {$safeName},\n\nYour OTP is: {$otp}\nThis OTP is valid for 5 minutes.\n\nIf you did not request this OTP, please ignore this email.";
+        $htmlBody = '<div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.6;color:#1f2937;">'
+            . '<p>Hello ' . htmlspecialchars($safeName, ENT_QUOTES, 'UTF-8') . ',</p>'
+            . '<p>Your OTP is: <strong>' . htmlspecialchars((string)$otp, ENT_QUOTES, 'UTF-8') . '</strong></p>'
+            . '<p>This OTP is valid for 5 minutes.</p>'
+            . '<p>If you did not request this OTP, please ignore this email.</p>'
+            . '</div>';
+
+        // Prefer SMTP settings saved from admin panel.
+        try {
+            $pdo = Database::getConnection();
+            if ($pdo) {
+                $transport = SmtpTransportService::fromDatabase($pdo);
+                if ($transport->isConfigured()) {
+                    $transport->send([(string)$email], $subject, $textBody, $htmlBody);
+                    return true;
+                }
+            }
+        } catch (\Throwable $e) {
+            error_log('OTP SMTP DB transport failed: ' . $e->getMessage());
+        }
+
         $mail = new PHPMailer(true);
         try {
             // SMTP config
@@ -29,19 +58,8 @@ class MailService
             $mail->addAddress($email);
             $mail->isHTML(true);
 
-            $safeName = trim((string)$customerName);
-            if ($safeName === '') {
-                $safeName = 'Customer';
-            }
-
-            $mail->Subject = 'Your OTP Code';
-            $mail->Body = '<div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.6;color:#1f2937;">'
-                . '<p>Hello ' . htmlspecialchars($safeName, ENT_QUOTES, 'UTF-8') . ',</p>'
-                . '<p>Your OTP is: <strong>' . htmlspecialchars((string)$otp, ENT_QUOTES, 'UTF-8') . '</strong></p>'
-                . '<p>This OTP is valid for 5 minutes.</p>'
-                . '<p>If you did not request this OTP, please ignore this email.</p>'
-                . '<p style="margin-top:20px;font-size:12px;color:#6b7280;">Powerd by DCore Systems www.dcoresystems.com</p>'
-                . '</div>';
+            $mail->Subject = $subject;
+            $mail->Body = $htmlBody;
 
             $mail->send();
             return true;
@@ -57,7 +75,8 @@ $customerName,
 $orderId,
 $itemName,
 $amount,
-$phone
+$phone,
+$itemDetails = []
 ) {
 $mail = new PHPMailer(true);
 
@@ -133,7 +152,45 @@ $mail->setFrom(
                     <p><strong>Mobile:</strong> $phone</p>
                     <p><strong>Email:</strong> $email</p>
                     <p><strong>Item:</strong> $itemName</p>
+";
 
+    // Render per-item details table if provided
+    if (!empty($itemDetails)) {
+        $mail->Body .= "
+                    <table style='width:100%;border-collapse:collapse;margin-top:12px;font-size:13px;'>
+                        <thead>
+                            <tr style='background:#f5eef2;'>
+                                <th style='padding:8px;text-align:left;border-bottom:1px solid #ebd4dc;'>Item</th>
+                                <th style='padding:8px;text-align:left;border-bottom:1px solid #ebd4dc;'>Variant</th>
+                                <th style='padding:8px;text-align:left;border-bottom:1px solid #ebd4dc;'>Note / Topper</th>
+                                <th style='padding:8px;text-align:right;border-bottom:1px solid #ebd4dc;'>Qty × Price</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+";
+        foreach ($itemDetails as $itm) {
+            $note = htmlspecialchars((string)($itm['cake_message'] ?? ''), ENT_QUOTES, 'UTF-8');
+            $topper = htmlspecialchars((string)($itm['topper_name_snapshot'] ?? ''), ENT_QUOTES, 'UTF-8');
+            $noteTopper = array_filter([$note ? "🎂 $note" : '', $topper && $topper !== 'No Topper' ? "🎀 $topper" : '']);
+            $noteTopperStr = implode('<br>', $noteTopper) ?: '—';
+            $qty  = (int)($itm['quantity'] ?? 1);
+            $price = '₹' . number_format((float)($itm['line_total'] ?? 0), 0);
+            $mail->Body .= "
+                            <tr>
+                                <td style='padding:7px;border-bottom:1px solid #f5e8ec;'>" . htmlspecialchars((string)($itm['product_name_snapshot'] ?? $itm['product_name'] ?? ''), ENT_QUOTES, 'UTF-8') . "</td>
+                                <td style='padding:7px;border-bottom:1px solid #f5e8ec;'>" . htmlspecialchars((string)($itm['variant_snapshot'] ?? $itm['variant_label'] ?? ''), ENT_QUOTES, 'UTF-8') . "</td>
+                                <td style='padding:7px;border-bottom:1px solid #f5e8ec;font-size:12px;color:#7a5060;'>$noteTopperStr</td>
+                                <td style='padding:7px;border-bottom:1px solid #f5e8ec;text-align:right;'>{$qty}×$price</td>
+                            </tr>
+";
+        }
+        $mail->Body .= "
+                        </tbody>
+                    </table>
+";
+    }
+
+    $mail->Body .= "
                     <p style='font-size:24px;color:#80001F;font-weight:bold;'>
                         Amount: ₹$amount
                     </p>

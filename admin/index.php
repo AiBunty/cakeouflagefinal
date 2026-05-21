@@ -1,5 +1,13 @@
 <?php
 declare(strict_types=1);
 
-header('Location: dashboard.php');
+session_name('cakeouflage_sid');
+session_start();
+
+if (isset($_SESSION['admin']) || isset($_SESSION['admin_id'])) {
+	header('Location: dashboard.php');
+	exit;
+}
+
+header('Location: login.php');
 exit;

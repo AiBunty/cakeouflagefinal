@@ -135,8 +135,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string)($_POST['action'] ?? '') ==
   $allowedDietary = ['regular', 'eggless', 'vegan', 'sugar_free', 'healthy'];
   if (!in_array($dietaryTag, $allowedDietary, true)) { $dietaryTag = 'regular'; }
   $isVeg = isset($_POST['is_veg']) ? 1 : 0;
-  $stmt = $conn->prepare('UPDATE products SET name = ?, slug = ?, starting_price = ?, collection_category_id = ?, short_description = ?, featured_image = ?, availability_status = ?, is_chef_special = ?, dietary_tag = ?, is_veg = ?, updated_at = NOW() WHERE id = ? LIMIT 1');
-  $stmt->bind_param('ssdisssisii', $name, $slug, $basePrice, $categoryId, $description, $newImagePath, $availabilityStatus, $isChefSpecial, $dietaryTag, $isVeg, $id);
+  $topperEnabled = isset($_POST['topper_enabled']) ? 1 : 0;
+  $noteEnabled   = isset($_POST['note_enabled']) ? 1 : 0;
+  $stmt = $conn->prepare('UPDATE products SET name = ?, slug = ?, starting_price = ?, collection_category_id = ?, short_description = ?, featured_image = ?, availability_status = ?, is_chef_special = ?, dietary_tag = ?, is_veg = ?, topper_enabled = ?, note_enabled = ?, updated_at = NOW() WHERE id = ? LIMIT 1');
+  $stmt->bind_param('ssdisssisiiii', $name, $slug, $basePrice, $categoryId, $description, $newImagePath, $availabilityStatus, $isChefSpecial, $dietaryTag, $isVeg, $topperEnabled, $noteEnabled, $id);
   $ok = $stmt->execute();
 
   // Keep variant prices aligned with base price logic from edit flow.
@@ -1006,7 +1008,9 @@ include "layout.php";
                     data-preview-image="<?php echo prod_h(prod_resolve_image_url((string)($row['featured_image'] ?? ''))); ?>"
                     data-image2-url="<?php echo prod_h(prod_resolve_image_url((string)($row['image2_url'] ?? ''))); ?>"
                     data-chef-special="<?php echo (int)($row['is_chef_special'] ?? 0); ?>"
-                    data-availability="<?php echo prod_h((string)($row['availability_status'] ?? 'in_stock')); ?>">✏ Edit</button>
+                    data-availability="<?php echo prod_h((string)($row['availability_status'] ?? 'in_stock')); ?>"
+                    data-topper-enabled="<?php echo (int)($row['topper_enabled'] ?? 1); ?>"
+                    data-note-enabled="<?php echo (int)($row['note_enabled'] ?? 1); ?>">✏ Edit</button>
                   <a href="delete-product.php?id=<?php echo $row['id']; ?>" onclick="return confirm('Delete this product?')" class="product-action product-action--delete" title="Delete product">🗑 Delete</a>
                 </div>
               </td>
@@ -1053,7 +1057,9 @@ include "layout.php";
                 data-chef-special="<?php echo (int)($row['is_chef_special'] ?? 0); ?>"
                 data-availability="<?php echo prod_h((string)($row['availability_status'] ?? 'in_stock')); ?>"
                 data-dietary="<?php echo prod_h((string)($row['dietary_tag'] ?? 'regular')); ?>"
-                data-is-veg="<?php echo (int)($row['is_veg'] ?? 1); ?>">Edit</button>
+                data-is-veg="<?php echo (int)($row['is_veg'] ?? 1); ?>"
+                data-topper-enabled="<?php echo (int)($row['topper_enabled'] ?? 1); ?>"
+                data-note-enabled="<?php echo (int)($row['note_enabled'] ?? 1); ?>">Edit</button>
               <a href="delete-product.php?id=<?php echo $row['id']; ?>" onclick="return confirm('Delete this product?')" class="product-action product-action--delete">Delete</a>
             </div>
           </div>
@@ -1138,6 +1144,14 @@ include "layout.php";
 
           <div class="prod-editor-field">
             <label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" name="is_veg" id="prodEditIsVeg" value="1"> Veg</label>
+          </div>
+
+          <div class="prod-editor-field">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" name="topper_enabled" id="prodEditTopperEnabled" value="1" checked> Enable Topper Selection on PDP</label>
+          </div>
+
+          <div class="prod-editor-field">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" name="note_enabled" id="prodEditNoteEnabled" value="1" checked> Enable Note on the Cake on PDP</label>
           </div>
 
           <div class="prod-editor-field prod-editor-field--wide">
@@ -1260,8 +1274,12 @@ include "layout.php";
       if (prodEditChefSpecial) prodEditChefSpecial.checked = Number(button.getAttribute('data-chef-special') || '0') === 1;
       const prodEditDietary = document.getElementById('prodEditDietary');
       const prodEditIsVeg = document.getElementById('prodEditIsVeg');
+      const prodEditTopperEnabled = document.getElementById('prodEditTopperEnabled');
+      const prodEditNoteEnabled   = document.getElementById('prodEditNoteEnabled');
       if (prodEditDietary) prodEditDietary.value = button.getAttribute('data-dietary') || 'regular';
       if (prodEditIsVeg) prodEditIsVeg.checked = Number(button.getAttribute('data-is-veg') || '1') === 1;
+      if (prodEditTopperEnabled) prodEditTopperEnabled.checked = Number(button.getAttribute('data-topper-enabled') ?? '1') === 1;
+      if (prodEditNoteEnabled) prodEditNoteEnabled.checked = Number(button.getAttribute('data-note-enabled') ?? '1') === 1;
 
       const triggerRow = button.closest('tr');
       if (triggerRow && triggerRow.parentNode) {

@@ -69,6 +69,8 @@ function processRow(
     int    $isChefSpecial,
     string $dietaryTag,
     int    $isVeg,
+    int    $topperEnabled = 1,
+    int    $noteEnabled   = 1,
     string &$action = ''
 ): int|false {
 
@@ -138,11 +140,13 @@ function processRow(
                 is_chef_special        = ?,
                 dietary_tag            = ?,
                 is_veg                 = ?,
+                topper_enabled         = ?,
+                note_enabled           = ?,
                 base_price             = ?,
                 starting_price         = ?,
                 updated_at             = NOW()
             WHERE id = ?
-        ")->execute([$categoryId, $isChefSpecial, $dietaryTag, $isVeg, $basePrice, $basePrice, $productId]);
+        ")->execute([$categoryId, $isChefSpecial, $dietaryTag, $isVeg, $topperEnabled, $noteEnabled, $basePrice, $basePrice, $productId]);
 
     } else {
         $action    = 'insert';
@@ -165,12 +169,12 @@ function processRow(
             INSERT INTO products
                 (name, slug, sku, subcategory_id, collection_category_id,
                  base_price, starting_price, availability_status,
-                 is_chef_special, dietary_tag, is_veg, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 'in_stock', ?, ?, ?, NOW())
+                 is_chef_special, dietary_tag, is_veg, topper_enabled, note_enabled, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'in_stock', ?, ?, ?, ?, ?, NOW())
         ")->execute([
             $productName, $slug, $sku, $subcategoryId, $categoryId,
             $basePrice, $basePrice,
-            $isChefSpecial, $dietaryTag, $isVeg,
+            $isChefSpecial, $dietaryTag, $isVeg, $topperEnabled, $noteEnabled,
         ]);
 
         $productId = (int)$pdo->lastInsertId();
@@ -358,12 +362,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['upload'])) {
 
                     $isVeg = (trim((string)($row[16] ?? '')) === '0') ? 0 : 1;
 
+                    $rawTopper = trim((string)($row[17] ?? ''));
+                    $topperEnabled = ($rawTopper === '0') ? 0 : 1;
+
+                    $rawNote = trim((string)($row[18] ?? ''));
+                    $noteEnabled = ($rawNote === '0') ? 0 : 1;
+
                     $action    = '';
                     $productId = processRow(
                         $pdo,
                         $categoryName, $subcategoryName, $productName,
                         $variantPrices,
-                        $isChefSpecial, $dietaryTag, $isVeg,
+                        $isChefSpecial, $dietaryTag, $isVeg, $topperEnabled, $noteEnabled,
                         $action
                     );
 

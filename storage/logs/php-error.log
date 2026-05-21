@@ -1,517 +1,492 @@
-[15-May-2026 12:16:46 Asia/Kolkata] [2026-05-15T12:16:46+05:30] Database connection failed. in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:68\n#0 Standard input code(8): App\Core\Database::getConnection()
-#1 {main}
-[16-May-2026 10:20:27 Asia/Kolkata] [update_order_status] Request: id=159, status=confirmed, method=upi_manual, redirect=
-[16-May-2026 10:20:27 Asia/Kolkata] [update_order_status] Test query OK - order exists: YES
-[16-May-2026 10:20:27 Asia/Kolkata] [update_order_status] Permissions passed
-[16-May-2026 10:20:27 Asia/Kolkata] [update_order_status] AdminId: 1
-[16-May-2026 10:20:27 Asia/Kolkata] [update_order_status] Status update result: rows=1, status=confirmed
-[16-May-2026 10:20:27 Asia/Kolkata] PHP Warning:  Undefined variable $flashParam in /var/www/html/admin/update_order_status.php on line 107
-[16-May-2026 10:20:27 Asia/Kolkata] PHP Warning:  Cannot modify header information - headers already sent by (output started at /var/www/html/admin/update_order_status.php:107) in /var/www/html/admin/update_order_status.php on line 206
-[16-May-2026 10:21:04 Asia/Kolkata] [update_order_status] Request: id=159, status=confirmed, method=upi_manual, redirect=
-[16-May-2026 10:21:04 Asia/Kolkata] [update_order_status] Test query OK - order exists: YES
-[16-May-2026 10:21:04 Asia/Kolkata] [update_order_status] Permissions passed
-[16-May-2026 10:21:04 Asia/Kolkata] [update_order_status] AdminId: 1
-[16-May-2026 10:21:04 Asia/Kolkata] [update_order_status] Status update result: rows=0, status=confirmed
-[16-May-2026 10:21:04 Asia/Kolkata] PHP Warning:  Undefined variable $flashParam in /var/www/html/admin/update_order_status.php on line 107
-[16-May-2026 10:21:04 Asia/Kolkata] PHP Warning:  Cannot modify header information - headers already sent by (output started at /var/www/html/admin/update_order_status.php:107) in /var/www/html/admin/update_order_status.php on line 206
-[16-May-2026 10:21:17 Asia/Kolkata] [update_order_status] Request: id=1, status=confirmed, method=upi_manual, redirect=
-[16-May-2026 10:21:17 Asia/Kolkata] [update_order_status] Test query OK - order exists: NO
-[16-May-2026 10:21:17 Asia/Kolkata] [update_order_status] Order not found: id=1
-[16-May-2026 10:21:32 Asia/Kolkata] [update_order_status] Request: id=17, status=confirmed, method=upi_manual, redirect=
-[16-May-2026 10:21:32 Asia/Kolkata] [update_order_status] Test query OK - order exists: YES
-[16-May-2026 10:21:32 Asia/Kolkata] [update_order_status] Permissions passed
-[16-May-2026 10:21:32 Asia/Kolkata] [update_order_status] AdminId: 1
-[16-May-2026 10:21:32 Asia/Kolkata] [update_order_status] Status update result: rows=1, status=confirmed
-[16-May-2026 10:21:32 Asia/Kolkata] PHP Warning:  Undefined variable $flashParam in /var/www/html/admin/update_order_status.php on line 107
-[16-May-2026 10:21:32 Asia/Kolkata] PHP Warning:  Cannot modify header information - headers already sent by (output started at /var/www/html/admin/update_order_status.php:107) in /var/www/html/admin/update_order_status.php on line 206
-[16-May-2026 13:37:31 Asia/Kolkata] [update_order_status][automation] SQLSTATE[42S02]: Base table or view not found: 1146 Table 'cakeouflage_dev.crm_settings' doesn't exist
-[16-May-2026 13:39:27 Asia/Kolkata] [update_order_status][automation] SQLSTATE[42S02]: Base table or view not found: 1146 Table 'cakeouflage_dev.crm_settings' doesn't exist
-[16-May-2026 17:05:32 Asia/Kolkata] PHP Fatal error:  Uncaught PDOException: PDO::__construct(): php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:61
+[20-May-2026 11:57:45 UTC] PHP Fatal error:  Uncaught RuntimeException: Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.2.0". You are running 8.1.34. in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
 Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php(61): PDO->__construct('mysql:host=cake...', 'root', 'rootpassword', Array)
+#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\autoload_real.php(25): require()
+#1 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\autoload.php(22): ComposerAutoloaderInit99d99c36c66a5d5685da6cab9ce9918f::getLoader()
+#2 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\bootstrap.php(81): require_once('D:\\GITHUB Proje...')
+#3 Command line code(1): require('D:\\GITHUB Proje...')
+#4 {main}
+  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php on line 26
+[20-May-2026 11:57:45 UTC] [2026-05-20T11:57:45+00:00] Fatal error: Uncaught RuntimeException: Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.2.0". You are running 8.1.34. in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
+Stack trace:
+#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\autoload_real.php(25): require()
+#1 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\autoload.php(22): ComposerAutoloaderInit99d99c36c66a5d5685da6cab9ce9918f::getLoader()
+#2 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\bootstrap.php(81): require_once('D:\\GITHUB Proje...')
+#3 Command line code(1): require('D:\\GITHUB Proje...')
+#4 {main}
+  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
+[20-May-2026 11:58:01 UTC] PHP Fatal error:  Uncaught RuntimeException: Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.2.0". You are running 8.1.34. in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
+Stack trace:
+#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\autoload_real.php(25): require()
+#1 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\autoload.php(22): ComposerAutoloaderInit99d99c36c66a5d5685da6cab9ce9918f::getLoader()
+#2 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\bootstrap.php(81): require_once('D:\\GITHUB Proje...')
+#3 Command line code(1): require('D:\\GITHUB Proje...')
+#4 {main}
+  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php on line 26
+[20-May-2026 11:58:01 UTC] [2026-05-20T11:58:01+00:00] Fatal error: Uncaught RuntimeException: Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.2.0". You are running 8.1.34. in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
+Stack trace:
+#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\autoload_real.php(25): require()
+#1 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\autoload.php(22): ComposerAutoloaderInit99d99c36c66a5d5685da6cab9ce9918f::getLoader()
+#2 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\bootstrap.php(81): require_once('D:\\GITHUB Proje...')
+#3 Command line code(1): require('D:\\GITHUB Proje...')
+#4 {main}
+  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
+[20-May-2026 11:58:09 UTC] PHP Fatal error:  Uncaught RuntimeException: Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.2.0". You are running 8.1.34. in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
+Stack trace:
+#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\autoload_real.php(25): require()
+#1 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\autoload.php(22): ComposerAutoloaderInit99d99c36c66a5d5685da6cab9ce9918f::getLoader()
+#2 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\bootstrap.php(81): require_once('D:\\GITHUB Proje...')
+#3 Command line code(1): require('D:\\GITHUB Proje...')
+#4 {main}
+  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php on line 26
+[20-May-2026 11:58:09 UTC] [2026-05-20T11:58:09+00:00] Fatal error: Uncaught RuntimeException: Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.2.0". You are running 8.1.34. in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
+Stack trace:
+#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\autoload_real.php(25): require()
+#1 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\autoload.php(22): ComposerAutoloaderInit99d99c36c66a5d5685da6cab9ce9918f::getLoader()
+#2 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\bootstrap.php(81): require_once('D:\\GITHUB Proje...')
+#3 Command line code(1): require('D:\\GITHUB Proje...')
+#4 {main}
+  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
+[20-May-2026 11:58:12 UTC] PHP Fatal error:  Uncaught RuntimeException: Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.2.0". You are running 8.1.34. in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
+Stack trace:
+#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\autoload_real.php(25): require()
+#1 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\autoload.php(22): ComposerAutoloaderInit99d99c36c66a5d5685da6cab9ce9918f::getLoader()
+#2 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\bootstrap.php(81): require_once('D:\\GITHUB Proje...')
+#3 Command line code(1): require('D:\\GITHUB Proje...')
+#4 {main}
+  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php on line 26
+[20-May-2026 11:58:12 UTC] [2026-05-20T11:58:12+00:00] Fatal error: Uncaught RuntimeException: Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.2.0". You are running 8.1.34. in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
+Stack trace:
+#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\autoload_real.php(25): require()
+#1 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\autoload.php(22): ComposerAutoloaderInit99d99c36c66a5d5685da6cab9ce9918f::getLoader()
+#2 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\bootstrap.php(81): require_once('D:\\GITHUB Proje...')
+#3 Command line code(1): require('D:\\GITHUB Proje...')
+#4 {main}
+  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
+[20-May-2026 13:35:47 UTC] PHP Fatal error:  Uncaught RuntimeException: Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.2.0". You are running 8.1.34. in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
+Stack trace:
+#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\autoload_real.php(25): require()
+#1 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\autoload.php(22): ComposerAutoloaderInit99d99c36c66a5d5685da6cab9ce9918f::getLoader()
+#2 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\bootstrap.php(81): require_once('D:\\GITHUB Proje...')
+#3 Command line code(1): require('D:\\GITHUB Proje...')
+#4 {main}
+  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php on line 26
+[20-May-2026 13:35:47 UTC] [2026-05-20T13:35:47+00:00] Fatal error: Uncaught RuntimeException: Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.2.0". You are running 8.1.34. in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
+Stack trace:
+#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\autoload_real.php(25): require()
+#1 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\autoload.php(22): ComposerAutoloaderInit99d99c36c66a5d5685da6cab9ce9918f::getLoader()
+#2 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\bootstrap.php(81): require_once('D:\\GITHUB Proje...')
+#3 Command line code(1): require('D:\\GITHUB Proje...')
+#4 {main}
+  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
+[20-May-2026 13:36:05 UTC] PHP Fatal error:  Uncaught RuntimeException: Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.2.0". You are running 8.1.34. in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
+Stack trace:
+#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\autoload_real.php(25): require()
+#1 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\autoload.php(22): ComposerAutoloaderInit99d99c36c66a5d5685da6cab9ce9918f::getLoader()
+#2 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\bootstrap.php(81): require_once('D:\\GITHUB Proje...')
+#3 Command line code(1): require('D:\\GITHUB Proje...')
+#4 {main}
+  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php on line 26
+[20-May-2026 13:36:05 UTC] [2026-05-20T13:36:05+00:00] Fatal error: Uncaught RuntimeException: Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.2.0". You are running 8.1.34. in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
+Stack trace:
+#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\autoload_real.php(25): require()
+#1 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\autoload.php(22): ComposerAutoloaderInit99d99c36c66a5d5685da6cab9ce9918f::getLoader()
+#2 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\bootstrap.php(81): require_once('D:\\GITHUB Proje...')
+#3 Command line code(1): require('D:\\GITHUB Proje...')
+#4 {main}
+  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
+[20-May-2026 13:36:13 UTC] PHP Fatal error:  Uncaught RuntimeException: Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.2.0". You are running 8.1.34. in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
+Stack trace:
+#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\autoload_real.php(25): require()
+#1 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\autoload.php(22): ComposerAutoloaderInit99d99c36c66a5d5685da6cab9ce9918f::getLoader()
+#2 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\bootstrap.php(81): require_once('D:\\GITHUB Proje...')
+#3 Command line code(1): require('D:\\GITHUB Proje...')
+#4 {main}
+  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php on line 26
+[20-May-2026 13:36:13 UTC] [2026-05-20T13:36:13+00:00] Fatal error: Uncaught RuntimeException: Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.2.0". You are running 8.1.34. in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
+Stack trace:
+#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\autoload_real.php(25): require()
+#1 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\autoload.php(22): ComposerAutoloaderInit99d99c36c66a5d5685da6cab9ce9918f::getLoader()
+#2 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\bootstrap.php(81): require_once('D:\\GITHUB Proje...')
+#3 Command line code(1): require('D:\\GITHUB Proje...')
+#4 {main}
+  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
+[20-May-2026 13:36:26 UTC] PHP Fatal error:  Uncaught RuntimeException: Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.2.0". You are running 8.1.34. in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
+Stack trace:
+#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\autoload_real.php(25): require()
+#1 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\autoload.php(22): ComposerAutoloaderInit99d99c36c66a5d5685da6cab9ce9918f::getLoader()
+#2 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\bootstrap.php(81): require_once('D:\\GITHUB Proje...')
+#3 Command line code(1): require('D:\\GITHUB Proje...')
+#4 {main}
+  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php on line 26
+[20-May-2026 13:36:26 UTC] [2026-05-20T13:36:26+00:00] Fatal error: Uncaught RuntimeException: Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.2.0". You are running 8.1.34. in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
+Stack trace:
+#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\autoload_real.php(25): require()
+#1 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\autoload.php(22): ComposerAutoloaderInit99d99c36c66a5d5685da6cab9ce9918f::getLoader()
+#2 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\bootstrap.php(81): require_once('D:\\GITHUB Proje...')
+#3 Command line code(1): require('D:\\GITHUB Proje...')
+#4 {main}
+  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
+[20-May-2026 13:36:34 UTC] PHP Fatal error:  Uncaught RuntimeException: Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.2.0". You are running 8.1.34. in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
+Stack trace:
+#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\autoload_real.php(25): require()
+#1 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\autoload.php(22): ComposerAutoloaderInit99d99c36c66a5d5685da6cab9ce9918f::getLoader()
+#2 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\bootstrap.php(81): require_once('D:\\GITHUB Proje...')
+#3 Command line code(1): require('D:\\GITHUB Proje...')
+#4 {main}
+  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php on line 26
+[20-May-2026 13:36:34 UTC] [2026-05-20T13:36:34+00:00] Fatal error: Uncaught RuntimeException: Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.2.0". You are running 8.1.34. in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
+Stack trace:
+#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\autoload_real.php(25): require()
+#1 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\autoload.php(22): ComposerAutoloaderInit99d99c36c66a5d5685da6cab9ce9918f::getLoader()
+#2 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\bootstrap.php(81): require_once('D:\\GITHUB Proje...')
+#3 Command line code(1): require('D:\\GITHUB Proje...')
+#4 {main}
+  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
+[20-May-2026 13:37:07 UTC] PHP Fatal error:  Uncaught RuntimeException: Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.2.0". You are running 8.1.34. in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
+Stack trace:
+#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\autoload_real.php(25): require()
+#1 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\autoload.php(22): ComposerAutoloaderInit99d99c36c66a5d5685da6cab9ce9918f::getLoader()
+#2 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\bootstrap.php(81): require_once('D:\\GITHUB Proje...')
+#3 Command line code(1): require('D:\\GITHUB Proje...')
+#4 {main}
+  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php on line 26
+[20-May-2026 13:37:07 UTC] [2026-05-20T13:37:07+00:00] Fatal error: Uncaught RuntimeException: Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.2.0". You are running 8.1.34. in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
+Stack trace:
+#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\autoload_real.php(25): require()
+#1 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\autoload.php(22): ComposerAutoloaderInit99d99c36c66a5d5685da6cab9ce9918f::getLoader()
+#2 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\bootstrap.php(81): require_once('D:\\GITHUB Proje...')
+#3 Command line code(1): require('D:\\GITHUB Proje...')
+#4 {main}
+  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
+[20-May-2026 13:44:38 UTC] PHP Fatal error:  Uncaught RuntimeException: Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.2.0". You are running 8.1.34. in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
+Stack trace:
+#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\autoload_real.php(25): require()
+#1 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\autoload.php(22): ComposerAutoloaderInit99d99c36c66a5d5685da6cab9ce9918f::getLoader()
+#2 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\bootstrap.php(81): require_once('D:\\GITHUB Proje...')
+#3 Command line code(1): require('D:\\GITHUB Proje...')
+#4 {main}
+  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php on line 26
+[20-May-2026 13:44:38 UTC] [2026-05-20T13:44:38+00:00] Fatal error: Uncaught RuntimeException: Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.2.0". You are running 8.1.34. in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
+Stack trace:
+#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\autoload_real.php(25): require()
+#1 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\autoload.php(22): ComposerAutoloaderInit99d99c36c66a5d5685da6cab9ce9918f::getLoader()
+#2 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\bootstrap.php(81): require_once('D:\\GITHUB Proje...')
+#3 Command line code(1): require('D:\\GITHUB Proje...')
+#4 {main}
+  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
+[20-May-2026 14:46:38 UTC] [2026-05-20T14:46:38+00:00] Optional vendor autoload skipped: Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.2.0". You are running 8.1.34.
+[20-May-2026 14:46:38 UTC] PHP Warning:  session_set_cookie_params(): Session cookie parameters cannot be changed after headers have already been sent in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\bootstrap.php on line 120
+[20-May-2026 14:46:38 UTC] PHP Warning:  session_name(): Session name cannot be changed after headers have already been sent in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\bootstrap.php on line 126
+[20-May-2026 14:46:38 UTC] PHP Warning:  session_start(): Session cannot be started after headers have already been sent in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\bootstrap.php on line 130
+[20-May-2026 14:47:02 UTC] [2026-05-20T14:47:02+00:00] Optional vendor autoload skipped: Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.2.0". You are running 8.1.34.
+[20-May-2026 14:47:28 UTC] [2026-05-20T14:47:28+00:00] Optional vendor autoload skipped: Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.2.0". You are running 8.1.34.
+[20-May-2026 21:35:26 Asia/Kolkata] PHP Warning:  Trying to access array offset on value of type null in /var/www/html/app/Views/pages/product.php on line 51
+[20-May-2026 21:35:26 Asia/Kolkata] PHP Warning:  Trying to access array offset on value of type null in /var/www/html/app/Views/pages/product.php on line 54
+[20-May-2026 21:35:26 Asia/Kolkata] PHP Warning:  Trying to access array offset on value of type null in /var/www/html/app/Views/pages/product.php on line 67
+[20-May-2026 21:35:26 Asia/Kolkata] PHP Warning:  Trying to access array offset on value of type null in /var/www/html/app/Views/pages/product.php on line 76
+[20-May-2026 21:35:26 Asia/Kolkata] PHP Warning:  Trying to access array offset on value of type null in /var/www/html/app/Views/pages/product.php on line 136
+[20-May-2026 21:35:26 Asia/Kolkata] PHP Deprecated:  htmlspecialchars(): Passing null to parameter #1 ($string) of type string is deprecated in /var/www/html/app/Views/pages/product.php on line 136
+[20-May-2026 21:35:26 Asia/Kolkata] PHP Warning:  Trying to access array offset on value of type null in /var/www/html/app/Views/pages/product.php on line 160
+[20-May-2026 21:35:26 Asia/Kolkata] PHP Deprecated:  htmlspecialchars(): Passing null to parameter #1 ($string) of type string is deprecated in /var/www/html/app/Views/pages/product.php on line 160
+[20-May-2026 21:35:26 Asia/Kolkata] PHP Warning:  Trying to access array offset on value of type null in /var/www/html/app/Views/pages/product.php on line 163
+[20-May-2026 21:35:26 Asia/Kolkata] PHP Warning:  Trying to access array offset on value of type null in /var/www/html/app/Views/pages/product.php on line 196
+[20-May-2026 21:35:26 Asia/Kolkata] PHP Warning:  Trying to access array offset on value of type null in /var/www/html/app/Views/pages/product.php on line 198
+[20-May-2026 21:35:26 Asia/Kolkata] PHP Warning:  Trying to access array offset on value of type null in /var/www/html/app/Views/pages/product.php on line 266
+[20-May-2026 21:35:26 Asia/Kolkata] PHP Warning:  Trying to access array offset on value of type null in /var/www/html/app/Views/pages/product.php on line 268
+[20-May-2026 21:35:26 Asia/Kolkata] PHP Warning:  Trying to access array offset on value of type null in /var/www/html/app/Views/pages/product.php on line 392
+[20-May-2026 21:35:26 Asia/Kolkata] PHP Warning:  Trying to access array offset on value of type null in /var/www/html/app/Views/pages/product.php on line 491
+[20-May-2026 21:35:26 Asia/Kolkata] PHP Warning:  Trying to access array offset on value of type null in /var/www/html/app/Views/pages/product.php on line 517
+[20-May-2026 21:35:57 Asia/Kolkata] PHP Warning:  Trying to access array offset on value of type null in /var/www/html/app/Views/pages/product.php on line 51
+[20-May-2026 21:35:57 Asia/Kolkata] PHP Warning:  Trying to access array offset on value of type null in /var/www/html/app/Views/pages/product.php on line 54
+[20-May-2026 21:35:57 Asia/Kolkata] PHP Warning:  Trying to access array offset on value of type null in /var/www/html/app/Views/pages/product.php on line 67
+[20-May-2026 21:35:57 Asia/Kolkata] PHP Warning:  Trying to access array offset on value of type null in /var/www/html/app/Views/pages/product.php on line 76
+[20-May-2026 21:35:57 Asia/Kolkata] PHP Warning:  Trying to access array offset on value of type null in /var/www/html/app/Views/pages/product.php on line 136
+[20-May-2026 21:35:57 Asia/Kolkata] PHP Deprecated:  htmlspecialchars(): Passing null to parameter #1 ($string) of type string is deprecated in /var/www/html/app/Views/pages/product.php on line 136
+[20-May-2026 21:35:57 Asia/Kolkata] PHP Warning:  Trying to access array offset on value of type null in /var/www/html/app/Views/pages/product.php on line 160
+[20-May-2026 21:35:57 Asia/Kolkata] PHP Deprecated:  htmlspecialchars(): Passing null to parameter #1 ($string) of type string is deprecated in /var/www/html/app/Views/pages/product.php on line 160
+[20-May-2026 21:35:57 Asia/Kolkata] PHP Warning:  Trying to access array offset on value of type null in /var/www/html/app/Views/pages/product.php on line 163
+[20-May-2026 21:35:57 Asia/Kolkata] PHP Warning:  Trying to access array offset on value of type null in /var/www/html/app/Views/pages/product.php on line 196
+[20-May-2026 21:35:57 Asia/Kolkata] PHP Warning:  Trying to access array offset on value of type null in /var/www/html/app/Views/pages/product.php on line 198
+[20-May-2026 21:35:57 Asia/Kolkata] PHP Warning:  Trying to access array offset on value of type null in /var/www/html/app/Views/pages/product.php on line 266
+[20-May-2026 21:35:57 Asia/Kolkata] PHP Warning:  Trying to access array offset on value of type null in /var/www/html/app/Views/pages/product.php on line 268
+[20-May-2026 21:35:57 Asia/Kolkata] PHP Warning:  Trying to access array offset on value of type null in /var/www/html/app/Views/pages/product.php on line 392
+[20-May-2026 21:35:57 Asia/Kolkata] PHP Warning:  Trying to access array offset on value of type null in /var/www/html/app/Views/pages/product.php on line 491
+[20-May-2026 21:35:57 Asia/Kolkata] PHP Warning:  Trying to access array offset on value of type null in /var/www/html/app/Views/pages/product.php on line 517
+[20-May-2026 21:36:45 Asia/Kolkata] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000] [2002] No such file or directory in /var/www/html/app/Core/Database.php:69
+Stack trace:
+#0 /var/www/html/app/Core/Database.php(69): PDO->__construct('mysql:host=loca...', 'root', Object(SensitiveParameterValue), Array)
 #1 Command line code(1): App\Core\Database::getConnection()
 #2 {main}
 
-Next PDOException: SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:61
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php(61): PDO->__construct('mysql:host=cake...', 'root', 'rootpassword', Array)
-#1 Command line code(1): App\Core\Database::getConnection()
-#2 {main}
-
-Next RuntimeException: SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:68
+Next RuntimeException: SQLSTATE[HY000] [2002] No such file or directory in /var/www/html/app/Core/Database.php:80
 Stack trace:
 #0 Command line code(1): App\Core\Database::getConnection()
 #1 {main}
-  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php on line 68
-[16-May-2026 17:05:33 Asia/Kolkata] [2026-05-16T17:05:33+05:30] Fatal error: Uncaught PDOException: PDO::__construct(): php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:61
+  thrown in /var/www/html/app/Core/Database.php on line 80
+[20-May-2026 21:36:45 Asia/Kolkata] [2026-05-20T21:36:45+05:30] Fatal error: Uncaught PDOException: SQLSTATE[HY000] [2002] No such file or directory in /var/www/html/app/Core/Database.php:69
 Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php(61): PDO->__construct('mysql:host=cake...', 'root', 'rootpassword', Array)
+#0 /var/www/html/app/Core/Database.php(69): PDO->__construct('mysql:host=loca...', 'root', Object(SensitiveParameterValue), Array)
 #1 Command line code(1): App\Core\Database::getConnection()
 #2 {main}
 
-Next PDOException: SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:61
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php(61): PDO->__construct('mysql:host=cake...', 'root', 'rootpassword', Array)
-#1 Command line code(1): App\Core\Database::getConnection()
-#2 {main}
-
-Next RuntimeException: SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:68
+Next RuntimeException: SQLSTATE[HY000] [2002] No such file or directory in /var/www/html/app/Core/Database.php:80
 Stack trace:
 #0 Command line code(1): App\Core\Database::getConnection()
 #1 {main}
-  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:68
-[16-May-2026 17:52:06 Asia/Kolkata] OTP send failed for parin11@gmail.com: Call to undefined method App\Core\App::getPdo()
-[16-May-2026 18:36:09 Asia/Kolkata] [2026-05-16T18:36:09+05:30] SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:68\n#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\.tmp_send_email_tests.php(9): App\Core\Database::getConnection()
+  thrown in /var/www/html/app/Core/Database.php:80
+[20-May-2026 21:46:30 Asia/Kolkata] [2026-05-20T21:46:30+05:30] No active product found; cannot create dummy test orders. in /var/www/html/tools/dummy-test-3-order-types.php:37\n#0 {main}
+[20-May-2026 21:47:03 Asia/Kolkata] [2026-05-20T21:47:03+05:30] SQLSTATE[42S02]: Base table or view not found: 1146 Table 'cakeouflage_local.orders' doesn't exist in /var/www/html/tools/dummy-test-3-order-types.php:85\n#0 /var/www/html/tools/dummy-test-3-order-types.php(85): PDO->prepare('INSERT INTO ord...')
 #1 {main}
-[16-May-2026 18:36:41 Asia/Kolkata] [2026-05-16T18:36:41+05:30] SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:68\n#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\.tmp_send_email_tests.php(10): App\Core\Database::getConnection()
+[20-May-2026 21:47:34 Asia/Kolkata] [2026-05-20T21:47:34+05:30] SQLSTATE[42S02]: Base table or view not found: 1146 Table 'cakeouflage_local.crm_settings' doesn't exist in /var/www/html/app/Services/OrderAutomationService.php:954\n#0 /var/www/html/app/Services/OrderAutomationService.php(954): PDO->prepare('INSERT INTO crm...')
+#1 /var/www/html/app/Services/OrderAutomationService.php(922): App\Services\OrderAutomationService->ensureCrmSettingExists(Object(PDO), 'online_order_re...')
+#2 /var/www/html/app/Services/OrderAutomationService.php(189): App\Services\OrderAutomationService->maybeQueueCrmTriggerJob(Object(PDO), 'online_order_re...', Array)
+#3 /var/www/html/tools/dummy-test-3-order-types.php(126): App\Services\OrderAutomationService->handleOrderPlaced(Object(PDO), 1, 'online')
+#4 {main}
+[20-May-2026 21:47:59 Asia/Kolkata] [2026-05-20T21:47:59+05:30] SQLSTATE[42S22]: Column not found: 1054 Unknown column 'advance_amount' in 'INSERT INTO' in /var/www/html/tools/dummy-test-3-order-types.php:209\n#0 /var/www/html/tools/dummy-test-3-order-types.php(209): PDO->prepare('INSERT INTO ord...')
 #1 {main}
-[16-May-2026 19:03:03 Asia/Kolkata] [2026-05-16T19:03:03+05:30] SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:68\n#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\.tmp_sync_comm_templates.php(4): App\Core\Database::getConnection()
+[20-May-2026 21:48:13 Asia/Kolkata] [2026-05-20T21:48:13+05:30] SQLSTATE[01000]: Warning: 1265 Data truncated for column 'payment_status' at row 1 in /var/www/html/tools/dummy-test-3-order-types.php:222\n#0 /var/www/html/tools/dummy-test-3-order-types.php(222): PDOStatement->execute(Array)
 #1 {main}
-[16-May-2026 19:03:15 Asia/Kolkata] [2026-05-16T19:03:15+05:30] SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:68\n#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\.tmp_sync_comm_templates.php(4): App\Core\Database::getConnection()
-#1 {main}
-[16-May-2026 23:01:58 Asia/Kolkata] PHP Fatal error:  Uncaught PDOException: PDO::__construct(): php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:61
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php(61): PDO->__construct('mysql:host=cake...', 'root', 'rootpassword', Array)
-#1 Command line code(1): App\Core\Database::getConnection()
-#2 {main}
-
-Next PDOException: SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:61
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php(61): PDO->__construct('mysql:host=cake...', 'root', 'rootpassword', Array)
-#1 Command line code(1): App\Core\Database::getConnection()
-#2 {main}
-
-Next RuntimeException: SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:68
-Stack trace:
-#0 Command line code(1): App\Core\Database::getConnection()
-#1 {main}
-  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php on line 68
-[16-May-2026 23:01:58 Asia/Kolkata] [2026-05-16T23:01:58+05:30] Fatal error: Uncaught PDOException: PDO::__construct(): php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:61
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php(61): PDO->__construct('mysql:host=cake...', 'root', 'rootpassword', Array)
-#1 Command line code(1): App\Core\Database::getConnection()
-#2 {main}
-
-Next PDOException: SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:61
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php(61): PDO->__construct('mysql:host=cake...', 'root', 'rootpassword', Array)
-#1 Command line code(1): App\Core\Database::getConnection()
-#2 {main}
-
-Next RuntimeException: SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:68
-Stack trace:
-#0 Command line code(1): App\Core\Database::getConnection()
-#1 {main}
-  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:68
-[16-May-2026 23:02:03 Asia/Kolkata] PHP Fatal error:  Uncaught PDOException: PDO::__construct(): php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:61
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php(61): PDO->__construct('mysql:host=cake...', 'root', 'rootpassword', Array)
-#1 Command line code(1): App\Core\Database::getConnection()
-#2 {main}
-
-Next PDOException: SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:61
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php(61): PDO->__construct('mysql:host=cake...', 'root', 'rootpassword', Array)
-#1 Command line code(1): App\Core\Database::getConnection()
-#2 {main}
-
-Next RuntimeException: SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:68
-Stack trace:
-#0 Command line code(1): App\Core\Database::getConnection()
-#1 {main}
-  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php on line 68
-[16-May-2026 23:02:03 Asia/Kolkata] [2026-05-16T23:02:03+05:30] Fatal error: Uncaught PDOException: PDO::__construct(): php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:61
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php(61): PDO->__construct('mysql:host=cake...', 'root', 'rootpassword', Array)
-#1 Command line code(1): App\Core\Database::getConnection()
-#2 {main}
-
-Next PDOException: SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:61
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php(61): PDO->__construct('mysql:host=cake...', 'root', 'rootpassword', Array)
-#1 Command line code(1): App\Core\Database::getConnection()
-#2 {main}
-
-Next RuntimeException: SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:68
-Stack trace:
-#0 Command line code(1): App\Core\Database::getConnection()
-#1 {main}
-  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:68
-[16-May-2026 23:02:09 Asia/Kolkata] PHP Fatal error:  Uncaught PDOException: PDO::__construct(): php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:61
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php(61): PDO->__construct('mysql:host=cake...', 'root', 'rootpassword', Array)
-#1 Command line code(1): App\Core\Database::getConnection()
-#2 {main}
-
-Next PDOException: SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:61
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php(61): PDO->__construct('mysql:host=cake...', 'root', 'rootpassword', Array)
-#1 Command line code(1): App\Core\Database::getConnection()
-#2 {main}
-
-Next RuntimeException: SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:68
-Stack trace:
-#0 Command line code(1): App\Core\Database::getConnection()
-#1 {main}
-  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php on line 68
-[16-May-2026 23:02:09 Asia/Kolkata] [2026-05-16T23:02:09+05:30] Fatal error: Uncaught PDOException: PDO::__construct(): php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:61
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php(61): PDO->__construct('mysql:host=cake...', 'root', 'rootpassword', Array)
-#1 Command line code(1): App\Core\Database::getConnection()
-#2 {main}
-
-Next PDOException: SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:61
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php(61): PDO->__construct('mysql:host=cake...', 'root', 'rootpassword', Array)
-#1 Command line code(1): App\Core\Database::getConnection()
-#2 {main}
-
-Next RuntimeException: SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:68
-Stack trace:
-#0 Command line code(1): App\Core\Database::getConnection()
-#1 {main}
-  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:68
-[16-May-2026 23:02:13 Asia/Kolkata] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000] [2002] No connection could be made because the target machine actively refused it in Command line code:1
-Stack trace:
-#0 Command line code(1): PDO->__construct('mysql:host=127....', 'root', 'rootpassword')
-#1 {main}
-  thrown in Command line code on line 1
-[16-May-2026 23:02:13 Asia/Kolkata] [2026-05-16T23:02:13+05:30] Fatal error: Uncaught PDOException: SQLSTATE[HY000] [2002] No connection could be made because the target machine actively refused it in Command line code:1
-Stack trace:
-#0 Command line code(1): PDO->__construct('mysql:host=127....', 'root', 'rootpassword')
-#1 {main}
-  thrown in Command line code:1
-[16-May-2026 23:02:18 Asia/Kolkata] PHP Fatal error:  Uncaught PDOException: PDO::__construct(): php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:61
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php(61): PDO->__construct('mysql:host=cake...', 'root', 'rootpassword', Array)
-#1 Command line code(1): App\Core\Database::getConnection()
-#2 {main}
-
-Next PDOException: SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:61
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php(61): PDO->__construct('mysql:host=cake...', 'root', 'rootpassword', Array)
-#1 Command line code(1): App\Core\Database::getConnection()
-#2 {main}
-
-Next RuntimeException: SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:68
-Stack trace:
-#0 Command line code(1): App\Core\Database::getConnection()
-#1 {main}
-  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php on line 68
-[16-May-2026 23:02:18 Asia/Kolkata] [2026-05-16T23:02:18+05:30] Fatal error: Uncaught PDOException: PDO::__construct(): php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:61
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php(61): PDO->__construct('mysql:host=cake...', 'root', 'rootpassword', Array)
-#1 Command line code(1): App\Core\Database::getConnection()
-#2 {main}
-
-Next PDOException: SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:61
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php(61): PDO->__construct('mysql:host=cake...', 'root', 'rootpassword', Array)
-#1 Command line code(1): App\Core\Database::getConnection()
-#2 {main}
-
-Next RuntimeException: SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:68
-Stack trace:
-#0 Command line code(1): App\Core\Database::getConnection()
-#1 {main}
-  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:68
-[17-May-2026 20:08:41 Asia/Kolkata] PHP Fatal error:  Uncaught PDOException: PDO::__construct(): php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:61
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php(61): PDO->__construct('mysql:host=cake...', 'root', 'rootpassword', Array)
-#1 Command line code(6): App\Core\Database::getConnection()
-#2 {main}
-
-Next PDOException: SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:61
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php(61): PDO->__construct('mysql:host=cake...', 'root', 'rootpassword', Array)
-#1 Command line code(6): App\Core\Database::getConnection()
-#2 {main}
-
-Next RuntimeException: SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:68
-Stack trace:
-#0 Command line code(6): App\Core\Database::getConnection()
-#1 {main}
-  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php on line 68
-[17-May-2026 20:08:41 Asia/Kolkata] [2026-05-17T20:08:41+05:30] Fatal error: Uncaught PDOException: PDO::__construct(): php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:61
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php(61): PDO->__construct('mysql:host=cake...', 'root', 'rootpassword', Array)
-#1 Command line code(6): App\Core\Database::getConnection()
-#2 {main}
-
-Next PDOException: SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:61
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php(61): PDO->__construct('mysql:host=cake...', 'root', 'rootpassword', Array)
-#1 Command line code(6): App\Core\Database::getConnection()
-#2 {main}
-
-Next RuntimeException: SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:68
-Stack trace:
-#0 Command line code(6): App\Core\Database::getConnection()
-#1 {main}
-  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:68
-[17-May-2026 20:08:50 Asia/Kolkata] PHP Fatal error:  Uncaught PDOException: PDO::__construct(): php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:61
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php(61): PDO->__construct('mysql:host=cake...', 'root', 'rootpassword', Array)
-#1 Command line code(8): App\Core\Database::getConnection()
-#2 {main}
-
-Next PDOException: SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:61
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php(61): PDO->__construct('mysql:host=cake...', 'root', 'rootpassword', Array)
-#1 Command line code(8): App\Core\Database::getConnection()
-#2 {main}
-
-Next RuntimeException: SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:68
-Stack trace:
-#0 Command line code(8): App\Core\Database::getConnection()
-#1 {main}
-  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php on line 68
-[17-May-2026 20:08:50 Asia/Kolkata] [2026-05-17T20:08:50+05:30] Fatal error: Uncaught PDOException: PDO::__construct(): php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:61
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php(61): PDO->__construct('mysql:host=cake...', 'root', 'rootpassword', Array)
-#1 Command line code(8): App\Core\Database::getConnection()
-#2 {main}
-
-Next PDOException: SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:61
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php(61): PDO->__construct('mysql:host=cake...', 'root', 'rootpassword', Array)
-#1 Command line code(8): App\Core\Database::getConnection()
-#2 {main}
-
-Next RuntimeException: SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:68
-Stack trace:
-#0 Command line code(8): App\Core\Database::getConnection()
-#1 {main}
-  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:68
-[17-May-2026 20:08:59 Asia/Kolkata] PHP Fatal error:  Uncaught PDOException: PDO::__construct(): php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:61
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php(61): PDO->__construct('mysql:host=cake...', 'root', 'rootpassword', Array)
-#1 Command line code(10): App\Core\Database::getConnection()
-#2 {main}
-
-Next PDOException: SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:61
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php(61): PDO->__construct('mysql:host=cake...', 'root', 'rootpassword', Array)
-#1 Command line code(10): App\Core\Database::getConnection()
-#2 {main}
-
-Next RuntimeException: SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:68
-Stack trace:
-#0 Command line code(10): App\Core\Database::getConnection()
-#1 {main}
-  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php on line 68
-[17-May-2026 20:08:59 Asia/Kolkata] [2026-05-17T20:08:59+05:30] Fatal error: Uncaught PDOException: PDO::__construct(): php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:61
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php(61): PDO->__construct('mysql:host=cake...', 'root', 'rootpassword', Array)
-#1 Command line code(10): App\Core\Database::getConnection()
-#2 {main}
-
-Next PDOException: SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:61
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php(61): PDO->__construct('mysql:host=cake...', 'root', 'rootpassword', Array)
-#1 Command line code(10): App\Core\Database::getConnection()
-#2 {main}
-
-Next RuntimeException: SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:68
-Stack trace:
-#0 Command line code(10): App\Core\Database::getConnection()
-#1 {main}
-  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:68
-[17-May-2026 20:09:05 Asia/Kolkata] PHP Fatal error:  Uncaught PDOException: PDO::__construct(): php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:61
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php(61): PDO->__construct('mysql:host=cake...', 'root', 'rootpassword', Array)
-#1 Command line code(11): App\Core\Database::getConnection()
-#2 {main}
-
-Next PDOException: SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:61
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php(61): PDO->__construct('mysql:host=cake...', 'root', 'rootpassword', Array)
-#1 Command line code(11): App\Core\Database::getConnection()
-#2 {main}
-
-Next RuntimeException: SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:68
-Stack trace:
-#0 Command line code(11): App\Core\Database::getConnection()
-#1 {main}
-  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php on line 68
-[17-May-2026 20:09:05 Asia/Kolkata] [2026-05-17T20:09:05+05:30] Fatal error: Uncaught PDOException: PDO::__construct(): php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:61
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php(61): PDO->__construct('mysql:host=cake...', 'root', 'rootpassword', Array)
-#1 Command line code(11): App\Core\Database::getConnection()
-#2 {main}
-
-Next PDOException: SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:61
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php(61): PDO->__construct('mysql:host=cake...', 'root', 'rootpassword', Array)
-#1 Command line code(11): App\Core\Database::getConnection()
-#2 {main}
-
-Next RuntimeException: SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:68
-Stack trace:
-#0 Command line code(11): App\Core\Database::getConnection()
-#1 {main}
-  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:68
-[17-May-2026 20:09:10 Asia/Kolkata] PHP Fatal error:  Uncaught PDOException: PDO::__construct(): php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:61
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php(61): PDO->__construct('mysql:host=cake...', 'root', 'rootpassword', Array)
-#1 Command line code(14): App\Core\Database::getConnection()
-#2 {main}
-
-Next PDOException: SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:61
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php(61): PDO->__construct('mysql:host=cake...', 'root', 'rootpassword', Array)
-#1 Command line code(14): App\Core\Database::getConnection()
-#2 {main}
-
-Next RuntimeException: SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:68
-Stack trace:
-#0 Command line code(14): App\Core\Database::getConnection()
-#1 {main}
-  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php on line 68
-[17-May-2026 20:09:10 Asia/Kolkata] [2026-05-17T20:09:10+05:30] Fatal error: Uncaught PDOException: PDO::__construct(): php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:61
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php(61): PDO->__construct('mysql:host=cake...', 'root', 'rootpassword', Array)
-#1 Command line code(14): App\Core\Database::getConnection()
-#2 {main}
-
-Next PDOException: SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:61
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php(61): PDO->__construct('mysql:host=cake...', 'root', 'rootpassword', Array)
-#1 Command line code(14): App\Core\Database::getConnection()
-#2 {main}
-
-Next RuntimeException: SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:68
-Stack trace:
-#0 Command line code(14): App\Core\Database::getConnection()
-#1 {main}
-  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:68
-[17-May-2026 20:09:16 Asia/Kolkata] PHP Fatal error:  Uncaught PDOException: PDO::__construct(): php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:61
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php(61): PDO->__construct('mysql:host=cake...', 'root', 'rootpassword', Array)
-#1 Command line code(14): App\Core\Database::getConnection()
-#2 {main}
-
-Next PDOException: SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:61
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php(61): PDO->__construct('mysql:host=cake...', 'root', 'rootpassword', Array)
-#1 Command line code(14): App\Core\Database::getConnection()
-#2 {main}
-
-Next RuntimeException: SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:68
-Stack trace:
-#0 Command line code(14): App\Core\Database::getConnection()
-#1 {main}
-  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php on line 68
-[17-May-2026 20:09:16 Asia/Kolkata] [2026-05-17T20:09:16+05:30] Fatal error: Uncaught PDOException: PDO::__construct(): php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:61
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php(61): PDO->__construct('mysql:host=cake...', 'root', 'rootpassword', Array)
-#1 Command line code(14): App\Core\Database::getConnection()
-#2 {main}
-
-Next PDOException: SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:61
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php(61): PDO->__construct('mysql:host=cake...', 'root', 'rootpassword', Array)
-#1 Command line code(14): App\Core\Database::getConnection()
-#2 {main}
-
-Next RuntimeException: SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for cakeouflage_mysql failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:68
-Stack trace:
-#0 Command line code(14): App\Core\Database::getConnection()
-#1 {main}
-  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:68
-[17-May-2026 20:49:59 Asia/Kolkata] PHP Fatal error:  Uncaught PDOException: PDO::__construct(): php_network_getaddresses: getaddrinfo for sdb-77.hosting.stackcp.net failed: No such host is known.  in Command line code:1
-Stack trace:
-#0 Command line code(1): PDO->__construct('mysql:host=sdb-...', 'cakeouflage-353...', '3btoum4iwi', Array)
-#1 {main}
-
-Next PDOException: SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for sdb-77.hosting.stackcp.net failed: No such host is known.  in Command line code:1
-Stack trace:
-#0 Command line code(1): PDO->__construct('mysql:host=sdb-...', 'cakeouflage-353...', '3btoum4iwi', Array)
-#1 {main}
-  thrown in Command line code on line 1
-[17-May-2026 20:49:59 Asia/Kolkata] [2026-05-17T20:49:59+05:30] Fatal error: Uncaught PDOException: PDO::__construct(): php_network_getaddresses: getaddrinfo for sdb-77.hosting.stackcp.net failed: No such host is known.  in Command line code:1
-Stack trace:
-#0 Command line code(1): PDO->__construct('mysql:host=sdb-...', 'cakeouflage-353...', '3btoum4iwi', Array)
-#1 {main}
-
-Next PDOException: SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for sdb-77.hosting.stackcp.net failed: No such host is known.  in Command line code:1
-Stack trace:
-#0 Command line code(1): PDO->__construct('mysql:host=sdb-...', 'cakeouflage-353...', '3btoum4iwi', Array)
-#1 {main}
-  thrown in Command line code:1
-[19-May-2026 13:24:24 Asia/Kolkata] [2026-05-19T13:24:24+05:30] SQLSTATE[HY000]: General error: 1824 Failed to open the referenced table 'orders' in /var/www/html/app/Controllers/AdminApiController.php:4446\n#0 /var/www/html/app/Controllers/AdminApiController.php(4446): PDO->exec('CREATE TABLE IF...')
-#1 /var/www/html/app/Controllers/AdminApiController.php(2676): App\Controllers\AdminApiController->ensureBankAlertSchema(Object(PDO))
-#2 [internal function]: App\Controllers\AdminApiController->bankAlertsQueueList()
-#3 /var/www/html/app/Core/App.php(312): call_user_func_array(Array, Array)
-#4 /var/www/html/index.php(44): App\Core\App->run()
-#5 {main}
-[19-May-2026 13:24:28 Asia/Kolkata] [2026-05-19T13:24:28+05:30] SQLSTATE[HY000]: General error: 1824 Failed to open the referenced table 'orders' in /var/www/html/app/Controllers/AdminApiController.php:4446\n#0 /var/www/html/app/Controllers/AdminApiController.php(4446): PDO->exec('CREATE TABLE IF...')
-#1 /var/www/html/app/Controllers/AdminApiController.php(2676): App\Controllers\AdminApiController->ensureBankAlertSchema(Object(PDO))
-#2 [internal function]: App\Controllers\AdminApiController->bankAlertsQueueList()
-#3 /var/www/html/app/Core/App.php(312): call_user_func_array(Array, Array)
-#4 /var/www/html/index.php(44): App\Core\App->run()
-#5 {main}
-[19-May-2026 13:24:31 Asia/Kolkata] [2026-05-19T13:24:31+05:30] SQLSTATE[HY000]: General error: 1824 Failed to open the referenced table 'orders' in /var/www/html/app/Controllers/AdminApiController.php:4446\n#0 /var/www/html/app/Controllers/AdminApiController.php(4446): PDO->exec('CREATE TABLE IF...')
-#1 /var/www/html/app/Controllers/AdminApiController.php(2676): App\Controllers\AdminApiController->ensureBankAlertSchema(Object(PDO))
-#2 [internal function]: App\Controllers\AdminApiController->bankAlertsQueueList()
-#3 /var/www/html/app/Core/App.php(312): call_user_func_array(Array, Array)
-#4 /var/www/html/index.php(44): App\Core\App->run()
-#5 {main}
-[19-May-2026 13:25:24 Asia/Kolkata] [2026-05-19T13:25:24+05:30] SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for db failed: No such host is known.  in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:68\n#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\run_migrations.php(12): App\Core\Database::getConnection()
-#1 {main}
-[19-May-2026 13:25:24 Asia/Kolkata] PHP Warning:  Cannot modify header information - headers already sent by (output started at D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\run_migrations.php:10) in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\bootstrap.php on line 50
-[19-May-2026 13:26:30 Asia/Kolkata] [2026-05-19T13:26:30+05:30] SQLSTATE[HY000]: General error: 3730 Cannot drop table 'product_import_runs' referenced by a foreign key constraint 'product_import_snapshots_ibfk_1' on table 'product_import_snapshots'. in /var/www/html/setup_migrations.php:18\n#0 /var/www/html/setup_migrations.php(18): PDO->exec('DROP TABLE IF E...')
-#1 {main}
-[19-May-2026 13:26:30 Asia/Kolkata] PHP Warning:  Cannot modify header information - headers already sent by (output started at /var/www/html/setup_migrations.php:11) in /var/www/html/app/bootstrap.php on line 50
-[19-May-2026 13:27:12 Asia/Kolkata] [2026-05-19T13:27:12+05:30] SQLSTATE[HY000]: General error: 3730 Cannot drop table 'product_import_runs' referenced by a foreign key constraint 'product_import_snapshots_ibfk_1' on table 'product_import_snapshots'. in /var/www/html/setup_migrations.php:18\n#0 /var/www/html/setup_migrations.php(18): PDO->exec('DROP TABLE IF E...')
-#1 {main}
-[19-May-2026 13:27:12 Asia/Kolkata] PHP Warning:  Cannot modify header information - headers already sent by (output started at /var/www/html/setup_migrations.php:11) in /var/www/html/app/bootstrap.php on line 50
-[19-May-2026 13:27:16 Asia/Kolkata] [2026-05-19T13:27:16+05:30] SQLSTATE[HY000]: General error: 3730 Cannot drop table 'product_import_runs' referenced by a foreign key constraint 'product_import_snapshots_ibfk_1' on table 'product_import_snapshots'. in /var/www/html/setup_migrations.php:18\n#0 /var/www/html/setup_migrations.php(18): PDO->exec('DROP TABLE IF E...')
-#1 {main}
-[19-May-2026 13:27:16 Asia/Kolkata] PHP Warning:  Cannot modify header information - headers already sent by (output started at /var/www/html/setup_migrations.php:11) in /var/www/html/app/bootstrap.php on line 50
-[19-May-2026 13:27:20 Asia/Kolkata] [2026-05-19T13:27:20+05:30] SQLSTATE[HY000]: General error: 3730 Cannot drop table 'product_import_runs' referenced by a foreign key constraint 'product_import_snapshots_ibfk_1' on table 'product_import_snapshots'. in /var/www/html/setup_migrations.php:18\n#0 /var/www/html/setup_migrations.php(18): PDO->exec('DROP TABLE IF E...')
-#1 {main}
-[19-May-2026 13:27:20 Asia/Kolkata] PHP Warning:  Cannot modify header information - headers already sent by (output started at /var/www/html/setup_migrations.php:11) in /var/www/html/app/bootstrap.php on line 50
-[19-May-2026 13:27:23 Asia/Kolkata] [2026-05-19T13:27:23+05:30] SQLSTATE[HY000]: General error: 3730 Cannot drop table 'product_import_runs' referenced by a foreign key constraint 'product_import_snapshots_ibfk_1' on table 'product_import_snapshots'. in /var/www/html/setup_migrations.php:18\n#0 /var/www/html/setup_migrations.php(18): PDO->exec('DROP TABLE IF E...')
-#1 {main}
-[19-May-2026 13:27:23 Asia/Kolkata] PHP Warning:  Cannot modify header information - headers already sent by (output started at /var/www/html/setup_migrations.php:11) in /var/www/html/app/bootstrap.php on line 50
-[19-May-2026 13:27:27 Asia/Kolkata] [2026-05-19T13:27:27+05:30] SQLSTATE[HY000]: General error: 3730 Cannot drop table 'product_import_runs' referenced by a foreign key constraint 'product_import_snapshots_ibfk_1' on table 'product_import_snapshots'. in /var/www/html/setup_migrations.php:18\n#0 /var/www/html/setup_migrations.php(18): PDO->exec('DROP TABLE IF E...')
-#1 {main}
-[19-May-2026 13:27:27 Asia/Kolkata] PHP Warning:  Cannot modify header information - headers already sent by (output started at /var/www/html/setup_migrations.php:11) in /var/www/html/app/bootstrap.php on line 50
-[19-May-2026 13:27:30 Asia/Kolkata] [2026-05-19T13:27:30+05:30] SQLSTATE[HY000]: General error: 3730 Cannot drop table 'product_import_runs' referenced by a foreign key constraint 'product_import_snapshots_ibfk_1' on table 'product_import_snapshots'. in /var/www/html/setup_migrations.php:18\n#0 /var/www/html/setup_migrations.php(18): PDO->exec('DROP TABLE IF E...')
-#1 {main}
-[19-May-2026 13:27:30 Asia/Kolkata] PHP Warning:  Cannot modify header information - headers already sent by (output started at /var/www/html/setup_migrations.php:11) in /var/www/html/app/bootstrap.php on line 50
-[19-May-2026 13:27:33 Asia/Kolkata] [2026-05-19T13:27:33+05:30] SQLSTATE[HY000]: General error: 3730 Cannot drop table 'product_import_runs' referenced by a foreign key constraint 'product_import_snapshots_ibfk_1' on table 'product_import_snapshots'. in /var/www/html/setup_migrations.php:18\n#0 /var/www/html/setup_migrations.php(18): PDO->exec('DROP TABLE IF E...')
-#1 {main}
-[19-May-2026 13:27:33 Asia/Kolkata] PHP Warning:  Cannot modify header information - headers already sent by (output started at /var/www/html/setup_migrations.php:11) in /var/www/html/app/bootstrap.php on line 50
-[19-May-2026 13:27:36 Asia/Kolkata] [2026-05-19T13:27:36+05:30] SQLSTATE[HY000]: General error: 3730 Cannot drop table 'product_import_runs' referenced by a foreign key constraint 'product_import_snapshots_ibfk_1' on table 'product_import_snapshots'. in /var/www/html/setup_migrations.php:18\n#0 /var/www/html/setup_migrations.php(18): PDO->exec('DROP TABLE IF E...')
-#1 {main}
-[19-May-2026 13:27:36 Asia/Kolkata] PHP Warning:  Cannot modify header information - headers already sent by (output started at /var/www/html/setup_migrations.php:11) in /var/www/html/app/bootstrap.php on line 50
-[19-May-2026 13:27:39 Asia/Kolkata] [2026-05-19T13:27:39+05:30] SQLSTATE[HY000]: General error: 3730 Cannot drop table 'product_import_runs' referenced by a foreign key constraint 'product_import_snapshots_ibfk_1' on table 'product_import_snapshots'. in /var/www/html/setup_migrations.php:18\n#0 /var/www/html/setup_migrations.php(18): PDO->exec('DROP TABLE IF E...')
-#1 {main}
-[19-May-2026 13:27:39 Asia/Kolkata] PHP Warning:  Cannot modify header information - headers already sent by (output started at /var/www/html/setup_migrations.php:11) in /var/www/html/app/bootstrap.php on line 50
-[19-May-2026 13:32:18 Asia/Kolkata] [2026-05-19T13:32:18+05:30] SQLSTATE[HY000]: General error: 1824 Failed to open the referenced table 'orders' in /var/www/html/app/Controllers/AdminApiController.php:4446\n#0 /var/www/html/app/Controllers/AdminApiController.php(4446): PDO->exec('CREATE TABLE IF...')
-#1 /var/www/html/app/Controllers/AdminApiController.php(2676): App\Controllers\AdminApiController->ensureBankAlertSchema(Object(PDO))
-#2 [internal function]: App\Controllers\AdminApiController->bankAlertsQueueList()
-#3 /var/www/html/app/Core/App.php(312): call_user_func_array(Array, Array)
-#4 /var/www/html/index.php(44): App\Core\App->run()
-#5 {main}
-[19-May-2026 13:33:29 Asia/Kolkata] [2026-05-19T13:33:29+05:30] SQLSTATE[HY000]: General error: 1824 Failed to open the referenced table 'orders' in /var/www/html/app/Controllers/AdminApiController.php:4446\n#0 /var/www/html/app/Controllers/AdminApiController.php(4446): PDO->exec('CREATE TABLE IF...')
-#1 /var/www/html/app/Controllers/AdminApiController.php(2676): App\Controllers\AdminApiController->ensureBankAlertSchema(Object(PDO))
-#2 [internal function]: App\Controllers\AdminApiController->bankAlertsQueueList()
-#3 /var/www/html/app/Core/App.php(312): call_user_func_array(Array, Array)
-#4 /var/www/html/index.php(44): App\Core\App->run()
-#5 {main}
-[19-May-2026 22:25:23 Asia/Kolkata] BYOC quote accept failed: SQLSTATE[01000]: Warning: 1265 Data truncated for column 'payment_status' at row 1
-[19-May-2026 22:25:30 Asia/Kolkata] BYOC quote accept failed: SQLSTATE[01000]: Warning: 1265 Data truncated for column 'payment_status' at row 1
-[19-May-2026 22:28:53 Asia/Kolkata] BYOC quote accept failed: SQLSTATE[01000]: Warning: 1265 Data truncated for column 'payment_status' at row 1
-[19-May-2026 22:28:57 Asia/Kolkata] BYOC quote accept failed: SQLSTATE[01000]: Warning: 1265 Data truncated for column 'payment_status' at row 1
-[19-May-2026 22:29:09 Asia/Kolkata] BYOC quote accept failed: SQLSTATE[01000]: Warning: 1265 Data truncated for column 'payment_status' at row 1
-[19-May-2026 23:03:00 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Call to undefined method App\Core\QueueWorker::run() in Command line code:1
-Stack trace:
-#0 {main}
-  thrown in Command line code on line 1
-[19-May-2026 23:03:01 Asia/Kolkata] [2026-05-19T23:03:01+05:30] Fatal error: Uncaught Error: Call to undefined method App\Core\QueueWorker::run() in Command line code:1
-Stack trace:
-#0 {main}
-  thrown in Command line code:1
+[21-May-2026 08:23:41 Asia/Kolkata] [2026-05-21T08:23:41+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}
+[21-May-2026 08:23:41 Asia/Kolkata] [2026-05-21T08:23:41+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}
+[21-May-2026 08:24:24 Asia/Kolkata] [2026-05-21T08:24:24+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}
+[21-May-2026 08:24:24 Asia/Kolkata] [2026-05-21T08:24:24+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}
+[21-May-2026 08:27:27 Asia/Kolkata] [2026-05-21T08:27:27+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}
+[21-May-2026 08:27:27 Asia/Kolkata] [2026-05-21T08:27:27+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}
+[21-May-2026 08:27:28 Asia/Kolkata] [2026-05-21T08:27:28+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}
+[21-May-2026 08:28:00 Asia/Kolkata] [2026-05-21T08:28:00+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}
+[21-May-2026 08:28:00 Asia/Kolkata] [2026-05-21T08:28:00+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}
+[21-May-2026 08:28:03 Asia/Kolkata] [2026-05-21T08:28:03+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}
+[21-May-2026 08:28:03 Asia/Kolkata] [2026-05-21T08:28:03+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}
+[21-May-2026 08:28:09 Asia/Kolkata] [2026-05-21T08:28:09+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}
+[21-May-2026 08:28:09 Asia/Kolkata] [2026-05-21T08:28:09+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}
+[21-May-2026 08:28:13 Asia/Kolkata] [2026-05-21T08:28:13+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}
+[21-May-2026 08:28:13 Asia/Kolkata] [2026-05-21T08:28:13+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}
+[21-May-2026 08:28:21 Asia/Kolkata] [2026-05-21T08:28:21+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}
+[21-May-2026 08:28:21 Asia/Kolkata] [2026-05-21T08:28:21+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}
+[21-May-2026 08:28:26 Asia/Kolkata] [2026-05-21T08:28:26+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}
+[21-May-2026 08:28:26 Asia/Kolkata] [2026-05-21T08:28:26+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}
+[21-May-2026 08:28:35 Asia/Kolkata] [2026-05-21T08:28:35+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}
+[21-May-2026 08:28:36 Asia/Kolkata] [2026-05-21T08:28:36+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}
+[21-May-2026 08:28:39 Asia/Kolkata] [2026-05-21T08:28:39+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}
+[21-May-2026 08:28:39 Asia/Kolkata] [2026-05-21T08:28:39+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}
+[21-May-2026 08:30:09 Asia/Kolkata] [2026-05-21T08:30:09+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}
+[21-May-2026 08:30:09 Asia/Kolkata] [2026-05-21T08:30:09+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}
+[21-May-2026 08:30:28 Asia/Kolkata] [2026-05-21T08:30:28+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}
+[21-May-2026 08:30:28 Asia/Kolkata] [2026-05-21T08:30:28+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}
+[21-May-2026 08:30:30 Asia/Kolkata] [2026-05-21T08:30:30+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}
+[21-May-2026 08:30:30 Asia/Kolkata] [2026-05-21T08:30:30+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}
+[21-May-2026 08:30:32 Asia/Kolkata] [2026-05-21T08:30:33+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}
+[21-May-2026 08:30:33 Asia/Kolkata] [2026-05-21T08:30:33+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}
+[21-May-2026 08:30:35 Asia/Kolkata] [2026-05-21T08:30:35+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}
+[21-May-2026 08:30:35 Asia/Kolkata] [2026-05-21T08:30:35+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}
+[21-May-2026 08:30:39 Asia/Kolkata] [2026-05-21T08:30:39+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}
+[21-May-2026 08:30:39 Asia/Kolkata] [2026-05-21T08:30:39+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}
+[21-May-2026 08:30:49 Asia/Kolkata] [2026-05-21T08:30:49+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}
+[21-May-2026 08:30:49 Asia/Kolkata] [2026-05-21T08:30:49+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}
+[21-May-2026 08:30:57 Asia/Kolkata] [2026-05-21T08:30:57+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}
+[21-May-2026 08:30:57 Asia/Kolkata] [2026-05-21T08:30:57+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}
+[21-May-2026 08:31:07 Asia/Kolkata] [2026-05-21T08:31:07+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}
+[21-May-2026 08:31:07 Asia/Kolkata] [2026-05-21T08:31:07+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}
+[21-May-2026 08:31:23 Asia/Kolkata] [2026-05-21T08:31:23+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}
+[21-May-2026 08:31:23 Asia/Kolkata] [2026-05-21T08:31:23+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}
+[21-May-2026 08:31:27 Asia/Kolkata] [2026-05-21T08:31:27+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}
+[21-May-2026 08:31:27 Asia/Kolkata] [2026-05-21T08:31:27+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}
+[21-May-2026 08:31:36 Asia/Kolkata] [2026-05-21T08:31:36+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}
+[21-May-2026 08:31:36 Asia/Kolkata] [2026-05-21T08:31:36+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}
+[21-May-2026 08:31:36 Asia/Kolkata] [2026-05-21T08:31:36+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}
+[21-May-2026 08:31:42 Asia/Kolkata] [2026-05-21T08:31:42+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}
+[21-May-2026 08:31:42 Asia/Kolkata] [2026-05-21T08:31:42+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}
+[21-May-2026 08:42:38 Asia/Kolkata] [2026-05-21T08:42:38+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}
+[21-May-2026 08:42:38 Asia/Kolkata] [2026-05-21T08:42:38+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}
+[21-May-2026 08:42:49 Asia/Kolkata] [2026-05-21T08:42:49+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}
+[21-May-2026 08:42:50 Asia/Kolkata] [2026-05-21T08:42:50+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}
+[21-May-2026 09:54:20 Asia/Kolkata] [2026-05-21T09:54:20+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1081\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}
+[21-May-2026 09:54:20 Asia/Kolkata] [2026-05-21T09:54:20+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1081\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}
+[21-May-2026 09:55:56 Asia/Kolkata] [2026-05-21T09:55:56+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1081\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}
+[21-May-2026 09:55:56 Asia/Kolkata] [2026-05-21T09:55:56+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1081\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}
+[21-May-2026 09:55:58 Asia/Kolkata] [2026-05-21T09:55:58+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1081\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}
+[21-May-2026 09:55:58 Asia/Kolkata] [2026-05-21T09:55:58+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1081\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}
+[21-May-2026 09:55:58 Asia/Kolkata] [2026-05-21T09:55:58+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1081\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
+#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
+#2 /var/www/html/index.php(50): App\Core\App->run()
+#3 {main}

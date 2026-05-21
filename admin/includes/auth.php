@@ -76,11 +76,14 @@ function admin_bootstrap_support_tables($conn)
         email VARCHAR(190) NOT NULL,
         otp VARCHAR(12) NOT NULL,
         expires_at DATETIME NOT NULL,
+        attempt_count INT UNSIGNED NOT NULL DEFAULT 0,
         created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (id),
         KEY idx_otp_verifications_email (email),
         KEY idx_otp_verifications_expires_at (expires_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    // Ensure attempt_count exists on pre-existing installations
+    $conn->query("ALTER TABLE otp_verifications ADD COLUMN IF NOT EXISTS attempt_count INT UNSIGNED NOT NULL DEFAULT 0");
 
     $bootstrapped = true;
 }
@@ -210,6 +213,7 @@ function admin_page_permissions()
         'delete-product.php' => 'products',
         'import-products.php' => 'import_products',
         'download_products.php' => 'import_products',
+        'toppers.php' => 'products',
         'orders.php' => 'orders',
         'bank-alerts.php' => 'payment_verification',
         'manual_order.php' => 'manual_orders',
@@ -356,6 +360,7 @@ function admin_navigation_items()
         array('title' => 'Products', 'href' => 'products.php', 'page' => 'Products', 'permission' => 'products'),
         array('title' => 'Coupons', 'href' => 'coupons.php', 'page' => 'Coupons', 'permission' => 'coupons'),
         array('title' => 'Import Products', 'href' => 'import-products.php', 'page' => 'Import Products', 'permission' => 'import_products'),
+        array('title' => 'Cake Toppers', 'href' => 'toppers.php', 'page' => 'Cake Toppers', 'permission' => 'products'),
         array('title' => 'Orders', 'href' => 'orders.php', 'page' => 'Orders', 'permission' => 'orders'),
         array('title' => 'Payment Verification', 'href' => 'bank-alerts.php', 'page' => 'Payment Verification', 'permission' => 'payment_verification'),
         array('title' => 'Manual Order Punch', 'href' => 'manual_order.php', 'page' => 'Manual Order Punch', 'permission' => 'manual_orders'),

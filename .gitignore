@@ -1,2 +1,6 @@
 cakeouflage_deploy_20260520.zip
 public/uploads/
+.env
+.env.local
+.env.*.local
+config.php

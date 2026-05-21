@@ -444,6 +444,7 @@ $currentUri = htmlspecialchars((string)($_SERVER['REQUEST_URI'] ?? 'orders.php')
       <?php if (admin_has_permission('manual_orders')): ?>
         <a class="btn btn--sm" href="manual_order.php">+ Manual Order</a>
       <?php endif; ?>
+      <a class="btn btn--sm" href="production_plan.php" style="background:#5b1f3a;color:#fff;">🖨 Daily Production</a>
     </div>
   </div>
 

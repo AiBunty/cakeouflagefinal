@@ -6,6 +6,11 @@ use App\Core\Env;
 
 require_once __DIR__ . '/Core/Env.php';
 
+$rootConfig = __DIR__ . '/../config.php';
+if (is_file($rootConfig)) {
+    require_once $rootConfig;
+}
+
 if (!function_exists('str_starts_with')) {
     function str_starts_with($haystack, $needle)
     {
@@ -22,7 +27,9 @@ if (!function_exists('str_contains')) {
 
 Env::load(__DIR__ . '/../.env');
 
-define('APP_DEBUG', Env::get('APP_DEBUG', Env::get('APP_ENV', 'production') !== 'production' ? '1' : '0') === '1');
+if (!defined('APP_DEBUG')) {
+    define('APP_DEBUG', Env::get('APP_DEBUG', Env::get('APP_ENV', 'production') !== 'production' ? '1' : '0') === '1');
+}
 
 $logDir = __DIR__ . '/../storage/logs';
 if (!is_dir($logDir)) {
@@ -76,9 +83,27 @@ register_shutdown_function(static function (): void {
     ));
 });
 
-// Load Composer autoloader (PhpSpreadsheet + any future packages)
+// Load Composer autoloader (PhpSpreadsheet + any future packages).
+// On some shared hosts, Composer platform checks can throw at runtime.
+// Keep app bootable for core routes even when optional vendor packages cannot be loaded.
 if (is_file(__DIR__ . '/../vendor/autoload.php')) {
-    require_once __DIR__ . '/../vendor/autoload.php';
+    ob_start();
+    $displayErrorsPrev = ini_get('display_errors');
+    ini_set('display_errors', '1');
+    try {
+        require_once __DIR__ . '/../vendor/autoload.php';
+        $autoloadOutput = (string)ob_get_clean();
+        if ($autoloadOutput !== '') {
+            error_log(sprintf('[%s] Optional vendor autoload output suppressed', date('c')));
+        }
+    } catch (\Throwable $e) {
+        if (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+        error_log(sprintf('[%s] Optional vendor autoload skipped: %s', date('c'), $e->getMessage()));
+    } finally {
+        ini_set('display_errors', (string)$displayErrorsPrev);
+    }
 }
 
 spl_autoload_register(static function (string $class): void {

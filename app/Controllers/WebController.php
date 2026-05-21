@@ -556,6 +556,12 @@ $products = $db->fetchAll($productSql, $productArgs);
         ", [$slug]);
 
         if (!$product) {
+            $fallbackSlug = $this->findNearestProductSlug($db, $slug);
+            if ($fallbackSlug !== null) {
+                header('Location: /product/' . rawurlencode($fallbackSlug), true, 301);
+                return;
+            }
+
             http_response_code(404);
             View::render('errors/404', ['title' => 'Not Found']);
             return;
@@ -616,6 +622,56 @@ $products = $db->fetchAll($productSql, $productArgs);
             'breadcrumbs'  => $breadcrumbs,
             'businessPhone'=> $rawPhone,
         ]);
+    }
+
+    private function findNearestProductSlug($db, string $requestedSlug): ?string
+    {
+        $requested = strtolower(trim($requestedSlug));
+        if ($requested === '') {
+            return null;
+        }
+
+        $requestedCompact = preg_replace('/[^a-z0-9]/', '', $requested) ?: '';
+        $tokens = preg_split('/[-_\s]+/', $requested) ?: [];
+        $tokens = array_values(array_filter(array_map(static function ($token): string {
+            $clean = strtolower(trim((string)$token));
+            return strlen($clean) >= 3 ? $clean : '';
+        }, $tokens)));
+
+        $rows = $db->fetchAll(
+            "SELECT slug, name FROM products WHERE deleted_at IS NULL AND availability_status != 'draft' ORDER BY id DESC LIMIT 500"
+        );
+
+        $bestSlug = null;
+        $bestScore = 0;
+
+        foreach ($rows as $row) {
+            $candidateSlug = strtolower((string)($row['slug'] ?? ''));
+            if ($candidateSlug === '') {
+                continue;
+            }
+
+            $candidateName = strtolower((string)($row['name'] ?? ''));
+            $candidateCompact = preg_replace('/[^a-z0-9]/', '', $candidateSlug . ' ' . $candidateName) ?: '';
+
+            if ($requestedCompact !== '' && $candidateCompact === $requestedCompact) {
+                return (string)$row['slug'];
+            }
+
+            $score = 0;
+            foreach ($tokens as $token) {
+                if (strpos($candidateSlug, $token) !== false || strpos($candidateName, $token) !== false) {
+                    $score++;
+                }
+            }
+
+            if ($score > $bestScore) {
+                $bestScore = $score;
+                $bestSlug = (string)$row['slug'];
+            }
+        }
+
+        return $bestScore >= 2 ? $bestSlug : null;
     }
 
     public function cart(): void
@@ -735,15 +791,8 @@ $products = $db->fetchAll($productSql, $productArgs);
 
     public function adminLogin(): void
     {
-        if ($this->hasAdminSession()) {
-            header('Location: /admin/dashboard');
-            return;
-        }
-
-        View::render('admin-login', [
-            'title' => 'Admin Login',
-            'layout' => 'admin-auth',
-        ]);
+        header('Location: /admin/login.php');
+        return;
     }
 
     public function adminDashboard(): void

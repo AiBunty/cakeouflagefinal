@@ -1,4 +1,6 @@
 RewriteEngine On
+DirectoryIndex index.php index.html index.htm
+RewriteBase /
 
 # Canonical host: redirect www to bare domain.
 RewriteCond %{HTTP_HOST} ^www\.cakeouflage\.com$ [NC]
@@ -12,11 +14,14 @@ RewriteRule ^Cakeouflage-E-commerce/(.*)$ /$1 [R=301,L]
 RewriteCond %{THE_REQUEST} \s/+index\.php(?:[\s?]|$) [NC]
 RewriteRule ^index\.php$ / [R=301,L]
 
-# Force app routing for /shop to avoid host-level redirect loops.
-RewriteRule ^shop/?$ index.php [L,QSA]
+# Never rewrite the front controller itself.
+RewriteRule ^index\.php$ - [L]
+
+# Force app routing for /shop.
+RewriteRule ^shop/?$ index.php [END,QSA]
 
 RewriteCond %{REQUEST_FILENAME} -f [OR]
 RewriteCond %{REQUEST_FILENAME} -d
 RewriteRule ^ - [L]
 
-RewriteRule ^ index.php [L,QSA]
+RewriteRule ^ index.php [END,QSA]

@@ -84,6 +84,11 @@ final class VariableResolverService
             'batch_date' => '2026-04-18',
             'quote_number' => 'QTE-2026-0042',
             'company_name' => 'Nashik Corporate Events LLP',
+            'cake_message' => 'Happy Birthday Sarah!',
+            'topper_choice' => 'Happy Birthday Topper',
+            'topper_price' => '₹0',
+            'special_instructions' => 'No nuts please',
+            'item_details' => '1× Chocolate Fantasy Cake',
         ];
     }
 }

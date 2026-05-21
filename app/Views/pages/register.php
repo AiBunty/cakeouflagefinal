@@ -29,6 +29,7 @@
         <div class="auth-card__links-row">
           <button class="btn btn--secondary btn--sm" type="button" id="registerSendOtpBtn">Send OTP</button>
         </div>
+        <div id="registerOtpNotice" class="form-feedback" aria-live="polite" style="display:none;margin-top:-0.25rem;padding:0.75rem 0.9rem;border-radius:12px;border:1px solid transparent;"></div>
         <div class="form-row-2">
           <label class="form-control">
             <span class="form-label">OTP <span class="form-required">*</span></span>
@@ -62,6 +63,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const emailInput = document.getElementById("registerEmail");
   const otpInput = document.getElementById("registerOtp");
   const sendBtn = document.getElementById("registerSendOtpBtn");
+  const noticeEl = document.getElementById("registerOtpNotice");
   const statusEl = document.getElementById("registerStatus");
   const defaultSendText = sendBtn ? sendBtn.textContent : "Send OTP";
 
@@ -99,6 +101,21 @@ document.addEventListener("DOMContentLoaded", () => {
     cooldownTimer = window.setInterval(tick, 250);
   };
 
+  const showNotice = (message, tone = "info") => {
+    if (!noticeEl) return;
+    noticeEl.style.display = "block";
+    noticeEl.textContent = message;
+    noticeEl.style.background = tone === "warn" ? "#fff4e5" : "#eef7ff";
+    noticeEl.style.borderColor = tone === "warn" ? "#f0c36d" : "#b7d7f7";
+    noticeEl.style.color = tone === "warn" ? "#8a5a00" : "#184d78";
+  };
+
+  const clearNotice = () => {
+    if (!noticeEl) return;
+    noticeEl.style.display = "none";
+    noticeEl.textContent = "";
+  };
+
   if (!form || !nameInput || !phoneInput || !emailInput || !otpInput || !sendBtn || !statusEl) {
     return;
   }
@@ -106,6 +123,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const existingCooldownUntil = readCooldownUntil();
   if (existingCooldownUntil > Date.now()) {
     startCooldownUi(existingCooldownUntil);
+    showNotice("Cooldown active. You can request a new OTP after the timer ends.", "warn");
   }
 
   sendBtn.addEventListener("click", async () => {
@@ -117,6 +135,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     statusEl.textContent = "Sending OTP...";
+    clearNotice();
     sendBtn.disabled = true;
     sendBtn.textContent = "Sending...";
 
@@ -136,8 +155,23 @@ document.addEventListener("DOMContentLoaded", () => {
         const cooldownUntil = Date.now() + OTP_COOLDOWN_MS;
         window.localStorage.setItem(OTP_STORAGE_KEY, String(cooldownUntil));
         startCooldownUi(cooldownUntil);
+        clearNotice();
+        statusEl.textContent = "OTP sent to your email. It expires in 5 minutes.";
+        return;
       }
-      statusEl.textContent = data.success ? "OTP sent to your email." : (data.message || "Failed to send OTP");
+
+      const responseMessage = String(data.message || "");
+      if (res.status === 429 || responseMessage.includes('60 seconds before requesting a new OTP')) {
+        const cooldownUntil = Date.now() + OTP_COOLDOWN_MS;
+        window.localStorage.setItem(OTP_STORAGE_KEY, String(cooldownUntil));
+        startCooldownUi(cooldownUntil);
+        showNotice(responseMessage || "Please wait 60 seconds before requesting a new OTP.", "warn");
+        statusEl.textContent = responseMessage || "Please wait 60 seconds before requesting a new OTP.";
+        return;
+      }
+
+      clearNotice();
+      statusEl.textContent = data.message || "Failed to send OTP";
     } catch (error) {
       statusEl.textContent = "Unable to send OTP right now.";
       sendBtn.disabled = false;

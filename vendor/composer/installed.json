@@ -440,6 +440,6 @@
             "install-path": "../psr/simple-cache"
         }
     ],
-    "dev": false,
+    "dev": true,
     "dev-package-names": []
 }

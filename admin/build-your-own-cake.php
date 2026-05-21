@@ -404,6 +404,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             throw new RuntimeException('Invalid lead for order creation.');
           }
 
+          // Resolve selected topper (optional)
+          $byocTopperId = isset($_POST['topper_id']) && (int)$_POST['topper_id'] > 0 ? (int)$_POST['topper_id'] : null;
+          $byocTopperPrice = 0.00;
+          $byocTopperName  = null;
+          if ($byocTopperId !== null) {
+            $tpRow = $conn->query('SELECT name, price FROM cake_toppers WHERE id = ' . $byocTopperId . ' AND is_active = 1 LIMIT 1');
+            $tpRow = $tpRow ? $tpRow->fetch_assoc() : null;
+            if ($tpRow) {
+              $byocTopperPrice = (float)$tpRow['price'];
+              $byocTopperName  = (string)$tpRow['name'];
+            } else {
+              $byocTopperId = null; // invalid — ignore
+            }
+          }
+
           $conn->begin_transaction();
 
           $quoteStmt = $conn->prepare('SELECT q.id, q.quote_number, q.quote_subject, q.quote_message, q.quote_amount, q.status, q.order_id, i.name, i.email, i.phone, i.message FROM byoc_quotes q INNER JOIN inquiries i ON i.id = q.inquiry_id WHERE q.inquiry_id = ? ORDER BY q.id DESC LIMIT 1');
@@ -471,7 +486,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $orderId = (int)$orderStmt->insert_id;
             $orderStmt->close();
 
-            $itemStmt = $conn->prepare('INSERT INTO order_items (order_id, product_id, variant_id, product_name_snapshot, variant_snapshot, unit_price, quantity, line_total, customisation_note) VALUES (?, ?, NULL, ?, NULL, ?, 1, ?, ?)');
+            $itemStmt = $conn->prepare('INSERT INTO order_items (order_id, product_id, variant_id, product_name_snapshot, variant_snapshot, unit_price, quantity, line_total, customisation_note, topper_id, topper_name_snapshot, topper_price_snapshot) VALUES (?, ?, NULL, ?, NULL, ?, 1, ?, ?, ?, ?, ?)');
             if (!$itemStmt) {
               throw new RuntimeException('Could not prepare BYOC order item insert.');
             }
@@ -480,7 +495,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               $subjectSnapshot = 'Build Your Own Cake Quote';
             }
             $messageSnapshot = (string)($quote['quote_message'] ?? '');
-            $itemStmt->bind_param('iisdds', $orderId, $productId, $subjectSnapshot, $quoteAmount, $quoteAmount, $messageSnapshot);
+            $itemStmt->bind_param('iisddsisd', $orderId, $productId, $subjectSnapshot, $quoteAmount, $quoteAmount, $messageSnapshot, $byocTopperId, $byocTopperName, $byocTopperPrice);
             $itemStmt->execute();
             $itemStmt->close();
 
@@ -622,6 +637,11 @@ if (!empty($rowIds)) {
       $latestQuoteByLead[$leadId] = $quoteRow;
     }
   }
+}
+// Fetch active toppers for the create_order form
+$byocTopperOptions = [];
+if ($tres = $conn->query('SELECT id, name, price FROM cake_toppers WHERE is_active = 1 ORDER BY sort_order ASC, id ASC')) {
+  $byocTopperOptions = $tres->fetch_all(MYSQLI_ASSOC);
 }
 ?>
 <style>
@@ -793,6 +813,14 @@ if (!empty($rowIds)) {
                     <form method="post" class="byoc-actions" style="margin-top:6px;">
                       <input type="hidden" name="action" value="create_order" />
                       <input type="hidden" name="inquiry_id" value="<?= (int)$row['id'] ?>" />
+                      <?php if (!empty($byocTopperOptions)): ?>
+                      <select name="topper_id" style="min-height:32px;border:1px solid #e4c9d2;border-radius:8px;padding:0 8px;font-size:12px;background:#fff;" title="Select topper (optional)">
+                        <option value="">— No Topper —</option>
+                        <?php foreach ($byocTopperOptions as $t): ?>
+                          <option value="<?= (int)$t['id'] ?>"><?= htmlspecialchars($t['name'], ENT_QUOTES, 'UTF-8') ?><?= (float)$t['price'] > 0 ? ' (+₹' . number_format((float)$t['price'], 0) . ')' : '' ?></option>
+                        <?php endforeach; ?>
+                      </select>
+                      <?php endif; ?>
                       <button type="submit" class="byoc-btn" onclick="return confirm('Create order from latest quote for this lead?');">☎ Create Order (Tele-calling)</button>
                     </form>
                   <?php endif; ?>
