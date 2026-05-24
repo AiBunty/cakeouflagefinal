@@ -2,7 +2,7 @@
 $pageTitle = "Change Password";
 include("layout.php");
 
-require __DIR__ . '/includes/db.php';
+require_once __DIR__ . '/includes/db.php';
 $success = "";
 $error = "";
 $adminId = $_SESSION['admin'] ?? 0;

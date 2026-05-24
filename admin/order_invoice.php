@@ -43,7 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_invoice_email'])
 }
 
 $invoiceHtml = $isPaymentConfirmed ? invoice_render_html($order) : '';
-include __DIR__ . '/layout.php';
+require_once __DIR__ . '/layout.php';
 ?>
 <style>
   .invoice-shell { display: grid; gap: 14px; }

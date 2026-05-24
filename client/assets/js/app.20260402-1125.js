@@ -6,6 +6,99 @@ document.addEventListener("DOMContentLoaded", () => {
     return;
   }
 
+  const BASE_PATH = ((window.BASE_URL || "") + "").replace(/\/$/, "");
+
+  const toCategoryUrl = (slug) => `${BASE_PATH}/category/${slug}`.replace(/^\/\//, "/");
+
+  const buildCategoryTreeMarkup = (items, mode, activeSlug = "", selectedCategory = "") => {
+    const normalized = Array.isArray(items) ? items : [];
+    const byParent = new Map();
+    normalized.forEach((item) => {
+      const parentKey = item.parent_id == null ? "root" : String(item.parent_id);
+      if (!byParent.has(parentKey)) {
+        byParent.set(parentKey, []);
+      }
+      byParent.get(parentKey).push(item);
+    });
+
+    const roots = byParent.get("root") || [];
+    const findRootForSlug = (slug) => {
+      if (!slug) return "";
+      for (const root of roots) {
+        if (String(root.slug || "") === slug) return String(root.slug || "");
+        const children = byParent.get(String(root.id || "")) || [];
+        if (children.some((child) => String(child.slug || "") === slug)) {
+          return String(root.slug || "");
+        }
+      }
+      return "";
+    };
+
+    const initiallyOpenRoot = findRootForSlug(activeSlug || selectedCategory) || String((roots[0] || {}).slug || "");
+
+    return roots.map((root) => {
+      const rootId = String(root.id || "");
+      const rootSlug = String(root.slug || "");
+      const children = byParent.get(rootId) || [];
+      const countText = Number(root.product_count || 0);
+      const isOpen = rootSlug === initiallyOpenRoot;
+      const isActiveRoot = activeSlug === rootSlug || selectedCategory === rootSlug;
+
+      const rootRow = mode === "shop"
+        ? `<label class="category-tree__link ${isActiveRoot ? "is-active" : ""}"><input type="radio" name="filterCat" value="${rootSlug}" ${isActiveRoot ? "checked" : ""} /><span class="category-tree__label"><span class="category-tree__thumb">${(String(root.name || "?").trim().charAt(0) || "?").toUpperCase()}</span><span class="category-tree__name">${root.name}</span><span class="category-tree__count">${countText}</span></span></label>`
+        : `<a class="category-tree__link ${isActiveRoot ? "is-active" : ""}" href="${toCategoryUrl(rootSlug)}"><span class="category-tree__label"><span class="category-tree__thumb">${(String(root.name || "?").trim().charAt(0) || "?").toUpperCase()}</span><span class="category-tree__name">${root.name}</span><span class="category-tree__count">${countText}</span></span></a>`;
+
+      const childrenRows = children.map((child) => {
+        const childSlug = String(child.slug || "");
+        const isActiveChild = activeSlug === childSlug || selectedCategory === childSlug;
+        const childCount = Number(child.product_count || 0);
+        if (mode === "shop") {
+          return `<label class="category-tree__sub-link ${isActiveChild ? "is-active" : ""}"><input type="radio" name="filterCat" value="${childSlug}" ${isActiveChild ? "checked" : ""} /><span>${child.name}</span><span class="category-tree__count">${childCount}</span></label>`;
+        }
+        return `<a class="category-tree__sub-link ${isActiveChild ? "is-active" : ""}" href="${toCategoryUrl(childSlug)}"><span>${child.name}</span><span class="category-tree__count">${childCount}</span></a>`;
+      }).join("");
+
+      return `
+        <section class="category-accordion ${isOpen ? "is-open" : ""}" data-root-slug="${rootSlug}">
+          <button type="button" class="category-accordion__trigger" aria-expanded="${isOpen ? "true" : "false"}">
+            <span class="category-accordion__title">${root.name}</span>
+            <span class="category-accordion__arrow" aria-hidden="true">▾</span>
+          </button>
+          <div class="category-accordion__panel" ${isOpen ? "" : "hidden"}>
+            ${rootRow}
+            ${childrenRows}
+          </div>
+        </section>
+      `;
+    }).join("");
+  };
+
+  const bindAccordionBehavior = (container) => {
+    if (!container) return;
+    const triggers = Array.from(container.querySelectorAll(".category-accordion__trigger"));
+    triggers.forEach((trigger) => {
+      trigger.addEventListener("click", () => {
+        const section = trigger.closest(".category-accordion");
+        if (!(section instanceof HTMLElement)) return;
+        const isOpen = section.classList.contains("is-open");
+        const all = Array.from(container.querySelectorAll(".category-accordion"));
+        all.forEach((item) => {
+          const panel = item.querySelector(".category-accordion__panel");
+          const t = item.querySelector(".category-accordion__trigger");
+          item.classList.remove("is-open");
+          if (panel instanceof HTMLElement) panel.hidden = true;
+          if (t instanceof HTMLElement) t.setAttribute("aria-expanded", "false");
+        });
+        if (!isOpen) {
+          const panel = section.querySelector(".category-accordion__panel");
+          section.classList.add("is-open");
+          if (panel instanceof HTMLElement) panel.hidden = false;
+          trigger.setAttribute("aria-expanded", "true");
+        }
+      });
+    });
+  };
+
   const renderShop = async () => {
     const page = document.querySelector('[data-page="shop"]');
     if (!page) {
@@ -19,8 +112,18 @@ document.addEventListener("DOMContentLoaded", () => {
     const applyBtn = document.getElementById("applyFiltersBtn");
     const clearBtn = document.getElementById("clearFiltersBtn");
     const countEl = document.getElementById("shopCount");
-    const priceRange = document.getElementById("priceRange");
-    const priceRangeVal = document.getElementById("priceRangeVal");
+    const priceBucketEl = document.getElementById("priceBucket");
+    const maxPriceInput = document.getElementById("maxPriceInput");
+    const sidebar = document.getElementById("shopSidebar");
+    const sidebarBackdrop = document.getElementById("sidebarBackdrop");
+    const sidebarToggle = document.getElementById("toggleSidebar");
+    const sidebarClose = document.getElementById("sidebarClose");
+    const activeFiltersEl = document.getElementById("activeFilters");
+    const quickChips = Array.from(document.querySelectorAll("[data-quick-filter]"));
+    const mobileFilterBtn = document.getElementById("mobileFilterBtn");
+    const mobileSortBtn = document.getElementById("mobileSortBtn");
+    const mobileSearchBtn = document.getElementById("mobileSearchBtn");
+    const mobileShopCartCount = document.getElementById("mobileShopCartCount");
 
     if (!grid) {
       return;
@@ -41,22 +144,145 @@ document.addEventListener("DOMContentLoaded", () => {
       return node ? String(node.value) : "";
     };
 
+    const getSelectedFeatureFlags = () => {
+      const flags = {};
+      Array.from(document.querySelectorAll('input[name="featureFlag"]:checked')).forEach((node) => {
+        const key = String(node.value || "").trim();
+        if (key) {
+          flags[key] = true;
+        }
+      });
+      return flags;
+    };
+
+    const setDrawerOpen = (isOpen) => {
+      if (!sidebar || !sidebarBackdrop) {
+        return;
+      }
+      sidebar.classList.toggle("is-open", isOpen);
+      sidebarBackdrop.classList.toggle("is-open", isOpen);
+      sidebarBackdrop.hidden = !isOpen;
+      if (sidebarToggle) {
+        sidebarToggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+      }
+      if (!isOpen) {
+        sidebarToggle?.focus();
+      }
+    };
+
+    const syncMobileCartCount = () => {
+      if (!mobileShopCartCount) return;
+      const count = Number(window.localStorage.getItem("cakeouflage_cart_count") || 0);
+      mobileShopCartCount.textContent = String(Math.max(0, count));
+    };
+
+    const renderLoadingSkeletons = () => {
+      grid.innerHTML = Array.from({ length: 8 })
+        .map(() => `
+          <article class="product-card product-card--loading" aria-hidden="true">
+            <div class="product-card__media skeleton"></div>
+            <div class="product-card__body">
+              <span class="skeleton" style="height:14px;width:72%;display:block;border-radius:8px;"></span>
+              <span class="skeleton" style="height:11px;width:52%;display:block;border-radius:8px;margin-top:8px;"></span>
+              <span class="skeleton" style="height:18px;width:36%;display:block;border-radius:8px;margin-top:10px;"></span>
+            </div>
+          </article>
+        `)
+        .join("");
+    };
+
+    const setQuickChip = (name) => {
+      quickChips.forEach((chip) => {
+        chip.classList.toggle("is-active", chip.getAttribute("data-quick-filter") === name);
+      });
+    };
+
+    const renderActiveFilters = () => {
+      if (!activeFiltersEl) {
+        return;
+      }
+      const chips = [];
+      const categoryNode = document.querySelector('input[name="filterCat"]:checked');
+      const categoryText = (categoryNode?.nextElementSibling?.textContent || "").trim();
+      if (categoryNode && categoryNode.value && categoryText) {
+        chips.push({ key: "category", label: categoryText });
+      }
+
+      const vegNode = document.querySelector('input[name="filterVeg"]:checked');
+      if (vegNode && vegNode.value !== "") {
+        chips.push({ key: "veg", label: vegNode.value === "1" ? "Veg" : "Non-Veg" });
+      }
+
+      Array.from(document.querySelectorAll('input[name="dietary"]:checked')).forEach((node) => {
+        const label = (node.parentElement?.textContent || "").trim();
+        if (label) {
+          chips.push({ key: `dietary:${node.value}`, label });
+        }
+      });
+
+      if (priceBucketEl && priceBucketEl.value) {
+        const bucketLabels = {
+          under_500: "Under ₹500",
+          "500_1000": "₹500-₹1000",
+          "1000_2000": "₹1000-₹2000",
+          above_2000: "Above ₹2000",
+        };
+        chips.push({ key: "priceBucket", label: bucketLabels[priceBucketEl.value] || "Price range" });
+      }
+
+      if (maxPriceInput && String(maxPriceInput.value || "").trim() !== "") {
+        chips.push({ key: "maxPrice", label: `Under ₹${String(maxPriceInput.value).trim()}` });
+      }
+
+      const featureLabels = {
+        is_bestseller: "Bestseller",
+        is_chef_special: "Chef's Special",
+        customizable: "Customizable",
+        topper_enabled: "Topper Available",
+        note_enabled: "Note on Cake",
+        same_day: "Same Day Delivery",
+        express: "Express Delivery",
+      };
+      Array.from(document.querySelectorAll('input[name="featureFlag"]:checked')).forEach((node) => {
+        const key = String(node.value || "").trim();
+        if (key) {
+          chips.push({ key: `feature:${key}`, label: featureLabels[key] || key.replace(/_/g, " ") });
+        }
+      });
+
+      if (quickChips.some((chip) => chip.classList.contains("is-active") && chip.getAttribute("data-quick-filter") !== "all")) {
+        // Keep quick chips visually synced with active filters section.
+      }
+
+      if (searchEl && searchEl.value.trim() !== "") {
+        chips.push({ key: "search", label: `Search: ${searchEl.value.trim()}` });
+      }
+
+      if (!chips.length) {
+        activeFiltersEl.hidden = true;
+        activeFiltersEl.innerHTML = "";
+        return;
+      }
+
+      activeFiltersEl.hidden = false;
+      activeFiltersEl.innerHTML = chips
+        .map((chip) => `<button type="button" class="shop-active-filter" data-remove-filter="${chip.key}">${chip.label} <span aria-hidden="true">×</span></button>`)
+        .join("");
+    };
+
     const loadCategories = async () => {
       const payload = await utils.apiGet("/api/catalog/categories");
       const items = payload.data?.items || [];
       if (!categoryWrap) {
         return;
       }
-      const chips = items
-        .map((item) => {
-          return `<label class="filter-chip"><input type="radio" name="filterCat" value="${item.slug}" /><span>${item.name}</span></label>`;
-        })
-        .join("");
-      categoryWrap.insertAdjacentHTML("beforeend", chips);
+      const selectedCategory = getSelectedCategory();
+      categoryWrap.innerHTML = buildCategoryTreeMarkup(items, "shop", "", selectedCategory);
+      bindAccordionBehavior(categoryWrap);
     };
 
     const loadProducts = async () => {
-      grid.innerHTML = '<article class="card"><p class="text-muted">Loading products...</p></article>';
+      renderLoadingSkeletons();
 
       const params = new URLSearchParams();
       if (searchEl && searchEl.value.trim()) params.set("q", searchEl.value.trim());
@@ -71,7 +297,16 @@ document.addEventListener("DOMContentLoaded", () => {
       if (selectedVeg !== "") params.set("is_veg", selectedVeg);
 
       if (sortEl && sortEl.value) params.set("sort", sortEl.value);
-      if (priceRange && Number(priceRange.value) > 0) params.set("max_price", String(priceRange.value));
+      if (priceBucketEl && priceBucketEl.value) params.set("price_bucket", priceBucketEl.value);
+      if (maxPriceInput && String(maxPriceInput.value || "").trim() !== "") {
+        params.set("max_price", String(maxPriceInput.value).trim());
+      }
+
+      const selectedFlags = getSelectedFeatureFlags();
+      Object.keys(selectedFlags).forEach((flag) => {
+        params.set(flag, "1");
+      });
+
       params.set("limit", "24");
 
       const payload = await utils.apiGet(`/api/catalog/products?${params.toString()}`);
@@ -84,32 +319,48 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (!items.length) {
         grid.innerHTML = '<article class="card"><p class="text-muted">No products matched your current filters.</p></article>';
+        renderActiveFilters();
         return;
       }
 
       grid.innerHTML = items
         .map((item) => {
           const imageUrl = utils.safeImage(item.image || item.featured_image || "", utils.productPlaceholder);
+          const badges = [];
+          if (String(item.dietary_tag || "").toLowerCase() === "eggless") badges.push("Eggless");
+          if (Number(item.is_chef_special || 0) === 1) badges.push("Bestseller");
+          if (Number(item.topper_enabled || 0) === 1) badges.push("Topper Available");
+          if (Number(item.note_enabled || 0) === 1) badges.push("Message on Cake");
+          if (String(item.customisation_note || "").trim() !== "") badges.push("Customizable");
+          const badgeHtml = badges.slice(0, 3).map((badge) => `<span class="product-card__badge">${badge}</span>`).join("");
           return `
             <article class="product-card">
-              <a class="product-card__image-wrap" href="/Cakeouflage-E-commerce/product/${item.slug}">
-                <img class="product-card__image" src="${imageUrl}" alt="${item.name}" loading="lazy" width="400" height="400" onerror="this.onerror=null;this.src='${utils.productPlaceholder}'" />
+              <a class="product-card__image-wrap" href="${BASE_PATH}/product/${item.slug}">
+                <img class="product-card__image" src="${imageUrl}" alt="${item.name}" loading="lazy" width="400" height="500" onerror="this.onerror=null;this.src='${utils.productPlaceholder}'" />
+                <div class="product-card__badge-row">${badgeHtml}</div>
                 <span class="product-card__veg-badge veg-dot veg-dot--${item.is_veg ? 'veg' : 'nonveg'}" title="${item.is_veg ? 'Vegetarian' : 'Non-Vegetarian'}"></span>
               </a>
-              <h3>${item.name}</h3>
-              <p class="text-muted">${item.category_name} | ${item.dietary_tag}</p>
-              <p>Starting from ${utils.formatInr(item.starting_price)}</p>
-              <div class="product-card__actions">
-                <a class="btn btn--secondary" href="/Cakeouflage-E-commerce/product/${item.slug}">View Product</a>
-                <button class="btn btn--primary" type="button" data-add-product="${item.id}" data-add-variant="${item.default_variant_id || ""}">Add</button>
+              <div class="product-card__body">
+                <h3 class="product-card__title">${item.name}</h3>
+                <p class="product-card__meta">${item.category_name || "Cake"}${item.dietary_tag ? ` · ${item.dietary_tag}` : ""}</p>
+                <div class="product-card__footer">
+                  <p class="product-card__price">${utils.formatInr(item.starting_price)}</p>
+                </div>
+                <div class="product-card__actions">
+                  <a class="btn btn--secondary btn--sm product-card__view-btn" href="${BASE_PATH}/product/${item.slug}">View Details</a>
+                  <button class="btn btn--primary btn--sm product-card__quick-add" type="button" data-add-product="${item.id}" data-add-variant="${item.default_variant_id || ""}">Quick Add</button>
+                </div>
               </div>
             </article>
           `;
         })
         .join("");
+
+      renderActiveFilters();
     };
 
     applyBtn?.addEventListener("click", () => {
+      setDrawerOpen(false);
       void loadProducts();
     });
 
@@ -125,29 +376,109 @@ document.addEventListener("DOMContentLoaded", () => {
       Array.from(document.querySelectorAll('input[name="dietary"]')).forEach((node) => {
         node.checked = false;
       });
-      if (priceRange) {
-        priceRange.value = "5000";
+      if (priceBucketEl) {
+        priceBucketEl.value = "";
       }
-      if (priceRangeVal) {
-        priceRangeVal.textContent = "Rs5000";
+      if (maxPriceInput) {
+        maxPriceInput.value = "";
       }
+      Array.from(document.querySelectorAll('input[name="featureFlag"]')).forEach((node) => {
+        node.checked = false;
+      });
       if (searchEl) {
         searchEl.value = "";
       }
       if (sortEl) {
         sortEl.value = "latest";
       }
+      setQuickChip("all");
       void loadProducts();
     });
 
-    priceRange?.addEventListener("input", () => {
-      if (priceRangeVal) {
-        priceRangeVal.textContent = `Rs${priceRange.value}`;
+    priceBucketEl?.addEventListener("change", () => {
+      void loadProducts();
+    });
+
+    maxPriceInput?.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        void loadProducts();
       }
+    });
+
+    Array.from(document.querySelectorAll('input[name="featureFlag"]')).forEach((node) => {
+      node.addEventListener("change", () => {
+        void loadProducts();
+      });
     });
 
     sortEl?.addEventListener("change", () => {
       void loadProducts();
+    });
+
+    sidebarToggle?.addEventListener("click", () => {
+      const isOpen = sidebar?.classList.contains("is-open") === true;
+      setDrawerOpen(!isOpen);
+    });
+    sidebarClose?.addEventListener("click", () => setDrawerOpen(false));
+    sidebarBackdrop?.addEventListener("click", () => setDrawerOpen(false));
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        setDrawerOpen(false);
+      }
+    });
+
+    quickChips.forEach((chip) => {
+      chip.addEventListener("click", () => {
+        const mode = chip.getAttribute("data-quick-filter") || "all";
+        setQuickChip(mode);
+
+        if (mode === "all") {
+          clearBtn?.click();
+          return;
+        }
+
+        if (mode === "eggless") {
+          const eggless = document.querySelector('input[name="dietary"][value="eggless"]');
+          if (eggless) eggless.checked = true;
+        }
+        if (mode === "vegan") {
+          const vegan = document.querySelector('input[name="dietary"][value="vegan"]');
+          if (vegan) vegan.checked = true;
+        }
+        if (mode === "under1000") {
+          if (priceBucketEl) {
+            priceBucketEl.value = "500_1000";
+          }
+          if (maxPriceInput) {
+            maxPriceInput.value = "1000";
+          }
+        }
+        if (mode === "bestseller") {
+          const bestseller = document.querySelector('input[name="featureFlag"][value="is_bestseller"]');
+          if (bestseller) bestseller.checked = true;
+        }
+        if (mode === "sameDay") {
+          const sameDay = document.querySelector('input[name="featureFlag"][value="same_day"]');
+          if (sameDay) sameDay.checked = true;
+        }
+        if (mode === "chefSpecial") {
+          const chefSpecial = document.querySelector('input[name="featureFlag"][value="is_chef_special"]');
+          if (chefSpecial) chefSpecial.checked = true;
+        }
+
+        void loadProducts();
+      });
+    });
+
+    mobileFilterBtn?.addEventListener("click", () => setDrawerOpen(true));
+    mobileSearchBtn?.addEventListener("click", () => {
+      searchEl?.focus();
+      searchEl?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+    mobileSortBtn?.addEventListener("click", () => {
+      sortEl?.focus();
+      sortEl?.scrollIntoView({ behavior: "smooth", block: "center" });
     });
 
     searchEl?.addEventListener("keydown", (event) => {
@@ -170,19 +501,311 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const variantId = Number(target.dataset.addVariant || 0);
       try {
+        target.setAttribute("aria-busy", "true");
+        target.textContent = "Adding...";
         await window.CakeouflageCart?.addItem(productId, variantId || null, 1);
         target.textContent = "Added";
+        setTimeout(() => {
+          target.textContent = "Quick Add";
+          target.removeAttribute("aria-busy");
+        }, 1200);
+        syncMobileCartCount();
       } catch (error) {
+        target.textContent = "Quick Add";
+        target.removeAttribute("aria-busy");
         alert(error.message);
       }
     });
 
+    activeFiltersEl?.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      const chip = target.closest("[data-remove-filter]");
+      if (!(chip instanceof HTMLElement)) return;
+      const key = chip.getAttribute("data-remove-filter") || "";
+
+      if (key === "category") {
+        const allCat = document.querySelector('input[name="filterCat"][value=""]');
+        if (allCat) allCat.checked = true;
+      }
+      if (key === "veg") {
+        const allVeg = document.querySelector('input[name="filterVeg"][value=""]');
+        if (allVeg) allVeg.checked = true;
+      }
+      if (key.startsWith("dietary:")) {
+        const val = key.split(":")[1] || "";
+        const input = document.querySelector(`input[name="dietary"][value="${val}"]`);
+        if (input) input.checked = false;
+      }
+      if (key === "priceBucket" && priceBucketEl) {
+        priceBucketEl.value = "";
+      }
+      if (key === "maxPrice" && maxPriceInput) {
+        maxPriceInput.value = "";
+      }
+      if (key.startsWith("feature:")) {
+        const flag = key.split(":")[1] || "";
+        const input = document.querySelector(`input[name="featureFlag"][value="${flag}"]`);
+        if (input) input.checked = false;
+      }
+      if (key === "search" && searchEl) {
+        searchEl.value = "";
+      }
+
+      void loadProducts();
+    });
+
+    window.addEventListener("cart:updated", syncMobileCartCount);
+
     try {
       await loadCategories();
+      syncMobileCartCount();
       await loadProducts();
     } catch (error) {
       grid.innerHTML = `<article class="card"><p class="text-muted">${error.message}</p></article>`;
     }
+  };
+
+  const initUnifiedBrowseUi = () => {
+    const page = document.querySelector('[data-page="shop"], [data-page="category"]');
+    if (!page) {
+      return;
+    }
+
+    const pageType = page.getAttribute("data-page") || "";
+    const isCategoryPage = pageType === "category";
+    const sidebar = document.getElementById("shopSidebar");
+    const sidebarBackdrop = document.getElementById("sidebarBackdrop");
+    const sidebarToggle = document.getElementById("toggleSidebar");
+    const sidebarClose = document.getElementById("sidebarClose");
+    const mobileFilterBtn = document.getElementById("mobileFilterBtn");
+    const mobileSortBtn = document.getElementById("mobileSortBtn");
+    const mobileSearchBtn = document.getElementById("mobileSearchBtn");
+    const searchEl = document.getElementById("shopSearch");
+    const sortEl = document.getElementById("shopSort");
+    const viewBtns = Array.from(document.querySelectorAll(".view-btn[data-view]"));
+    const mobileShopCartCount = document.getElementById("mobileShopCartCount");
+    const quickChips = Array.from(document.querySelectorAll("#shopQuickChips [data-quick-filter]"));
+
+    const syncMobileCartCount = () => {
+      if (!mobileShopCartCount) return;
+      const count = Number(window.localStorage.getItem("cakeouflage_cart_count") || 0);
+      mobileShopCartCount.textContent = String(Math.max(0, count));
+    };
+
+    const setViewMode = (mode) => {
+      const nextMode = mode === "list" ? "list" : "grid";
+      page.classList.toggle("is-list-view", nextMode === "list");
+      viewBtns.forEach((btn) => {
+        btn.classList.toggle("is-active", btn.getAttribute("data-view") === nextMode);
+      });
+      try {
+        window.localStorage.setItem("cakeouflage_browse_view_mode", nextMode);
+      } catch (error) {
+        // Ignore localStorage access errors.
+      }
+    };
+
+    if (viewBtns.length) {
+      let savedMode = "grid";
+      try {
+        savedMode = window.localStorage.getItem("cakeouflage_browse_view_mode") || "grid";
+      } catch (error) {
+        savedMode = "grid";
+      }
+      setViewMode(savedMode);
+
+      viewBtns.forEach((btn) => {
+        btn.addEventListener("click", () => {
+          setViewMode(btn.getAttribute("data-view") || "grid");
+        });
+      });
+    }
+
+    if (isCategoryPage) {
+      const setDrawerOpen = (isOpen) => {
+        if (!sidebar || !sidebarBackdrop) return;
+        sidebar.classList.toggle("is-open", isOpen);
+        sidebarBackdrop.classList.toggle("is-open", isOpen);
+        sidebarBackdrop.hidden = !isOpen;
+        if (sidebarToggle) {
+          sidebarToggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+        }
+      };
+
+      sidebarToggle?.addEventListener("click", () => {
+        const isOpen = sidebar?.classList.contains("is-open") === true;
+        setDrawerOpen(!isOpen);
+      });
+      sidebarClose?.addEventListener("click", () => setDrawerOpen(false));
+      sidebarBackdrop?.addEventListener("click", () => setDrawerOpen(false));
+      mobileFilterBtn?.addEventListener("click", () => setDrawerOpen(true));
+      mobileSearchBtn?.addEventListener("click", () => {
+        searchEl?.focus();
+        searchEl?.scrollIntoView({ behavior: "smooth", block: "center" });
+      });
+      mobileSortBtn?.addEventListener("click", () => {
+        sortEl?.focus();
+        sortEl?.scrollIntoView({ behavior: "smooth", block: "center" });
+      });
+
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") {
+          setDrawerOpen(false);
+        }
+      });
+
+      const trimEmptyFields = (form) => {
+        const fields = form.querySelectorAll("input, select, textarea");
+        fields.forEach((field) => {
+          if (field.disabled || !field.name) return;
+          if ((field.type === "checkbox" || field.type === "radio") && !field.checked) return;
+          if ((field.value || "").trim() === "") {
+            field.disabled = true;
+          }
+        });
+      };
+
+      const forms = [
+        document.getElementById("filterForm"),
+        document.getElementById("sortForm"),
+        document.querySelector(".shop-search-wrap[role='search']"),
+      ].filter(Boolean);
+
+      forms.forEach((form) => {
+        form.addEventListener("submit", () => {
+          trimEmptyFields(form);
+        });
+      });
+
+      const filterForm = document.getElementById("filterForm");
+      const categoryWrap = document.getElementById("filterCategories");
+      const currentCategorySlug = String(categoryWrap?.getAttribute("data-current-category") || "").trim();
+
+      const setRadioValue = (name, value) => {
+        const target = document.querySelector(`input[name="${name}"][value="${value}"]`);
+        if (target instanceof HTMLInputElement) {
+          target.checked = true;
+        }
+      };
+
+      const clearFeatureFlags = () => {
+        ["is_bestseller", "is_chef_special", "customizable", "topper_enabled", "note_enabled", "same_day", "express"].forEach((name) => {
+          const input = document.querySelector(`input[name="${name}"]`);
+          if (input instanceof HTMLInputElement) {
+            input.checked = false;
+          }
+        });
+      };
+
+      const applyCategoryQuickFilter = (mode) => {
+        if (!(filterForm instanceof HTMLFormElement)) {
+          return;
+        }
+        if (mode === "all") {
+          window.location.href = window.location.pathname;
+          return;
+        }
+        if (mode === "eggless") {
+          const eggless = document.querySelector('input[name="dietary[]"][value="eggless"]');
+          if (eggless instanceof HTMLInputElement) eggless.checked = true;
+        }
+        if (mode === "vegan") {
+          const vegan = document.querySelector('input[name="dietary[]"][value="vegan"]');
+          if (vegan instanceof HTMLInputElement) vegan.checked = true;
+        }
+        if (mode === "under1000") {
+          const bucket = document.getElementById("priceBucket");
+          if (bucket instanceof HTMLSelectElement) bucket.value = "500_1000";
+          const maxPrice = document.getElementById("maxPriceInput");
+          if (maxPrice instanceof HTMLInputElement) maxPrice.value = "1000";
+        }
+        if (mode === "bestseller") setRadioValue("is_bestseller", "1");
+        if (mode === "sameDay") setRadioValue("same_day", "1");
+        if (mode === "chefSpecial") setRadioValue("is_chef_special", "1");
+        clearFeatureFlags();
+        if (mode === "bestseller") setRadioValue("is_bestseller", "1");
+        if (mode === "sameDay") setRadioValue("same_day", "1");
+        if (mode === "chefSpecial") setRadioValue("is_chef_special", "1");
+        filterForm.submit();
+      };
+
+      quickChips.forEach((chip) => {
+        chip.addEventListener("click", () => {
+          quickChips.forEach((item) => item.classList.remove("is-active"));
+          chip.classList.add("is-active");
+          const mode = chip.getAttribute("data-quick-filter") || "all";
+          applyCategoryQuickFilter(mode);
+        });
+      });
+
+      // Reflect active filter in quick chips on page load
+      (function syncActiveChipOnLoad() {
+        const params = new URLSearchParams(window.location.search);
+        let activeMode = "all";
+        const dietary = params.getAll("dietary[]");
+        if (dietary.includes("eggless")) activeMode = "eggless";
+        else if (dietary.includes("vegan")) activeMode = "vegan";
+        else if (params.get("is_bestseller") === "1") activeMode = "bestseller";
+        else if (params.get("same_day") === "1") activeMode = "sameDay";
+        else if (params.get("is_chef_special") === "1") activeMode = "chefSpecial";
+        else if (params.get("price_bucket") === "500_1000" || params.get("max_price") === "1000") activeMode = "under1000";
+        if (activeMode !== "all") {
+          quickChips.forEach((c) => {
+            c.classList.toggle("is-active", c.getAttribute("data-quick-filter") === activeMode);
+          });
+        }
+      }());
+
+      const loadCategoryTree = async () => {
+        if (!categoryWrap) return;
+        const payload = await utils.apiGet("/api/catalog/categories");
+        const items = payload.data?.items || [];
+        categoryWrap.innerHTML = buildCategoryTreeMarkup(items, "category", currentCategorySlug);
+        bindAccordionBehavior(categoryWrap);
+      };
+
+      void loadCategoryTree();
+
+      // Toolbar sticky shadow via IntersectionObserver sentinel
+      const toolbar = document.querySelector('[data-page="category"] .shop-toolbar');
+      if (toolbar && 'IntersectionObserver' in window) {
+        const sentinel = document.createElement('div');
+        sentinel.style.cssText = 'position:absolute;top:0;left:0;width:1px;height:1px;pointer-events:none';
+        toolbar.parentElement?.insertBefore(sentinel, toolbar);
+        new IntersectionObserver(
+          ([entry]) => { toolbar.classList.toggle('is-stuck', !entry.isIntersecting); },
+          { rootMargin: '-1px 0px 0px 0px', threshold: [1] }
+        ).observe(sentinel);
+      }
+
+      const categoryGrid = document.getElementById("shopGrid");
+      categoryGrid?.addEventListener("click", async (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) return;
+        const productId = Number(target.dataset.addProduct || 0);
+        if (!productId) return;
+        const variantId = Number(target.dataset.addVariant || 0);
+        try {
+          target.setAttribute("aria-busy", "true");
+          target.textContent = "Adding...";
+          await window.CakeouflageCart?.addItem(productId, variantId || null, 1);
+          target.textContent = "Added";
+          setTimeout(() => {
+            target.textContent = "Quick Add";
+            target.removeAttribute("aria-busy");
+          }, 1200);
+          syncMobileCartCount();
+        } catch (error) {
+          target.textContent = "Quick Add";
+          target.removeAttribute("aria-busy");
+          alert(error.message);
+        }
+      });
+    }
+
+    syncMobileCartCount();
+    window.addEventListener("cart:updated", syncMobileCartCount);
   };
 
   const renderProduct = async () => {
@@ -327,7 +950,7 @@ document.addEventListener("DOMContentLoaded", () => {
       return `
         <div class="empty-state">
           <span class="empty-state__icon">📦</span>
-          <p>No orders yet. <a href="/shop" class="link">Browse our cakes →</a></p>
+          <p>No orders yet. <a href="/category" class="link">Browse our cakes →</a></p>
         </div>
       `;
     }
@@ -354,7 +977,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const renderWishlistCards = (items = [], compact = false) => {
     if (!items.length) {
       return compact
-        ? '<div class="empty-state"><span class="empty-state__icon">❤️</span><p>No saved items yet. <a href="/shop" class="link">Start browsing →</a></p></div>'
+        ? '<div class="empty-state"><span class="empty-state__icon">❤️</span><p>No saved items yet. <a href="/category" class="link">Start browsing →</a></p></div>'
         : "";
     }
 
@@ -1432,6 +2055,7 @@ if (params.get("success") === "1" && successOrderId) {
     }
   };
 
+  initUnifiedBrowseUi();
   void renderShop();
    void renderProduct();
   //void initCheckout();

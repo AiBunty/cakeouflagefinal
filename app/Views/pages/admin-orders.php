@@ -93,6 +93,20 @@
             <span>Admin Note</span>
             <textarea name="admin_note" rows="3" placeholder="Internal note for fulfilment team"></textarea>
           </label>
+          <label class="form-control">
+            <span>Production Status</span>
+            <select name="production_status">
+              <option value="">-- No Change --</option>
+              <option value="not_required">Not Required</option>
+              <option value="pending">Pending</option>
+              <option value="in_production">In Production</option>
+              <option value="decoration_pending">Decoration Pending</option>
+              <option value="ready">Ready</option>
+              <option value="packed">Packed</option>
+              <option value="out_for_delivery">Out for Delivery</option>
+              <option value="delivered">Delivered</option>
+            </select>
+          </label>
           <button class="btn btn--primary" type="submit">Save Slot/Note</button>
         </form>
       </section>

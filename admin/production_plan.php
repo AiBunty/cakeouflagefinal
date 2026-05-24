@@ -110,11 +110,19 @@ $defaultTargetDate = $now >= $cutoff
 
 $requestedDate = trim((string)($_GET['date'] ?? ''));
 $targetDate = preg_match('/^\d{4}-\d{2}-\d{2}$/', $requestedDate) ? $requestedDate : $defaultTargetDate;
+$mobileSearch = trim((string)($_GET['mobile'] ?? ''));
+$mobileDigits = $mobileSearch !== '' ? preg_replace('/\D/', '', $mobileSearch) : '';
 $exportCsv = strtolower(trim((string)($_GET['export'] ?? ''))) === 'csv';
 
 $plannedOrders = [];
 $unscheduledOrders = [];
 $totalItems = 0;
+
+$mobileCond = '';
+if ($mobileDigits !== '') {
+    $safeMob = $conn->real_escape_string($mobileDigits);
+    $mobileCond = " AND (o.customer_phone LIKE '%{$safeMob}%' OR o.customer_phone_e164 LIKE '%{$safeMob}%')";
+}
 
 $plannedStmt = $conn->prepare(
     'SELECT
@@ -127,12 +135,13 @@ $plannedStmt = $conn->prepare(
         o.payment_method,
         o.scheduled_slot,
         o.scheduled_slot_label,
+        o.grand_total,
         COALESCE(SUM(oi.quantity), 0) AS total_qty,
         GROUP_CONCAT(CONCAT(oi.quantity, "x ", oi.product_name_snapshot) ORDER BY oi.id ASC SEPARATOR ", ") AS items_summary
      FROM orders o
      LEFT JOIN order_items oi ON oi.order_id = o.id
      WHERE o.order_status IN ("confirmed", "in_preparation")
-       AND (o.payment_status = "paid" OR o.payment_status = "credit" OR o.payment_method = "credit")
+       AND (o.payment_status IN ("paid", "confirmed") OR o.payment_status = "credit" OR o.payment_method = "credit")' . $mobileCond . '
        AND o.scheduled_slot IS NOT NULL
        AND DATE(o.scheduled_slot) = ?
      GROUP BY o.id
@@ -161,7 +170,7 @@ $unscheduledStmt = $conn->prepare(
      FROM orders o
      LEFT JOIN order_items oi ON oi.order_id = o.id
      WHERE o.order_status IN ("confirmed", "in_preparation")
-       AND (o.payment_status = "paid" OR o.payment_status = "credit" OR o.payment_method = "credit")
+       AND (o.payment_status IN ("paid", "confirmed") OR o.payment_status = "credit" OR o.payment_method = "credit")' . $mobileCond . '
        AND o.scheduled_slot IS NULL
      GROUP BY o.id
      ORDER BY o.created_at DESC
@@ -171,6 +180,52 @@ $unscheduledStmt->execute();
 $unscheduledResult = $unscheduledStmt->get_result();
 while ($unscheduledResult && ($row = $unscheduledResult->fetch_assoc())) {
     $unscheduledOrders[] = $row;
+}
+
+// Per-slot summary
+$slotSummary = [];
+foreach ($plannedOrders as $row) {
+    $slotKey = (string)($row['scheduled_slot'] ?? '');
+    $slotLabel = (string)($row['scheduled_slot_label'] ?? $slotKey);
+    if (!isset($slotSummary[$slotKey])) {
+        $slotSummary[$slotKey] = ['label' => $slotLabel, 'orders' => 0, 'qty' => 0, 'revenue' => 0.0];
+    }
+    $slotSummary[$slotKey]['orders']++;
+    $slotSummary[$slotKey]['qty'] += (int)($row['total_qty'] ?? 0);
+    $slotSummary[$slotKey]['revenue'] += (float)($row['grand_total'] ?? 0);
+}
+$totalRevenue = array_sum(array_column($slotSummary, 'revenue'));
+
+// Pending-payment orders (scheduled for targetDate, payment not confirmed)
+$pendingPaymentOrders = [];
+$pendingStmt = $conn->prepare(
+    'SELECT
+        o.id,
+        o.order_number,
+        o.customer_name,
+        o.customer_phone,
+        o.order_status,
+        o.payment_status,
+        o.payment_method,
+        o.scheduled_slot,
+        o.scheduled_slot_label,
+        o.grand_total,
+        COALESCE(SUM(oi.quantity), 0) AS total_qty,
+        GROUP_CONCAT(CONCAT(oi.quantity, "x ", oi.product_name_snapshot) ORDER BY oi.id ASC SEPARATOR ", ") AS items_summary
+     FROM orders o
+     LEFT JOIN order_items oi ON oi.order_id = o.id
+     WHERE o.order_status NOT IN ("cancelled", "completed")
+       AND o.payment_status IN ("pending", "under_review")
+       AND o.payment_method != "credit"' . $mobileCond . '
+       AND DATE(o.scheduled_slot) = ?
+     GROUP BY o.id
+     ORDER BY o.scheduled_slot ASC, o.id ASC'
+);
+$pendingStmt->bind_param('s', $targetDate);
+$pendingStmt->execute();
+$pendingResult = $pendingStmt->get_result();
+while ($pendingResult && ($row = $pendingResult->fetch_assoc())) {
+    $pendingPaymentOrders[] = $row;
 }
 
 if ($exportCsv) {
@@ -199,7 +254,7 @@ if ($exportCsv) {
 }
 
 $pageTitle = 'Production Plan';
-include 'layout.php';
+require_once __DIR__ . '/layout.php';
 
 $firstSlot = count($plannedOrders) > 0 ? (string)$plannedOrders[0]['scheduled_slot'] : 'NA';
 $lastSlot = count($plannedOrders) > 0 ? (string)$plannedOrders[count($plannedOrders) - 1]['scheduled_slot'] : 'NA';
@@ -238,6 +293,10 @@ $lastSlot = count($plannedOrders) > 0 ? (string)$plannedOrders[count($plannedOrd
                     Target delivery date
                     <input type="date" name="date" value="<?= htmlspecialchars($targetDate, ENT_QUOTES, 'UTF-8') ?>">
                 </label>
+                <label>
+                    Mobile search
+                    <input type="tel" name="mobile" value="<?= htmlspecialchars($mobileSearch, ENT_QUOTES, 'UTF-8') ?>" placeholder="e.g. 98765 43210" style="width:160px">
+                </label>
                 <button type="submit" class="production-btn production-btn--primary">Apply</button>
                 <a class="production-btn production-btn--ghost" href="production_plan.php?date=<?= urlencode($targetDate) ?>&export=csv">Export CSV</a>
             </form>
@@ -255,8 +314,45 @@ $lastSlot = count($plannedOrders) > 0 ? (string)$plannedOrders[count($plannedOrd
                 <div class="production-kpi"><strong>Total Cakes/Qty</strong><span><?= (int)$totalItems ?></span></div>
                 <div class="production-kpi"><strong>First Slot</strong><span><?= htmlspecialchars($firstSlot, ENT_QUOTES, 'UTF-8') ?></span></div>
                 <div class="production-kpi"><strong>Last Slot</strong><span><?= htmlspecialchars($lastSlot, ENT_QUOTES, 'UTF-8') ?></span></div>
+                <div class="production-kpi"><strong>Confirmed Revenue</strong><span>₹<?= number_format($totalRevenue, 0) ?></span></div>
+                <div class="production-kpi"><strong>Slots Active</strong><span><?= count($slotSummary) ?></span></div>
                 <div class="production-kpi"><strong>Needs Scheduling</strong><span><?= count($unscheduledOrders) ?></span></div>
+                <div class="production-kpi" style="<?= $pendingPaymentOrders ? 'border-color:#f59e0b;background:#fffbeb' : '' ?>"><strong>Pending Payment ⚠</strong><span style="<?= $pendingPaymentOrders ? 'color:#b45309;font-weight:700' : '' ?>"><?= count($pendingPaymentOrders) ?></span></div>
             </div>
+        </div>
+    </section>
+
+    <section class="production-card">
+        <div class="production-card__head">
+            <h3>Slot Revenue Summary (<?= htmlspecialchars($targetDate, ENT_QUOTES, 'UTF-8') ?>)</h3>
+        </div>
+        <div class="production-card__body">
+            <?php if (!$slotSummary): ?>
+                <p>No confirmed orders scheduled for this date.</p>
+            <?php else: ?>
+            <table class="production-table">
+                <thead>
+                    <tr><th>Slot</th><th>Label</th><th>Orders</th><th>Total Qty</th><th>Revenue (₹)</th></tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($slotSummary as $sk => $ss): ?>
+                        <tr>
+                            <td><?= htmlspecialchars($sk, ENT_QUOTES, 'UTF-8') ?></td>
+                            <td><?= htmlspecialchars($ss['label'], ENT_QUOTES, 'UTF-8') ?></td>
+                            <td><?= (int)$ss['orders'] ?></td>
+                            <td><?= (int)$ss['qty'] ?></td>
+                            <td><strong>₹<?= number_format($ss['revenue'], 0) ?></strong></td>
+                        </tr>
+                    <?php endforeach; ?>
+                    <tr style="background:#fff8fa;font-weight:700">
+                        <td colspan="2">Total</td>
+                        <td><?= count($plannedOrders) ?></td>
+                        <td><?= (int)$totalItems ?></td>
+                        <td>₹<?= number_format($totalRevenue, 0) ?></td>
+                    </tr>
+                </tbody>
+            </table>
+            <?php endif; ?>
         </div>
     </section>
 
@@ -309,6 +405,49 @@ $lastSlot = count($plannedOrders) > 0 ? (string)$plannedOrders[count($plannedOrd
             </table>
         </div>
     </section>
+
+    <?php if ($pendingPaymentOrders): ?>
+    <section class="production-card" style="border-color:#f59e0b">
+        <div class="production-card__head" style="background:linear-gradient(180deg,#fffbeb,#fff)">
+            <h3 style="color:#b45309">⚠ Pending Payment — Scheduled for <?= htmlspecialchars($targetDate, ENT_QUOTES, 'UTF-8') ?> (<?= count($pendingPaymentOrders) ?>)</h3>
+        </div>
+        <div class="production-card__body">
+            <p style="color:#92400e;font-size:.88rem">These orders are scheduled for this date but payment has NOT been confirmed. Confirm or reject before preparing.</p>
+            <table class="production-table">
+                <thead>
+                    <tr>
+                        <th>Order</th>
+                        <th>Customer</th>
+                        <th>Slot</th>
+                        <th>Items</th>
+                        <th>Payment Status</th>
+                        <th>Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($pendingPaymentOrders as $row): ?>
+                        <tr>
+                            <td>
+                                <a href="order_details.php?id=<?= (int)$row['id'] ?>" style="color:#b45309;font-weight:600"><?= htmlspecialchars((string)$row['order_number'], ENT_QUOTES, 'UTF-8') ?></a><br>
+                                <small>#<?= (int)$row['id'] ?></small>
+                            </td>
+                            <td>
+                                <?= htmlspecialchars((string)$row['customer_name'], ENT_QUOTES, 'UTF-8') ?><br>
+                                <small><?= htmlspecialchars((string)$row['customer_phone'], ENT_QUOTES, 'UTF-8') ?></small>
+                            </td>
+                            <td>
+                                <?= htmlspecialchars((string)($row['scheduled_slot_label'] ?? $row['scheduled_slot'] ?? ''), ENT_QUOTES, 'UTF-8') ?>
+                            </td>
+                            <td><span class="production-chip">Qty: <?= (int)($row['total_qty'] ?? 0) ?></span><br><small><?= htmlspecialchars((string)($row['items_summary'] ?? ''), ENT_QUOTES, 'UTF-8') ?></small></td>
+                            <td><span class="production-chip" style="background:#fde68a;color:#92400e"><?= htmlspecialchars((string)$row['payment_status'], ENT_QUOTES, 'UTF-8') ?></span></td>
+                            <td><strong>₹<?= number_format((float)($row['grand_total'] ?? 0), 0) ?></strong></td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    </section>
+    <?php endif; ?>
 
     <section class="production-card">
         <div class="production-card__head">

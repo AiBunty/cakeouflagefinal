@@ -1,6 +1,6 @@
 const BASE_URL = "";
 window.CakeouflageUtils = {
-  productPlaceholder: "/client/assets/images/placeholders/product-generic.svg",
+  productPlaceholder: "/assets/defaults/default-product-image.webp",
   getCsrfToken() {
     return document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "";
   },

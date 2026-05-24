@@ -51,7 +51,7 @@ $whatsappLink = 'https://wa.me/' . $whatsappDigits . '?text=' . rawurlencode('Hi
     <div class="site-footer__logo">
   
 
-  <img src="/client/assets/images/whitelogo.png" alt="Cakeouflage Logo" style="height:140px;max-width:100%;width:auto;object-fit:contain;">
+  <img src="<?= htmlspecialchars($siteConfig['footer_logo_url'] ?? '/client/assets/images/whitelogo.png', ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($brand['name'] ?? 'Cakeouflage', ENT_QUOTES, 'UTF-8') ?> Logo" style="height:140px;max-width:100%;width:auto;object-fit:contain;">
 
 </div>
       <p class="site-footer__tagline"><?= htmlspecialchars((string)$brand['tagline'], ENT_QUOTES, 'UTF-8') ?></p>
@@ -72,7 +72,7 @@ $whatsappLink = 'https://wa.me/' . $whatsappDigits . '?text=' . rawurlencode('Hi
     <div class="site-footer__col">
       <h4 class="site-footer__col-title">Shop</h4>
       <ul class="site-footer__links">
-        <li><a href="<?= $base ?>/shop">All Products</a></li>
+        <li><a href="<?= $base ?>/category">All Products</a></li>
         <li><a href="<?= $base ?>/custom-cake-inquiry">Custom Orders</a></li>
    <li>
   <a 

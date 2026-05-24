@@ -1,7 +1,7 @@
 <?php
 require_once __DIR__ . '/includes/auth.php';
 require_permission_for_current_admin_page();
-include "includes/db.php";
+require_once __DIR__ . '/includes/db.php';
 
 $id = $_GET['id'];
 

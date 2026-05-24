@@ -41,4 +41,20 @@ final class Csrf
         $bodyToken = trim((string)($decoded['_csrf'] ?? ''));
         return $bodyToken !== '' && hash_equals($sessionToken, $bodyToken);
     }
+
+    public static function rotateToken(): string
+    {
+        unset($_SESSION['_csrf_token']);
+        return self::token();
+    }
+
+    public static function getMetaTag(): string
+    {
+        return '<meta name="csrf-token" content="' . htmlspecialchars(self::token(), ENT_QUOTES, 'UTF-8') . '">';
+    }
+
+    public static function getTokenField(): string
+    {
+        return '<input type="hidden" name="_csrf" value="' . htmlspecialchars(self::token(), ENT_QUOTES, 'UTF-8') . '">';
+    }
 }

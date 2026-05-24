@@ -23,5 +23,8 @@ function get_business_settings(mysqli $conn): array
         'business_email' => get_business_setting($conn, 'business_email'),
         'business_gst_number' => get_business_setting($conn, 'business_gst_number'),
         'business_pan_number' => get_business_setting($conn, 'business_pan_number'),
+        'email_logo_url' => get_business_setting($conn, 'email_logo_url'),
+        'navbar_logo_url' => get_business_setting($conn, 'navbar_logo_url'),
+        'footer_logo_url' => get_business_setting($conn, 'footer_logo_url'),
     );
 }

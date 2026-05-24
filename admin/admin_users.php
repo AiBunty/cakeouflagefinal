@@ -1,6 +1,6 @@
 <?php
 $pageTitle = 'Sub Users';
-include 'layout.php';
+require_once __DIR__ . '/layout.php';
 
 if (!admin_is_super_admin()) {
     http_response_code(403);

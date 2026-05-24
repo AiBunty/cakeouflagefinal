@@ -16,7 +16,7 @@ function comm_build_email_template(array $cfg): string
   $panelBg = (string)($cfg['panel_bg'] ?? '#fff7f9');
   $panelBorder = (string)($cfg['panel_border'] ?? '#f0d7df');
   $footer = (string)($cfg['footer'] ?? '#140b0f');
-  $tagline = (string)($cfg['tagline'] ?? 'Cakeouflage Notifications');
+  $tagline = (string)($cfg['tagline'] ?? '{{business_name}} Notifications');
   $heading = (string)($cfg['heading'] ?? 'Hi {{customer_name}}');
   $lead = (string)($cfg['lead'] ?? 'Cakeouflage has an update for you.');
   $notice = (string)($cfg['notice'] ?? '');
@@ -34,7 +34,7 @@ function comm_build_email_template(array $cfg): string
     ? '<div style="margin-top:22px;background:#fff5da;padding:18px;border-radius:12px;color:#7a5300;">' . $notice . '</div>'
     : '';
 
-  return '<div style="background:' . $bg . ';padding:40px;font-family:Arial,sans-serif;"><div style="max-width:650px;margin:auto;background:#fff;border-radius:20px;overflow:hidden;box-shadow:0 10px 35px rgba(0,0,0,0.08);"><div style="background:' . $accent . ';padding:28px;color:#fff;"><div style="margin-bottom:12px;"><img src="https://i.ibb.co/hRytXC3F/whitelogo.png" alt="Cakeouflage Logo" style="height:100px;display:block;"></div><p style="margin-top:10px;font-size:14px;opacity:0.9;">' . $tagline . '</p></div><div style="padding:40px;"><h2 style="margin-top:0;color:#1d1115;font-size:30px;">' . $heading . '</h2><p style="color:#5f4c55;font-size:16px;line-height:1.8;">' . $lead . '</p>' . $detailsSection . $noticeSection . $ctaHtml . '</div><div style="background:' . $footer . ';padding:30px;color:#fff;"><h3 style="margin-top:0;font-family:Georgia,serif;">Team Cakeouflage</h3><p style="color:#d7c6cc;font-size:14px;">Premium Designer Cakes crafted with elegance and creativity.</p><p style="color:#d7c6cc;font-size:14px;">&#127760; www.cakeouflage.com</p></div></div></div>';
+  return '<div style="background:' . $bg . ';padding:40px;font-family:Arial,sans-serif;"><div style="max-width:650px;margin:auto;background:#fff;border-radius:20px;overflow:hidden;box-shadow:0 10px 35px rgba(0,0,0,0.08);"><div style="background:' . $accent . ';padding:28px;color:#fff;"><div style="margin-bottom:12px;"><img src="{{email_logo_url}}" alt="{{business_name}} Logo" style="height:100px;display:block;"></div><p style="margin-top:10px;font-size:14px;opacity:0.9;">' . $tagline . '</p></div><div style="padding:40px;"><h2 style="margin-top:0;color:#1d1115;font-size:30px;">' . $heading . '</h2><p style="color:#5f4c55;font-size:16px;line-height:1.8;">' . $lead . '</p>' . $detailsSection . $noticeSection . $ctaHtml . '</div><div style="background:' . $footer . ';padding:30px;color:#fff;"><h3 style="margin-top:0;font-family:Georgia,serif;">Team {{business_name}}</h3><p style="color:#d7c6cc;font-size:14px;">Premium Designer Cakes crafted with elegance and creativity.</p><p style="color:#d7c6cc;font-size:14px;">&#127760; www.cakeouflage.com</p><p style="color:#d7c6cc;font-size:14px;">&#9993; {{support_email}} &nbsp;|&nbsp; &#128222; {{support_phone}}</p></div></div></div>';
 }
 
 // ── Auto-seed and auto-repair email templates so none remain blank/minimal ──
@@ -346,22 +346,22 @@ function comm_build_email_template(array $cfg): string
     ];
   }
 
-  $sql = 'INSERT INTO communication_templates (channel, event_key, subject, body_template, is_active) VALUES (?,?,?,?,1)
+  $sql = 'INSERT INTO communication_templates (channel, event_key, subject, body_template, is_active) VALUES (?,?,?,?,1) AS new
       ON DUPLICATE KEY UPDATE
       subject = CASE
-        WHEN event_key IN ("follow_up_review_email", "annual_reorder_email", "birthday_greeting_email", "birthday_preorder_email", "anniversary_greeting_email", "anniversary_preorder_email", "celebration_combined_email") THEN VALUES(subject)
-        WHEN TRIM(COALESCE(subject, "")) = "" THEN VALUES(subject)
-        ELSE subject
+        WHEN new.event_key IN ("follow_up_review_email", "annual_reorder_email", "birthday_greeting_email", "birthday_preorder_email", "anniversary_greeting_email", "anniversary_preorder_email", "celebration_combined_email") THEN new.subject
+        WHEN TRIM(COALESCE(communication_templates.subject, "")) = "" THEN new.subject
+        ELSE communication_templates.subject
       END,
       body_template = CASE
-        WHEN event_key IN ("follow_up_review_email", "annual_reorder_email", "birthday_greeting_email", "birthday_preorder_email", "anniversary_greeting_email", "anniversary_preorder_email", "celebration_combined_email") THEN VALUES(body_template)
-        WHEN TRIM(COALESCE(body_template, "")) = "" THEN VALUES(body_template)
-        WHEN LOWER(REPLACE(TRIM(body_template), " ", "")) IN ("<p><br></p>", "<p></p>") THEN VALUES(body_template)
-        WHEN LENGTH(COALESCE(body_template, "")) < 180 THEN VALUES(body_template)
-        WHEN body_template NOT LIKE "%<div%" THEN VALUES(body_template)
-        ELSE body_template
+        WHEN new.event_key IN ("follow_up_review_email", "annual_reorder_email", "birthday_greeting_email", "birthday_preorder_email", "anniversary_greeting_email", "anniversary_preorder_email", "celebration_combined_email") THEN new.body_template
+        WHEN TRIM(COALESCE(communication_templates.body_template, "")) = "" THEN new.body_template
+        WHEN LOWER(REPLACE(TRIM(communication_templates.body_template), " ", "")) IN ("<p><br></p>", "<p></p>") THEN new.body_template
+        WHEN LENGTH(COALESCE(communication_templates.body_template, "")) < 180 THEN new.body_template
+        WHEN communication_templates.body_template NOT LIKE "%<div%" THEN new.body_template
+        ELSE communication_templates.body_template
       END,
-      is_active = COALESCE(is_active, 1)';
+      is_active = COALESCE(communication_templates.is_active, 1)';
 
   $stmt = $conn->prepare($sql);
   foreach ($tpls as $t) {
@@ -369,6 +369,25 @@ function comm_build_email_template(array $cfg): string
     $stmt->execute();
   }
   $stmt->close();
+
+  // ── One-time migration: replace any legacy hardcoded imgbb logo with the
+  //    {{email_logo_url}} placeholder so branding is now dynamic. ──────────
+  $conn->query(
+    "UPDATE communication_templates
+     SET body_template = REPLACE(body_template, 'https://i.ibb.co/hRytXC3F/whitelogo.png', '{{email_logo_url}}')
+     WHERE body_template LIKE '%i.ibb.co%'"
+  );
+  // Also replace old hardcoded alt text and footer brand name.
+  $conn->query(
+    "UPDATE communication_templates
+     SET body_template = REPLACE(body_template, 'alt=\"Cakeouflage Logo\"', 'alt=\"{{business_name}} Logo\"')
+     WHERE body_template LIKE '%alt=\"Cakeouflage Logo\"%'"
+  );
+  $conn->query(
+    "UPDATE communication_templates
+     SET body_template = REPLACE(body_template, 'Team Cakeouflage', 'Team {{business_name}}')
+     WHERE body_template LIKE '%Team Cakeouflage%'"
+  );
 
   // Communication template table is master-of-truth for all queue-driven email events.
   $emailEventKeys = array_keys($templates);
@@ -418,7 +437,7 @@ if (isset($conn) && $conn instanceof mysqli) {
         })));
 
         $adminId = (int)($_SESSION['admin_id'] ?? 0);
-        $saveStmt = $conn->prepare('INSERT INTO settings (setting_key, setting_value, updated_by_admin_id) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_by_admin_id = VALUES(updated_by_admin_id)');
+        $saveStmt = $conn->prepare('INSERT INTO settings (setting_key, setting_value, updated_by_admin_id) VALUES (?, ?, ?) AS new ON DUPLICATE KEY UPDATE setting_value = new.setting_value, updated_by_admin_id = new.updated_by_admin_id');
         if ($saveStmt) {
           $keyTo = 'communication_admin_to_email';
           $saveStmt->bind_param('ssi', $keyTo, $adminEmail, $adminId);
@@ -1329,78 +1348,15 @@ if (isset($conn) && $conn instanceof mysqli) {
             <input type="text" id="subjectInput" class="comm-input" placeholder="Email subject line…">
           </div>
 
-          <!-- WYSIWYG toolbar + editor (email only) -->
+          <!-- TinyMCE editor (email only) -->
           <div id="editorToolbarWrap">
-            <div class="comm-editor-toolbar-wrap">
-              <!-- Info bar shown in visual mode -->
-              <div id="visualInfoBar" style="display:none;">🎨 Visual — click text inside the email to edit it directly</div>
-              <!-- Extra buttons -->
+            <div class="comm-editor-toolbar-wrap" style="padding:8px 12px;border-bottom:1px solid #f0d7df;">
               <div class="comm-editor-extra-btns">
-                <button type="button" id="btnSource" class="btn-src active" onclick="toggleSource()">🎨 Visual</button>
-                <button type="button" class="btn-vars" onclick="toggleCustomValues()">&#123;&#123;&#125;&#125; Values</button>
-              </div>
-              <div class="comm-rich-toolbar" id="commRichToolbar">
-                <div class="comm-tool-group">
-                  <span class="comm-tool-title">Type</span>
-                  <select id="toolFontFamily" class="comm-tool-select" onchange="applyFontFamily(this.value)">
-                    <option value="Arial">Arial</option>
-                    <option value="Helvetica">Helvetica</option>
-                    <option value="Georgia">Georgia</option>
-                    <option value="'Times New Roman'">Times New Roman</option>
-                    <option value="Verdana">Verdana</option>
-                    <option value="Tahoma">Tahoma</option>
-                  </select>
-                  <select id="toolFontSize" class="comm-tool-select" onchange="applyFontSize(this.value)">
-                    <option value="2">Small</option>
-                    <option value="3" selected>Normal</option>
-                    <option value="4">Large</option>
-                    <option value="5">XL</option>
-                    <option value="6">XXL</option>
-                  </select>
-                </div>
-                <div class="comm-tool-group">
-                  <button type="button" class="comm-tool-btn" onclick="applyVisualCommand('bold')" title="Bold"><strong>B</strong></button>
-                  <button type="button" class="comm-tool-btn" onclick="applyVisualCommand('italic')" title="Italic"><em>I</em></button>
-                  <button type="button" class="comm-tool-btn" onclick="applyVisualCommand('underline')" title="Underline"><u>U</u></button>
-                  <button type="button" class="comm-tool-btn" onclick="applyVisualCommand('strikeThrough')" title="Strikethrough"><s>S</s></button>
-                </div>
-                <div class="comm-tool-group">
-                  <input type="color" id="toolForeColor" class="comm-tool-color" value="#3d1020" title="Text Color" onchange="applyTextColor(this.value)">
-                  <input type="color" id="toolBackColor" class="comm-tool-color" value="#fff3a6" title="Highlight Color" onchange="applyHighlightColor(this.value)">
-                </div>
-                <div class="comm-tool-group">
-                  <button type="button" class="comm-tool-btn" onclick="applyVisualCommand('justifyLeft')" title="Align Left">⯇</button>
-                  <button type="button" class="comm-tool-btn" onclick="applyVisualCommand('justifyCenter')" title="Align Center">≡</button>
-                  <button type="button" class="comm-tool-btn" onclick="applyVisualCommand('justifyRight')" title="Align Right">⯈</button>
-                  <button type="button" class="comm-tool-btn" onclick="applyVisualCommand('justifyFull')" title="Justify">☰</button>
-                </div>
-                <div class="comm-tool-group">
-                  <button type="button" class="comm-tool-btn" onclick="applyVisualCommand('insertUnorderedList')" title="Bullet List">• List</button>
-                  <button type="button" class="comm-tool-btn" onclick="applyVisualCommand('insertOrderedList')" title="Numbered List">1. List</button>
-                  <button type="button" class="comm-tool-btn" onclick="applyBlock('h2')" title="Heading 2">H2</button>
-                  <button type="button" class="comm-tool-btn" onclick="applyBlock('h3')" title="Heading 3">H3</button>
-                  <button type="button" class="comm-tool-btn" onclick="applyBlock('p')" title="Paragraph">P</button>
-                </div>
-                <div class="comm-tool-group">
-                  <button type="button" class="comm-tool-btn" onclick="insertLink()" title="Insert Link">🔗</button>
-                  <button type="button" class="comm-tool-btn" onclick="insertTable()" title="Insert Table">▦</button>
-                  <button type="button" class="comm-tool-btn" onclick="insertImage()" title="Insert Image">🖼</button>
-                  <button type="button" class="comm-tool-btn" onclick="applyVisualCommand('insertHorizontalRule')" title="Horizontal Rule">―</button>
-                </div>
-                <div class="comm-tool-group">
-                  <button type="button" class="comm-tool-btn" onclick="applyVisualCommand('undo')" title="Undo">↶</button>
-                  <button type="button" class="comm-tool-btn" onclick="applyVisualCommand('redo')" title="Redo">↷</button>
-                  <button type="button" class="comm-tool-btn" onclick="applyVisualCommand('removeFormat')" title="Clear Formatting">Tx</button>
-                </div>
+                <button type="button" class="btn-vars" onclick="toggleCustomValues()">&#123;&#123;&#125;&#125; Variables</button>
               </div>
             </div>
-            <!-- Visual editable iframe -->
-            <div id="visualEditWrap" style="display:none;">
-              <iframe id="visualEditFrame" title="Visual Editor"></iframe>
-            </div>
-            <!-- HTML source textarea (shown by default) -->
-            <textarea id="sourceEditor" class="comm-input comm-textarea comm-textarea-source" placeholder="HTML source…"></textarea>
-            <input type="file" id="imageUploadInput" accept="image/jpeg,image/png,image/webp" style="display:none;">
+            <!-- TinyMCE mounts here -->
+            <textarea id="tinymceEditor" class="comm-input" placeholder="Email body HTML…" style="width:100%;min-height:420px;"></textarea>
           </div>
 
           <!-- WhatsApp plain-text body (no toolbar) -->
@@ -1418,7 +1374,22 @@ if (isset($conn) && $conn instanceof mysqli) {
             <button class="btn-save" type="button" id="btnSave" onclick="saveTemplate()">
               <span class="comm-spinner" id="saveSpin"></span>Save Template
             </button>
+            <button class="btn-preview" type="button" id="btnSendTest" onclick="openTestEmailPanel()" style="display:none;">✉ Send Test</button>
             <span class="comm-status" id="commStatus"></span>
+          </div>
+
+          <!-- Send Test Email panel (email channel only) -->
+          <div id="testEmailPanel" style="display:none;margin-top:14px;background:#fff7f9;border:1px solid #f0d7df;border-radius:12px;padding:18px;">
+            <p style="margin:0 0 10px;font-weight:600;color:#80001F;">Send Test Email</p>
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+              <input type="email" id="testEmailRecipient" placeholder="recipient@example.com"
+                     style="flex:1;min-width:220px;padding:9px 14px;border:1px solid #e2c8d1;border-radius:8px;font-size:14px;">
+              <button type="button" onclick="sendTestEmail()"
+                      style="background:#80001F;color:#fff;padding:9px 18px;border:none;border-radius:8px;font-weight:600;cursor:pointer;white-space:nowrap;">
+                <span id="testEmailSpin" class="comm-spinner"></span>Send
+              </button>
+            </div>
+            <div id="testEmailStatus" style="margin-top:8px;font-size:13px;"></div>
           </div>
 
           <!-- Preview iframe (email only) -->
@@ -1540,7 +1511,6 @@ if (isset($conn) && $conn instanceof mysqli) {
   let activeChannel = 'email';
   let selectedId    = null;
   let previewOpen   = false;
-  let sourceMode    = false;  // default: visual mode
   const BYOC_WA_EVENT_KEY = 'build_your_cake_quote_whatsapp';
 
   // ── Custom variable groups ──────────────────────────────────────────
@@ -1633,309 +1603,14 @@ if (isset($conn) && $conn instanceof mysqli) {
     return out.join('\n');
   }
 
-  // ── visual editable iframe helpers ────────────────────────────────
-  function loadVisualFrame(html) {
-    const frame = document.getElementById('visualEditFrame');
-    // Wrap bare fragment in a full document so styles apply
-    const fullDoc = /^<!doctype/i.test(html.trim())
-      ? html
-      : '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;background:#f2eef0;">' + html + '</body></html>';
-    frame.srcdoc = fullDoc;
-    frame.onload = function () {
-      try {
-        const fd = frame.contentDocument;
-        fd.designMode = 'on';
-        // Sync iframe height to its content
-        syncFrameHeight(frame);
-      } catch(e) {}
-    };
-  }
-
-  function syncFrameHeight(frame) {
-    try {
-      const h = frame.contentDocument.body.scrollHeight;
-      frame.style.height = Math.max(420, h + 32) + 'px';
-    } catch(e) {}
-  }
-
-  function getVisualFrameHTML() {
-    const frame = document.getElementById('visualEditFrame');
-    try {
-      const fd = frame.contentDocument;
-      // If the original had a full doctype, return full serialised doc
-      const src = document.getElementById('sourceEditor').value || '';
-      if (/^<!doctype/i.test(src.trim())) {
-        return fd.documentElement.outerHTML;
-      }
-      return fd.body.innerHTML;
-    } catch(e) {
-      return document.getElementById('sourceEditor').value;
-    }
-  }
-
-  function getVisualDoc() {
-    const frame = document.getElementById('visualEditFrame');
-    return frame?.contentDocument || null;
-  }
-
-  function focusVisualEditor() {
-    const frame = document.getElementById('visualEditFrame');
-    try {
-      frame?.contentWindow?.focus();
-      frame?.contentDocument?.body?.focus();
-    } catch (e) {}
-  }
-
-  function isEmailVisualMode() {
-    const t = allTemplates.find(x => x.id == selectedId);
-    return !!t && t.channel === 'email' && !sourceMode;
-  }
-
-  function insertIntoSource(snippet) {
-    const ta  = document.getElementById('sourceEditor');
-    const start = ta.selectionStart ?? ta.value.length;
-    const end = ta.selectionEnd ?? start;
-    ta.value = ta.value.slice(0, start) + snippet + ta.value.slice(end);
-    const next = start + snippet.length;
-    ta.selectionStart = ta.selectionEnd = next;
-    ta.focus();
-  }
-
-  function withVisualCommand(run) {
-    if (!isEmailVisualMode()) {
-      showToast('Switch to Visual mode for this tool');
-      return false;
-    }
-    const doc = getVisualDoc();
-    if (!doc) {
-      showToast('Editor is not ready yet');
-      return false;
-    }
-    try {
-      focusVisualEditor();
-      run(doc);
-      syncFrameHeight(document.getElementById('visualEditFrame'));
-      return true;
-    } catch (e) {
-      showToast('Could not apply formatting');
-      return false;
-    }
-  }
-
-  window.applyVisualCommand = function (cmd, value = null) {
-    withVisualCommand((doc) => {
-      doc.execCommand('styleWithCSS', false, true);
-      doc.execCommand(cmd, false, value);
-    });
-  };
-
-  window.applyFontFamily = function (fontName) {
-    if (!fontName) return;
-    withVisualCommand((doc) => {
-      doc.execCommand('fontName', false, fontName);
-    });
-  };
-
-  window.applyFontSize = function (size) {
-    if (!size) return;
-    withVisualCommand((doc) => {
-      doc.execCommand('fontSize', false, size);
-    });
-  };
-
-  window.applyTextColor = function (color) {
-    if (!color) return;
-    withVisualCommand((doc) => {
-      doc.execCommand('foreColor', false, color);
-    });
-  };
-
-  window.applyHighlightColor = function (color) {
-    if (!color) return;
-    withVisualCommand((doc) => {
-      doc.execCommand('hiliteColor', false, color);
-    });
-  };
-
-  window.applyBlock = function (tagName) {
-    if (!tagName) return;
-    withVisualCommand((doc) => {
-      doc.execCommand('formatBlock', false, tagName.toUpperCase());
-    });
-  };
-
-  window.insertLink = function () {
-    const urlRaw = prompt('Enter URL (https://...)');
-    if (!urlRaw) return;
-    const textRaw = prompt('Link text (optional)', 'Click here') || 'Click here';
-    const url = /^https?:\/\//i.test(urlRaw) ? urlRaw : ('https://' + urlRaw.replace(/^\/+/, ''));
-    if (!isEmailVisualMode()) {
-      insertIntoSource('<a href="' + url.replace(/"/g, '&quot;') + '" target="_blank" rel="noopener noreferrer">' + textRaw.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</a>');
-      return;
-    }
-    withVisualCommand((doc) => {
-      const selText = (doc.getSelection && doc.getSelection().toString()) || '';
-      if (!selText) {
-        doc.execCommand('insertText', false, textRaw);
-      }
-      doc.execCommand('createLink', false, url);
-    });
-  };
-
-  window.insertTable = function () {
-    const rows = Math.max(1, Math.min(8, parseInt(prompt('Rows', '2') || '2', 10) || 2));
-    const cols = Math.max(1, Math.min(6, parseInt(prompt('Columns', '2') || '2', 10) || 2));
-    let table = '<table style="width:100%;border-collapse:collapse;margin:12px 0;" border="1" cellpadding="8" cellspacing="0">';
-    table += '<tbody>';
-    for (let r = 0; r < rows; r++) {
-      table += '<tr>';
-      for (let c = 0; c < cols; c++) {
-        table += '<td style="border:1px solid #e3cdd5;">&nbsp;</td>';
-      }
-      table += '</tr>';
-    }
-    table += '</tbody></table>';
-
-    if (!isEmailVisualMode()) {
-      insertIntoSource(table);
-      return;
-    }
-    withVisualCommand((doc) => {
-      doc.execCommand('insertHTML', false, table);
-    });
-  };
-
-  function buildImageTag(url, alt, title, width, align) {
-    const safeUrl = (url || '').replace(/"/g, '&quot;');
-    const safeAlt = (alt || '').replace(/"/g, '&quot;');
-    const safeTitle = (title || '').replace(/"/g, '&quot;');
-    let style = 'max-width:100%;height:auto;display:block;';
-    if (width === '50') style += 'width:50%;';
-    if (width === '75') style += 'width:75%;';
-    if (width === '100') style += 'width:100%;';
-    let wrapStyle = 'margin:12px 0;';
-    if (align === 'center') wrapStyle += 'text-align:center;';
-    if (align === 'right') wrapStyle += 'text-align:right;';
-    if (align === 'left') wrapStyle += 'text-align:left;';
-    return '<div style="' + wrapStyle + '"><img src="' + safeUrl + '" alt="' + safeAlt + '" title="' + safeTitle + '" style="' + style + '"></div>';
-  }
-
-  function insertImageHtml(imageHtml) {
-    if (!isEmailVisualMode()) {
-      insertIntoSource(imageHtml);
-      return;
-    }
-    withVisualCommand((doc) => {
-      doc.execCommand('insertHTML', false, imageHtml);
-    });
-  }
-
-  async function uploadImageFile(file) {
-    const fd = new FormData();
-    fd.append('file', file);
-    fd.append('_csrf', getCsrfToken());
-    const r = await fetch('/api/admin/media/upload', {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: {
-        'X-CSRF-Token': getCsrfToken(),
-        'X-Requested-With': 'XMLHttpRequest',
-      },
-      body: fd,
-    });
-    const j = await r.json();
-    if (!j.success || !j.data?.url) {
-      throw new Error(j.message || 'Upload failed');
-    }
-    return j.data.url;
-  }
-
-  window.insertImage = async function () {
-    const urlInput = prompt('Paste image URL. Leave blank to upload from your device.', '');
-    let finalUrl = (urlInput || '').trim();
-
-    if (!finalUrl) {
-      const picker = document.getElementById('imageUploadInput');
-      picker.value = '';
-      picker.click();
-      return;
-    }
-
-    if (!/^https?:\/\//i.test(finalUrl) && !finalUrl.startsWith('/')) {
-      finalUrl = 'https://' + finalUrl.replace(/^\/+/, '');
-    }
-
-    const alt = prompt('Alt text (required for accessibility)', 'Cake image') || 'Cake image';
-    const title = prompt('Image title (optional)', '') || '';
-    const width = prompt('Width: 50, 75, or 100', '100') || '100';
-    const align = (prompt('Alignment: left, center, right', 'center') || 'center').toLowerCase();
-    insertImageHtml(buildImageTag(finalUrl, alt, title, width, align));
-  };
-
-  function initImageUploader() {
-    const picker = document.getElementById('imageUploadInput');
-    if (!picker || picker.dataset.bound === '1') return;
-    picker.dataset.bound = '1';
-    picker.addEventListener('change', async function () {
-      const file = picker.files && picker.files[0];
-      if (!file) return;
-      try {
-        showStatus('Uploading image...', true);
-        const imageUrl = await uploadImageFile(file);
-        const alt = prompt('Alt text (required for accessibility)', file.name.replace(/\.[^.]+$/, '')) || file.name;
-        const title = prompt('Image title (optional)', '') || '';
-        const width = prompt('Width: 50, 75, or 100', '100') || '100';
-        const align = (prompt('Alignment: left, center, right', 'center') || 'center').toLowerCase();
-        insertImageHtml(buildImageTag(imageUrl, alt, title, width, align));
-        showStatus('Image inserted', true);
-      } catch (err) {
-        showStatus(err.message || 'Image upload failed', false);
-      }
-    });
-  }
-
   // ── get editor HTML ─────────────────────────────────────────────────
   function getEditorHTML() {
     const t = allTemplates.find(x => x.id == selectedId);
     if (!t) return '';
     if (t.channel !== 'email') return document.getElementById('waBodyInput').value;
-    if (sourceMode) return document.getElementById('sourceEditor').value;
-    return getVisualFrameHTML();
+    const editor = window.tinymce && tinymce.get('tinymceEditor');
+    return editor ? editor.getContent() : '';
   }
-
-  // ── source / visual toggle ──────────────────────────────────────────
-  window.toggleSource = function () {
-    const visualWrap = document.getElementById('visualEditWrap');
-    const srcArea    = document.getElementById('sourceEditor');
-    const btn        = document.getElementById('btnSource');
-    const infoBar    = document.getElementById('visualInfoBar');
-    if (sourceMode) {
-      // Switch TO visual
-      // First sync any edits from visual back to source (if frame was loaded)
-      const currentVisual = getVisualFrameHTML();
-      if (currentVisual && currentVisual.trim()) {
-        // no-op: source was already synced on previous visual→source switch
-      }
-      const html = srcArea.value;
-      loadVisualFrame(html);
-      visualWrap.style.display = '';
-      srcArea.style.display    = 'none';
-      infoBar.style.display    = '';
-      btn.classList.remove('active');
-      btn.textContent = '</> Source';
-      sourceMode = false;
-    } else {
-      // Switch TO source — extract HTML from iframe and pretty-print
-      const html = getVisualFrameHTML();
-      srcArea.value            = formatHtml(html);
-      visualWrap.style.display = 'none';
-      srcArea.style.display    = '';
-      infoBar.style.display    = 'none';
-      btn.classList.add('active');
-      btn.textContent = '🎨 Visual';
-      sourceMode = true;
-    }
-  };
 
   // ── Custom Values panel ─────────────────────────────────────────────
   window.toggleCustomValues = function () {
@@ -1974,19 +1649,16 @@ if (isset($conn) && $conn instanceof mysqli) {
       ta.value  = ta.value.slice(0, pos) + token + ta.value.slice(ta.selectionEnd);
       ta.selectionStart = ta.selectionEnd = pos + token.length;
       ta.focus();
-    } else if (sourceMode) {
-      const ta  = document.getElementById('sourceEditor');
-      const pos = ta.selectionStart;
-      ta.value  = ta.value.slice(0, pos) + token + ta.value.slice(ta.selectionEnd);
-      ta.selectionStart = ta.selectionEnd = pos + token.length;
-      ta.focus();
     } else {
-      // Visual mode: insert at cursor inside the editable iframe
-      const frame = document.getElementById('visualEditFrame');
-      try {
-        frame.contentDocument.execCommand('insertText', false, token);
-        frame.contentDocument.defaultView.focus();
-      } catch(e) { showToast('Switch to Source mode to insert placeholder'); }
+      // Insert into TinyMCE at cursor position
+      const editor = window.tinymce && tinymce.get('tinymceEditor');
+      if (editor) {
+        editor.insertContent(token);
+        editor.focus();
+      } else {
+        showToast('Editor not ready — please wait');
+        return;
+      }
     }
     showToast('Inserted: ' + token);
   };
@@ -2081,22 +1753,24 @@ if (isset($conn) && $conn instanceof mysqli) {
     document.getElementById('editorToolbarWrap').style.display = isEmail ? '' : 'none';
     document.getElementById('waBodyWrap').style.display         = isEmail ? 'none' : '';
     document.getElementById('btnPreview').style.display         = isEmail ? '' : 'none';
+    document.getElementById('btnSendTest').style.display        = isEmail ? '' : 'none';
+    if (!isEmail) {
+      const tp = document.getElementById('testEmailPanel');
+      if (tp) { tp.style.display = 'none'; }
+    }
 
     if (!isEmail) {
       document.getElementById('waBodyInput').value = t.body_template ?? '';
     } else {
-      // Email — load formatted HTML and default to visual mode
+      // Email — load into TinyMCE
       const rawHtml = t.body_template ?? '';
-      document.getElementById('sourceEditor').value = formatHtml(rawHtml);
-      loadVisualFrame(rawHtml);
-      sourceMode = false;
-      document.getElementById('visualEditWrap').style.display = '';
-      document.getElementById('sourceEditor').style.display   = 'none';
-      document.getElementById('visualInfoBar').style.display  = '';
-      const btn = document.getElementById('btnSource');
-      btn.classList.remove('active');
-      btn.textContent = '</> Source';
-      initImageUploader();
+      const editor = window.tinymce && tinymce.get('tinymceEditor');
+      if (editor) {
+        editor.setContent(rawHtml);
+      } else {
+        // TinyMCE not yet ready; store for the init callback
+        window._pendingEditorContent = rawHtml;
+      }
     }
 
     // Active toggle
@@ -2181,6 +1855,55 @@ if (isset($conn) && $conn instanceof mysqli) {
       showStatus('Network error.', false);
     } finally {
       btn.disabled       = false;
+      spin.style.display = 'none';
+    }
+  };
+
+  // ── test email ──────────────────────────────────────────────────────
+  window.openTestEmailPanel = function () {
+    const panel = document.getElementById('testEmailPanel');
+    if (!panel) return;
+    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    document.getElementById('testEmailStatus').textContent = '';
+  };
+
+  window.sendTestEmail = async function () {
+    if (!selectedId) return;
+    const email = document.getElementById('testEmailRecipient').value.trim();
+    if (!email || !email.includes('@')) {
+      document.getElementById('testEmailStatus').style.color = '#9f1239';
+      document.getElementById('testEmailStatus').textContent = '✗ Please enter a valid email address.';
+      return;
+    }
+
+    const spin = document.getElementById('testEmailSpin');
+    spin.style.display = 'inline-block';
+    document.getElementById('testEmailStatus').textContent = 'Sending…';
+
+    try {
+      const r = await fetch('/api/admin/communication/templates/' + selectedId + '/test', {
+        method:      'POST',
+        credentials: 'same-origin',
+        headers:     {
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-CSRF-Token': getCsrfToken(),
+        },
+        body: JSON.stringify({ email: email, _csrf: getCsrfToken() }),
+      });
+      const j = await r.json();
+      const statusEl = document.getElementById('testEmailStatus');
+      if (j.success) {
+        statusEl.style.color = '#166534';
+        statusEl.textContent = '✓ ' + j.message;
+      } else {
+        statusEl.style.color = '#9f1239';
+        statusEl.textContent = '✗ ' + (j.message || 'Send failed.');
+      }
+    } catch (e) {
+      document.getElementById('testEmailStatus').style.color = '#9f1239';
+      document.getElementById('testEmailStatus').textContent = '✗ Network error: ' + e.message;
+    } finally {
       spin.style.display = 'none';
     }
   };
@@ -2291,8 +2014,131 @@ if (isset($conn) && $conn instanceof mysqli) {
 
   // ── init ────────────────────────────────────────────────────────────
   buildCvPanel();
-  initImageUploader();
   loadTemplates();
   loadByocWhatsAppBinding();
+})();
+</script>
+<script src="https://cdn.tiny.cloud/1/91n6hff31u1xzckbtb4b2qmq31gv9orsmjd5cxwxwvtpe0qe/tinymce/8/tinymce.min.js" referrerpolicy="origin" crossorigin="anonymous"></script>
+<script>
+(function () {
+  'use strict';
+  // Wait for TinyMCE CDN to be available then initialise
+  function waitAndInit() {
+    if (typeof tinymce !== 'undefined') {
+      var ta = document.getElementById('tinymceEditor');
+      if (!ta) return;
+      tinymce.init({
+        selector: '#tinymceEditor',
+        plugins: [
+          'anchor', 'autolink', 'charmap', 'codesample', 'emoticons', 'image', 'link',
+          'lists', 'media', 'searchreplace', 'table', 'visualblocks', 'wordcount',
+          'checklist', 'mediaembed', 'casechange', 'formatpainter', 'pageembed',
+          'a11ychecker', 'tinymcespellchecker', 'permanentpen', 'powerpaste',
+          'advtable', 'advcode', 'advtemplate', 'tinymceai',
+          'tableofcontents', 'footnotes', 'mergetags', 'autocorrect',
+          'typography', 'inlinecss', 'markdown'
+        ],
+        toolbar: 'undo redo | blocks fontfamily fontsize | bold italic underline strikethrough | ' +
+                 'forecolor backcolor | align lineheight | link image media table mergetags | ' +
+                 'checklist numlist bullist indent outdent | emoticons charmap | ' +
+                 'a11ycheck typography | searchreplace code | removeformat',
+        height: 520,
+        entity_encoding: 'raw',
+        entities: '160,nbsp',
+        verify_html: false,
+        mergetags_prefix: '{{',
+        mergetags_suffix: '}}',
+        mergetags_list: [
+          {
+            title: 'Branding',
+            menu: [
+              { value: 'email_logo_url',        title: 'Email Logo URL' },
+              { value: 'business_name',          title: 'Business Name' },
+              { value: 'brand_primary_color',    title: 'Brand Primary Color' },
+              { value: 'brand_secondary_color',  title: 'Brand Secondary Color' },
+              { value: 'support_email',          title: 'Support Email' },
+              { value: 'support_phone',          title: 'Support Phone' },
+            ],
+          },
+          {
+            title: 'Customer',
+            menu: [
+              { value: 'customer_name', title: 'Customer Name' },
+              { value: 'first_name',    title: 'First Name' },
+              { value: 'company_name',  title: 'Company Name' },
+            ],
+          },
+          {
+            title: 'Order',
+            menu: [
+              { value: 'order_number',         title: 'Order Number' },
+              { value: 'item_details',          title: 'Item Details' },
+              { value: 'cake_message',          title: 'Cake Message' },
+              { value: 'topper_choice',         title: 'Topper Choice' },
+              { value: 'topper_price',          title: 'Topper Price' },
+              { value: 'special_instructions',  title: 'Special Instructions' },
+              { value: 'delivery_date',         title: 'Delivery Date' },
+              { value: 'pickup_time',           title: 'Pickup Time' },
+            ],
+          },
+          {
+            title: 'Invoice / Quote',
+            menu: [
+              { value: 'invoice_number', title: 'Invoice Number' },
+              { value: 'invoice_amount', title: 'Invoice Amount' },
+              { value: 'due_date',       title: 'Due Date' },
+              { value: 'quote_number',   title: 'Quote Number' },
+            ],
+          },
+          {
+            title: 'Course / Workshop',
+            menu: [
+              { value: 'course_name', title: 'Course Name' },
+              { value: 'batch_date',  title: 'Batch Date' },
+            ],
+          },
+        ],
+        tinymceai_token_provider: async function () {
+          var apiKey = '91n6hff31u1xzckbtb4b2qmq31gv9orsmjd5cxwxwvtpe0qe';
+          await fetch('https://demo.api.tiny.cloud/1/' + apiKey + '/auth/random', { method: 'POST', credentials: 'include' });
+          var token = await fetch('https://demo.api.tiny.cloud/1/' + apiKey + '/jwt/tinymceai', { credentials: 'include' }).then(function (r) { return r.text(); });
+          return { token: token };
+        },
+        images_upload_url: '/api/admin/media/upload',
+        images_upload_handler: function (blobInfo) {
+          return new Promise(function (resolve, reject) {
+            var fd = new FormData();
+            fd.append('file', blobInfo.blob(), blobInfo.filename());
+            var csrf = typeof getCsrfToken === 'function' ? getCsrfToken()
+                     : ((document.querySelector('meta[name="csrf-token"]') || {}).content || '');
+            fd.append('_csrf', csrf);
+            fetch('/api/admin/media/upload', {
+              method: 'POST',
+              credentials: 'same-origin',
+              headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': csrf },
+              body: fd,
+            }).then(function (r) { return r.json(); }).then(function (j) {
+              if (j && j.success && j.data && j.data.url) { resolve(j.data.url); }
+              else { reject({ message: j.message || 'Upload failed', remove: true }); }
+            }).catch(function (err) {
+              reject({ message: err.message || 'Upload error', remove: true });
+            });
+          });
+        },
+        setup: function (editor) {
+          window._tinyEmailEditor = editor;
+          editor.on('init', function () {
+            if (window._pendingEditorContent !== undefined) {
+              editor.setContent(window._pendingEditorContent);
+              delete window._pendingEditorContent;
+            }
+          });
+        }
+      });
+    } else {
+      setTimeout(waitAndInit, 100);
+    }
+  }
+  waitAndInit();
 })();
 </script>

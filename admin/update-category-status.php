@@ -2,7 +2,7 @@
 require_once __DIR__ . '/includes/auth.php';
 require_permission_for_current_admin_page();
 
-require 'includes/db.php';
+require_once __DIR__ . '/includes/db.php';
 
 header('Content-Type: application/json; charset=utf-8');
 

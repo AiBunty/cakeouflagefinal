@@ -9,6 +9,7 @@ use App\Core\Request;
 use App\Core\Response;
 use App\Services\AuthRateLimitService;
 use App\Services\ExcelService;
+use App\Services\UnifiedMediaService;
 use App\Services\VariableResolverService;
 use App\Services\WhatsAppDispatchService;
 use App\Services\WhatsAppMetaApiService;
@@ -21,6 +22,10 @@ use Throwable;
 
 final class AdminApiController
 {
+    private const MAX_MEDIA_UPLOAD_BYTES = 104857600; // 100 MB
+
+    private ?bool $mediaAssetsTableExists = null;
+
     private static function db(): ?\PDO
     {
         try { return Database::getConnection(); }
@@ -278,9 +283,10 @@ final class AdminApiController
         $input = $this->readJsonInput();
         $pdo = self::db(); if (!$pdo) return;
 
-        $existsStmt = $pdo->prepare('SELECT id FROM products WHERE id = :id AND deleted_at IS NULL LIMIT 1');
+        $existsStmt = $pdo->prepare('SELECT id, featured_image FROM products WHERE id = :id AND deleted_at IS NULL LIMIT 1');
         $existsStmt->execute(['id' => $productId]);
-        if (!$existsStmt->fetchColumn()) {
+        $product = $existsStmt->fetch(PDO::FETCH_ASSOC);
+        if (!$product) {
             Response::json(['success' => false, 'message' => 'Product not found'], 404);
             return;
         }
@@ -1138,8 +1144,8 @@ final class AdminApiController
             return;
         }
 
-        $allowedOrderStatuses = ['pending', 'confirmed', 'in_preparation', 'out_for_delivery', 'ready_for_pickup', 'completed', 'cancelled'];
-        $allowedPaymentStatuses = ['pending', 'paid', 'failed', 'refunded'];
+        $allowedOrderStatuses = ['pending_payment', 'payment_under_review', 'confirmed', 'preparing', 'ready_for_pickup', 'out_for_delivery', 'delivered', 'completed', 'cancelled', 'refund_requested', 'refunded', 'partially_refunded', 'fully_refunded', 'rejected'];
+        $allowedPaymentStatuses = ['pending', 'under_review', 'paid', 'credit', 'refund_pending', 'partially_refunded', 'refunded', 'failed', 'rejected'];
 
         $input = $this->readJsonInput();
         $deliveryStatus = trim((string)($input['delivery_status'] ?? ''));
@@ -1151,6 +1157,8 @@ final class AdminApiController
         $scheduledSlotLabel = trim((string)($input['scheduled_slot_label'] ?? ''));
         $scheduledSlot = trim((string)($input['scheduled_slot'] ?? ''));
         $adminNote = trim((string)($input['admin_note'] ?? ''));
+        $productionStatus = trim((string)($input['production_status'] ?? ''));
+        $allowedProductionStatuses = ['not_required','pending','in_production','decoration_pending','ready','packed','out_for_delivery','delivered'];
 
         $set = [];
         $params = ['id' => $orderId];
@@ -1160,8 +1168,7 @@ final class AdminApiController
                 Response::json(['success' => false, 'message' => 'Invalid order status'], 422);
                 return;
             }
-            $set[] = 'order_status = :order_status';
-            $params['order_status'] = $orderStatus;
+            // order_status is handled by OrderStateManager below — not added to $set
         }
 
         if ($paymentStatus !== '') {
@@ -1193,7 +1200,16 @@ final class AdminApiController
             $params['admin_note'] = $adminNote;
         }
 
-        if (count($set) === 0) {
+        if ($productionStatus !== '') {
+            if (!in_array($productionStatus, $allowedProductionStatuses, true)) {
+                Response::json(['success' => false, 'message' => 'Invalid production status'], 422);
+                return;
+            }
+            $set[] = 'production_status = :production_status';
+            $params['production_status'] = $productionStatus;
+        }
+
+        if (count($set) === 0 && $orderStatus === '') {
             Response::json(['success' => false, 'message' => 'No update payload provided'], 422);
             return;
         }
@@ -1208,13 +1224,17 @@ final class AdminApiController
         }
 
         if ($orderStatus !== '') {
-            $currentOrderStatus = (string)($existingOrder['order_status'] ?? 'pending');
-            $fulfilmentMode = (string)($existingOrder['fulfilment_mode'] ?? 'delivery');
-            if (!$this->isValidOrderStatusTransition($currentOrderStatus, $orderStatus, $fulfilmentMode)) {
-                Response::json([
-                    'success' => false,
-                    'message' => 'Invalid order status transition: ' . $currentOrderStatus . ' -> ' . $orderStatus,
-                ], 422);
+            $adminRole        = (string)($_SESSION['admin_role']        ?? '');
+            $adminPermissions = (array) ($_SESSION['admin_permissions'] ?? []);
+            $stateManager     = new \App\Services\OrderStateManager();
+            $smResult = $stateManager->transition($pdo, $orderId, $orderStatus, $adminId, [
+                'admin_role'        => $adminRole,
+                'admin_permissions' => $adminPermissions,
+                'ip_address'        => $_SERVER['REMOTE_ADDR'] ?? '',
+                'reason'            => 'Admin API status update',
+            ]);
+            if (!$smResult['success']) {
+                Response::json(['success' => false, 'message' => $smResult['message']], 422);
                 return;
             }
         }
@@ -1230,9 +1250,26 @@ final class AdminApiController
             }
         }
 
-        $sql = 'UPDATE orders SET ' . implode(', ', $set) . ' WHERE id = :id';
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute($params);
+        if (count($set) > 0) {
+            $sql = 'UPDATE orders SET ' . implode(', ', $set) . ' WHERE id = :id';
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($params);
+        }
+
+        // CRM ready hook — notify customer when production_status transitions to 'ready'
+        // Only fires when order is in 'confirmed' state (forward transition → preparing)
+        // to avoid double-notifications if the admin marks production ready on an already-notified order.
+        if ($productionStatus === 'ready') {
+            try {
+                $currentOrderStatus = (string)($existingOrder['order_status'] ?? '');
+                if ($currentOrderStatus === 'confirmed') {
+                    $automation = new \App\Services\OrderAutomationService();
+                    $automation->handleStatusChange($pdo, $orderId, 'preparing', $adminId);
+                }
+            } catch (\Throwable $crmErr) {
+                error_log('[ordersUpdateStatus] CRM ready hook error: ' . $crmErr->getMessage());
+            }
+        }
 
         $this->logAdminAction($pdo, $adminId, 'update_order_status', 'orders', $orderId, [
             'order_status' => $orderStatus,
@@ -1240,9 +1277,201 @@ final class AdminApiController
             'scheduled_slot_label' => $scheduledSlotLabel,
             'scheduled_slot' => $params['scheduled_slot'] ?? null,
             'admin_note' => $adminNote,
+            'production_status' => $productionStatus,
         ]);
 
         Response::json(['success' => true, 'message' => 'Order updated']);
+    }
+
+    /**
+     * POST /api/admin/orders/:id/confirm-payment
+     * Marks payment as paid, confirms slot reservation, queues customer email + CRM.
+     */
+    public function ordersConfirmPayment(): void
+    {
+        $adminId = $this->requireAdminId();
+        if ($adminId === null) { return; }
+
+        $orderId = (int)($this->routeParams['id'] ?? 0);
+        if ($orderId <= 0) {
+            Response::json(['success' => false, 'message' => 'Invalid order ID'], 422);
+            return;
+        }
+
+        $pdo = self::db();
+        if (!$pdo) { return; }
+
+        // Fetch order
+        $orderStmt = $pdo->prepare(
+            'SELECT id, order_status, payment_status, payment_method, customer_email, customer_name,
+                order_number, scheduled_slot_label, grand_total, COALESCE(refund_amount, 0) AS refund_amount
+             FROM orders WHERE id = :id LIMIT 1'
+        );
+        $orderStmt->execute(['id' => $orderId]);
+        $order = $orderStmt->fetch(\PDO::FETCH_ASSOC);
+        if (!$order) {
+            Response::json(['success' => false, 'message' => 'Order not found'], 404);
+            return;
+        }
+
+        if ((string)$order['payment_status'] === 'paid') {
+            Response::json(['success' => true, 'message' => 'Payment already confirmed.']);
+            return;
+        }
+
+        $pdo->beginTransaction();
+        try {
+            // 1. Confirm slot reservation (checks capacity inside transaction)
+            $slotSvc = new \App\Services\SlotService($pdo);
+            $slotResult = $slotSvc->confirmSlotReservation($orderId);
+            if (!$slotResult['success'] && !empty($slotResult['waitlist'])) {
+                $pdo->rollBack();
+                Response::json([
+                    'success' => false,
+                    'message' => $slotResult['message'],
+                    'waitlist' => true,
+                ], 409);
+                return;
+            }
+
+            // 2. Mark payment confirmed + order confirmed
+            $pdo->prepare(
+                'UPDATE orders SET
+                    payment_status = "paid",
+                    payment_confirmed_at = NOW(),
+                    order_status = CASE WHEN order_status = "pending" THEN "confirmed" ELSE order_status END
+                 WHERE id = :id'
+            )->execute(['id' => $orderId]);
+
+            $recognizedAmount = max(0.0, round((float)($order['grand_total'] ?? 0) - (float)($order['refund_amount'] ?? 0), 2));
+            if ($recognizedAmount > 0) {
+                $engine = new \App\Services\FinancialTransactionEngine();
+                $adminName = (string)($this->session['admin_name'] ?? 'Admin');
+
+                if ((string)($order['payment_status'] ?? '') === 'credit') {
+                    $postResult = $engine->recordBalanceSettled([
+                        'order_id' => $orderId,
+                        'order_number' => (string)($order['order_number'] ?? ''),
+                        'amount' => $recognizedAmount,
+                        'payment_method' => (string)($order['payment_method'] ?? 'upi_manual'),
+                        'source_reference' => 'AdminApiController::ordersConfirmPayment',
+                        'idempotency_key' => 'admin-api-confirm-payment-balance:' . $orderId,
+                        'admin_id' => $adminId,
+                        'admin_name' => $adminName,
+                        'narration' => 'Credit balance settled via admin API confirm payment',
+                    ]);
+                } else {
+                    $postResult = $engine->recordPaymentReceived([
+                        'order_id' => $orderId,
+                        'order_number' => (string)($order['order_number'] ?? ''),
+                        'amount' => $recognizedAmount,
+                        'payment_method' => (string)($order['payment_method'] ?? 'upi_manual'),
+                        'payment_status' => 'paid',
+                        'source_reference' => 'AdminApiController::ordersConfirmPayment',
+                        'idempotency_key' => 'admin-api-confirm-payment:' . $orderId,
+                        'admin_id' => $adminId,
+                        'admin_name' => $adminName,
+                        'narration' => 'Payment received via admin API confirm payment',
+                    ]);
+                }
+
+                if (!$postResult['success']) {
+                    error_log('[ordersConfirmPayment][fte] ' . $postResult['message']);
+                }
+            }
+
+            $pdo->commit();
+
+            $this->logAdminAction($pdo, $adminId, 'confirm_payment', 'orders', $orderId, [
+                'slot_result' => $slotResult['message'] ?? '',
+            ]);
+
+            // 3. Queue automation (non-fatal)
+            try {
+                $automation = new \App\Services\OrderAutomationService();
+                $automation->handleOrderPlaced($pdo, $orderId, 'admin_confirm');
+            } catch (\Throwable $e) {
+                error_log('[ordersConfirmPayment] automation error: ' . $e->getMessage());
+            }
+
+            Response::json([
+                'success' => true,
+                'message' => 'Payment confirmed. Slot reserved. Customer will be notified.',
+                'slot'    => $slotResult,
+            ]);
+
+        } catch (\Throwable $e) {
+            if ($pdo->inTransaction()) { $pdo->rollBack(); }
+            error_log('[ordersConfirmPayment] error: ' . $e->getMessage());
+            Response::json(['success' => false, 'message' => 'Confirmation failed. Please try again.'], 500);
+        }
+    }
+
+    /**
+     * POST /api/admin/orders/:id/reject-payment
+     * Releases slot hold, marks order cancelled, queues rejection notification.
+     */
+    public function ordersRejectPayment(): void
+    {
+        $adminId = $this->requireAdminId();
+        if ($adminId === null) { return; }
+
+        $orderId = (int)($this->routeParams['id'] ?? 0);
+        if ($orderId <= 0) {
+            Response::json(['success' => false, 'message' => 'Invalid order ID'], 422);
+            return;
+        }
+
+        $input = (array)(json_decode(file_get_contents('php://input'), true) ?? []);
+        $reason = substr(trim((string)($input['reason'] ?? '')), 0, 255);
+
+        $pdo = self::db();
+        if (!$pdo) { return; }
+
+        $orderStmt = $pdo->prepare(
+            'SELECT id, order_status, payment_status FROM orders WHERE id = :id LIMIT 1'
+        );
+        $orderStmt->execute(['id' => $orderId]);
+        $order = $orderStmt->fetch(\PDO::FETCH_ASSOC);
+        if (!$order) {
+            Response::json(['success' => false, 'message' => 'Order not found'], 404);
+            return;
+        }
+
+        if (in_array((string)$order['order_status'], ['confirmed', 'ready', 'completed', 'delivered'], true)) {
+            Response::json(['success' => false, 'message' => 'Cannot reject a confirmed/completed order.'], 409);
+            return;
+        }
+
+        // Release slot hold
+        $slotSvc = new \App\Services\SlotService($pdo);
+        $slotSvc->releaseReservation($orderId, 'released');
+
+        // Mark order cancelled + payment rejected
+        $pdo->prepare(
+            'UPDATE orders SET
+                order_status = "cancelled",
+                payment_status = "rejected",
+                admin_note = CONCAT(COALESCE(admin_note,""), :note)
+             WHERE id = :id'
+        )->execute([
+            'id'   => $orderId,
+            'note' => $reason !== '' ? "\n[Rejected] {$reason}" : "\n[Payment rejected]",
+        ]);
+
+        $this->logAdminAction($pdo, $adminId, 'reject_payment', 'orders', $orderId, [
+            'reason' => $reason,
+        ]);
+
+        // Queue rejection notification (non-fatal)
+        try {
+            $automation = new \App\Services\OrderAutomationService();
+            $automation->handleOrderPlaced($pdo, $orderId, 'admin_reject');
+        } catch (\Throwable $e) {
+            error_log('[ordersRejectPayment] automation error: ' . $e->getMessage());
+        }
+
+        Response::json(['success' => true, 'message' => 'Order rejected and slot released.']);
     }
 
     public function ordersExportCsv(): void
@@ -1355,12 +1584,19 @@ final class AdminApiController
             return;
         }
 
+        $oldFeaturedImage = (string)($product['featured_image'] ?? '');
+
         try {
             $pdo->beginTransaction();
 
             if ($mode === 'featured') {
                 $updateProduct = $pdo->prepare('UPDATE products SET featured_image = :path WHERE id = :id');
                 $updateProduct->execute(['path' => $path, 'id' => $productId]);
+
+                if ($oldFeaturedImage !== '' && $oldFeaturedImage !== $path) {
+                    $deleteOld = $pdo->prepare('DELETE FROM product_images WHERE product_id = :product_id AND image_url = :image_url');
+                    $deleteOld->execute(['product_id' => $productId, 'image_url' => $oldFeaturedImage]);
+                }
 
                 $imgExists = $pdo->prepare('SELECT id FROM product_images WHERE product_id = :product_id AND image_url = :image_url LIMIT 1');
                 $imgExists->execute(['product_id' => $productId, 'image_url' => $path]);
@@ -1393,6 +1629,10 @@ final class AdminApiController
             }
             Response::json(['success' => false, 'message' => 'Failed to attach media', 'details' => $e->getMessage()], 500);
             return;
+        }
+
+        if ($mode === 'featured') {
+            $this->deleteMediaFileIfUnreferenced($pdo, $oldFeaturedImage, $path);
         }
 
         $this->logAdminAction($pdo, $adminId, 'attach_media_product', 'products', $productId, [
@@ -2136,12 +2376,138 @@ final class AdminApiController
 
         $mediaDirectory = $this->ensureDirectory($this->mediaBasePath());
         $files = $this->scanMediaFiles($mediaDirectory);
+        $pdo = self::db();
+        if ($pdo) {
+            $metaByPath = $this->fetchMediaAssetMetadataMap($pdo);
+            foreach ($files as &$file) {
+                $path = (string)($file['path'] ?? '');
+                if ($path !== '' && isset($metaByPath[$path])) {
+                    $file = array_merge($file, $metaByPath[$path]);
+                }
+            }
+            unset($file);
+        }
 
         Response::json([
             'success' => true,
             'message' => 'ok',
             'data' => ['items' => $files],
         ]);
+    }
+
+    public function brandingUpload(): void
+    {
+        $adminId = $this->requireAdminId();
+        if ($adminId === null) {
+            return;
+        }
+
+        $isSuperAdmin     = isset($_SESSION['admin_role']) && $_SESSION['admin_role'] === 'super_admin';
+        $adminPermissions = isset($_SESSION['admin_permissions']) && is_array($_SESSION['admin_permissions'])
+            ? $_SESSION['admin_permissions']
+            : [];
+        if (!$isSuperAdmin && !in_array('business_settings', $adminPermissions, true)) {
+            Response::json(['success' => false, 'message' => 'Permission denied'], 403);
+            return;
+        }
+
+        $allowedLogoTypes = ['email_logo_url', 'navbar_logo_url', 'footer_logo_url'];
+        $logoType = trim((string)($_POST['logo_type'] ?? ''));
+        if (!in_array($logoType, $allowedLogoTypes, true)) {
+            Response::json(['success' => false, 'message' => 'Invalid logo_type. Must be one of: ' . implode(', ', $allowedLogoTypes)], 422);
+            return;
+        }
+
+        if (!isset($_FILES['file']) || !is_array($_FILES['file'])) {
+            Response::json(['success' => false, 'message' => 'No file uploaded'], 422);
+            return;
+        }
+
+        $file    = $_FILES['file'];
+        $error   = (int)($file['error'] ?? UPLOAD_ERR_NO_FILE);
+        $tmpName = (string)($file['tmp_name'] ?? '');
+        $origName = (string)($file['name'] ?? 'logo.png');
+        $fileSize = (int)($file['size'] ?? 0);
+
+        if ($error !== UPLOAD_ERR_OK || $tmpName === '' || !is_uploaded_file($tmpName)) {
+            Response::json(['success' => false, 'message' => $this->uploadErrorMessage($error)], 422);
+            return;
+        }
+
+        $maxBytes = $this->effectiveUploadLimitBytes();
+        if ($fileSize <= 0) {
+            Response::json(['success' => false, 'message' => 'Uploaded file appears empty'], 422);
+            return;
+        }
+        if ($maxBytes > 0 && $fileSize > $maxBytes) {
+            Response::json(['success' => false, 'message' => 'File is larger than server upload limit (' . $this->formatBytes($maxBytes) . ')'], 422);
+            return;
+        }
+
+        // Detect MIME — allow raster + SVG for branding
+        $mime      = $this->detectMediaMimeType($tmpName);
+        $extension = strtolower((string)pathinfo($origName, PATHINFO_EXTENSION));
+        $allowedBrandingMimes = ['image/jpeg', 'image/png', 'image/webp', 'image/svg+xml'];
+        $allowedBrandingExts  = ['jpg', 'jpeg', 'png', 'webp', 'svg'];
+
+        if ($mime === '' || !in_array($mime, $allowedBrandingMimes, true) || !in_array($extension, $allowedBrandingExts, true)) {
+            Response::json(['success' => false, 'message' => 'Allowed formats: JPG, PNG, WebP, SVG'], 422);
+            return;
+        }
+
+        $uploadResult = UnifiedMediaService::upload($file, [
+            'module' => 'branding',
+            'entity_type' => 'settings',
+            'entity_id' => $adminId,
+            'admin_id' => $adminId,
+            'allow_svg' => true,
+            'max_bytes' => 2 * 1024 * 1024,
+        ]);
+
+        if (!$uploadResult['ok']) {
+            Response::json(['success' => false, 'message' => $uploadResult['error']], 500);
+            return;
+        }
+
+        $targetRelative = $uploadResult['relative_url'];
+
+        // Persist URL to settings table and clean up old branding file
+        $pdo = self::db();
+        if (!$pdo) {
+            return;
+        }
+
+        // Read old value to delete the old file (only delete if it's inside /uploads/branding/)
+        $stmtRead = $pdo->prepare('SELECT setting_value FROM settings WHERE setting_key = ? LIMIT 1');
+        $stmtRead->execute([$logoType]);
+        $oldUrl = (string)($stmtRead->fetchColumn() ?: '');
+        if ($oldUrl !== '' && str_starts_with($oldUrl, '/public/uploads/branding/')) {
+            $oldAbsolute = $this->projectRoot() . str_replace('/', DIRECTORY_SEPARATOR, $oldUrl);
+            if (is_file($oldAbsolute)) {
+                @unlink($oldAbsolute);
+            }
+        }
+
+        // Upsert the new URL
+        $stmtUpsert = $pdo->prepare(
+            'INSERT INTO settings (setting_key, setting_value) VALUES (?, ?)
+             ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_at = NOW()'
+        );
+        $stmtUpsert->execute([$logoType, $targetRelative]);
+
+        $this->logAdminAction($pdo, $adminId, 'branding_upload', 'settings', null, [
+            'logo_type' => $logoType,
+            'path'      => $targetRelative,
+        ]);
+
+        Response::json([
+            'success' => true,
+            'message' => 'Logo uploaded successfully',
+            'data'    => [
+                'url' => $targetRelative,
+                'key' => $logoType,
+            ],
+        ], 201);
     }
 
     public function mediaUpload(): void
@@ -2160,21 +2526,29 @@ final class AdminApiController
         $error = (int)($file['error'] ?? UPLOAD_ERR_NO_FILE);
         $tmpName = (string)($file['tmp_name'] ?? '');
         $originalName = (string)($file['name'] ?? 'media.jpg');
+        $fileSize = (int)($file['size'] ?? 0);
 
         if ($error !== UPLOAD_ERR_OK || $tmpName === '' || !is_uploaded_file($tmpName)) {
-            Response::json(['success' => false, 'message' => 'Upload failed'], 422);
+            Response::json(['success' => false, 'message' => $this->uploadErrorMessage($error)], 422);
             return;
         }
 
-        $mime = (string)(mime_content_type($tmpName) ?: '');
-        $allowed = [
-            'image/jpeg' => 'jpg',
-            'image/png' => 'png',
-            'image/webp' => 'webp',
-        ];
+        $maxUploadSize = $this->effectiveUploadLimitBytes();
+        if ($fileSize <= 0) {
+            Response::json(['success' => false, 'message' => 'Uploaded file appears empty'], 422);
+            return;
+        }
+        if ($maxUploadSize > 0 && $fileSize > $maxUploadSize) {
+            Response::json(['success' => false, 'message' => 'File is larger than current server upload limit (' . $this->formatBytes($maxUploadSize) . ')'], 422);
+            return;
+        }
 
-        if (!isset($allowed[$mime])) {
-            Response::json(['success' => false, 'message' => 'Only JPEG, PNG, and WEBP images are allowed'], 422);
+        $mime = $this->detectMediaMimeType($tmpName);
+        $extension = strtolower((string)pathinfo($originalName, PATHINFO_EXTENSION));
+        $allowed = $this->allowedMediaMimeMap();
+        $allowedExtensions = $this->allowedMediaExtensions();
+        if ($mime === '' || !isset($allowed[$mime]) || !in_array($extension, $allowedExtensions, true)) {
+            Response::json(['success' => false, 'message' => 'Allowed formats: JPG, PNG, WEBP, GIF, SVG, MP4, MOV, AVI, MKV, WEBM, M4V, MPG, MPEG'], 422);
             return;
         }
 
@@ -2186,26 +2560,82 @@ final class AdminApiController
             $basename = 'media-file';
         }
         $fileToken = $basename . '-' . date('His') . '-' . bin2hex(random_bytes(2));
-        $targetRelative = '/uploads/media/' . $yearMonth . '/' . $fileToken . '.webp';
+        $isVideo = str_starts_with($mime, 'video/');
+        $targetRelative = '/uploads/media/' . $yearMonth . '/' . $fileToken . ($isVideo ? '.' . $extension : '.webp');
         $targetAbsolute = $this->projectRoot() . str_replace('/', DIRECTORY_SEPARATOR, $targetRelative);
 
-        $optimized = $this->optimizeImageToWebp($tmpName, $targetAbsolute, 1600, 85);
-        if (!$optimized) {
-            $fallbackRelative = '/uploads/media/' . $yearMonth . '/' . $fileToken . '.' . $allowed[$mime];
-            $fallbackAbsolute = $this->projectRoot() . str_replace('/', DIRECTORY_SEPARATOR, $fallbackRelative);
+        $optimized = false;
+        $queueId = 0;
+        $sourcePath = null;
+        $canonicalPath = $targetRelative;
+        $publicUrl = $targetRelative;
 
-            $targetRelative = $fallbackRelative;
-            $targetAbsolute = $fallbackAbsolute;
-
+        if ($isVideo) {
             if (!move_uploaded_file($tmpName, $targetAbsolute)) {
                 Response::json(['success' => false, 'message' => 'Unable to save media file'], 500);
                 return;
             }
+            $sourcePath = $targetRelative;
+            $canonicalPath = '/uploads/media/' . $yearMonth . '/' . $fileToken . '.mp4';
+            $publicUrl = $sourcePath;
+        } else {
+            $upload = UnifiedMediaService::upload($file, [
+                'module' => 'media_center',
+                'entity_type' => 'media_asset',
+                'entity_id' => 0,
+                'admin_id' => $adminId,
+                'allow_svg' => true,
+                'max_bytes' => $maxUploadSize,
+            ]);
+            if (!$upload['ok']) {
+                Response::json(['success' => false, 'message' => $upload['error']], 500);
+                return;
+            }
+            $targetRelative = (string)$upload['relative_url'];
+            $targetAbsolute = (string)$upload['absolute_path'];
+            $canonicalPath = (string)$upload['optimized_url'];
+            $publicUrl = $targetRelative;
+            $queueId = (int)$upload['queue_id'];
+            $optimized = true;
         }
 
         $size = filesize($targetAbsolute);
+        if ($size === false) {
+            $size = $fileSize;
+        }
 
         $pdo = self::db(); if (!$pdo) return;
+
+        $mediaType = $isVideo ? 'video' : 'image';
+        $conversionStatus = $isVideo ? 'queued' : ($queueId > 0 ? 'queued' : 'ready');
+
+        if ($isVideo) {
+            $this->upsertMediaAssetRecord($pdo, [
+                'original_path' => $sourcePath,
+                'canonical_path' => $canonicalPath,
+                'original_filename' => $originalName,
+                'mime_type' => $mime,
+                'media_type' => $mediaType,
+                'file_size' => $size,
+                'conversion_status' => 'queued',
+                'conversion_error' => null,
+                'uploaded_by_admin_id' => $adminId,
+            ]);
+            $this->queueMediaTranscodeJob($pdo, $sourcePath, $canonicalPath, $adminId);
+        } else {
+            $this->upsertMediaAssetRecord($pdo, [
+                'original_path' => $targetRelative,
+                'canonical_path' => $canonicalPath,
+                'original_filename' => $originalName,
+                'mime_type' => 'image/webp',
+                'media_type' => $mediaType,
+                'file_size' => $size,
+                'conversion_status' => $conversionStatus,
+                'conversion_error' => null,
+                'uploaded_by_admin_id' => $adminId,
+            ]);
+        }
+
         $this->logAdminAction($pdo, $adminId, 'upload_media', 'product_images', null, ['path' => $targetRelative, 'size' => $size]);
 
         Response::json([
@@ -2213,10 +2643,15 @@ final class AdminApiController
             'message' => 'Media uploaded',
             'data' => [
                 'path' => $targetRelative,
-                'url' => $targetRelative,
+                'url' => $publicUrl,
                 'name' => basename($targetAbsolute),
                 'size' => $size,
-                'mime' => $optimized ? 'image/jpeg' : $mime,
+                'mime' => $optimized ? 'image/webp' : $mime,
+                'media_type' => $mediaType,
+                'canonical_path' => $canonicalPath,
+                'conversion_status' => $conversionStatus,
+                'source_path' => $sourcePath,
+                'queue_id' => $queueId,
             ],
         ], 201);
     }
@@ -2231,26 +2666,203 @@ final class AdminApiController
         $input = $this->readJsonInput();
         $relativePath = (string)($input['path'] ?? '');
 
-        if ($relativePath === '' || !str_starts_with($relativePath, '/uploads/media/')) {
+        if ($relativePath === '' || !$this->isValidMediaRelativePath($relativePath)) {
             Response::json(['success' => false, 'message' => 'Invalid media path'], 422);
             return;
         }
 
-        $absolutePath = $this->projectRoot() . str_replace('/', DIRECTORY_SEPARATOR, $relativePath);
+        $absolutePath = $this->resolveMediaAbsolutePath($relativePath);
+        if ($absolutePath === null) {
+            Response::json(['success' => false, 'message' => 'Invalid media path'], 422);
+            return;
+        }
+
         if (!is_file($absolutePath)) {
             Response::json(['success' => false, 'message' => 'Media file not found'], 404);
             return;
         }
 
-        if (!unlink($absolutePath)) {
+        $pdo = self::db(); if (!$pdo) return;
+        $references = $this->countMediaPathReferences($pdo, $relativePath);
+        if ($references > 0) {
+            Response::json(['success' => false, 'message' => 'Media is still referenced and cannot be deleted'], 409);
+            return;
+        }
+
+        if (!@unlink($absolutePath)) {
             Response::json(['success' => false, 'message' => 'Failed to delete media file'], 500);
             return;
         }
 
-        $pdo = self::db(); if (!$pdo) return;
+        if ($this->mediaAssetsTableExists($pdo)) {
+            $assetStmt = $pdo->prepare('SELECT original_path, canonical_path FROM media_assets WHERE original_path = :path OR canonical_path = :path LIMIT 1');
+            $assetStmt->execute(['path' => $relativePath]);
+            $asset = $assetStmt->fetch(PDO::FETCH_ASSOC);
+            if (is_array($asset)) {
+                $originalPath = (string)($asset['original_path'] ?? '');
+                $canonicalPath = (string)($asset['canonical_path'] ?? '');
+                if ($originalPath !== '' && $originalPath !== $relativePath) {
+                    $extraAbsolute = $this->resolveMediaAbsolutePath($originalPath);
+                    if ($extraAbsolute !== null && is_file($extraAbsolute) && $this->countMediaPathReferences($pdo, $originalPath) === 0) {
+                        @unlink($extraAbsolute);
+                    }
+                }
+                if ($canonicalPath !== '' && $canonicalPath !== $relativePath) {
+                    $extraAbsolute = $this->resolveMediaAbsolutePath($canonicalPath);
+                    if ($extraAbsolute !== null && is_file($extraAbsolute) && $this->countMediaPathReferences($pdo, $canonicalPath) === 0) {
+                        @unlink($extraAbsolute);
+                    }
+                }
+                $deleteAssetStmt = $pdo->prepare('DELETE FROM media_assets WHERE original_path = :path OR canonical_path = :path');
+                $deleteAssetStmt->execute(['path' => $relativePath]);
+            }
+        }
+
         $this->logAdminAction($pdo, $adminId, 'delete_media', 'product_images', null, ['path' => $relativePath]);
 
         Response::json(['success' => true, 'message' => 'Media file deleted']);
+    }
+
+    public function mediaProcessingSummary(): void
+    {
+        $adminId = $this->requireAdminId();
+        if ($adminId === null) {
+            return;
+        }
+
+        $pdo = self::db(); if (!$pdo) return;
+
+        $exists = $pdo->query("SHOW TABLES LIKE 'media_processing_queue'");
+        if (!($exists instanceof \PDOStatement) || !$exists->fetchColumn()) {
+            Response::json([
+                'success' => true,
+                'message' => 'Media processing queue not initialized',
+                'data' => [
+                    'counts' => ['pending' => 0, 'processing' => 0, 'completed' => 0, 'failed' => 0],
+                    'storage' => ['original_bytes' => 0, 'optimized_bytes' => 0, 'savings_bytes' => 0, 'optimization_ratio' => 0.0],
+                    'orphans' => ['optimized_without_queue' => 0],
+                ],
+            ]);
+            return;
+        }
+
+        $counts = ['pending' => 0, 'processing' => 0, 'completed' => 0, 'failed' => 0];
+        $countStmt = $pdo->query('SELECT processing_status, COUNT(*) AS total FROM media_processing_queue GROUP BY processing_status');
+        if ($countStmt instanceof \PDOStatement) {
+            while ($row = $countStmt->fetch(PDO::FETCH_ASSOC)) {
+                $status = (string)($row['processing_status'] ?? '');
+                if (isset($counts[$status])) {
+                    $counts[$status] = (int)($row['total'] ?? 0);
+                }
+            }
+        }
+
+        $storage = [
+            'original_bytes' => 0,
+            'optimized_bytes' => 0,
+            'savings_bytes' => 0,
+            'optimization_ratio' => 0.0,
+        ];
+
+        $pairStmt = $pdo->query('SELECT original_path, optimized_path FROM media_processing_queue WHERE processing_status = "completed" ORDER BY id DESC LIMIT 5000');
+        if ($pairStmt instanceof \PDOStatement) {
+            while ($row = $pairStmt->fetch(PDO::FETCH_ASSOC)) {
+                $originalPath = trim((string)($row['original_path'] ?? ''));
+                $optimizedPath = trim((string)($row['optimized_path'] ?? ''));
+                if ($originalPath === '' || $optimizedPath === '') {
+                    continue;
+                }
+
+                $originalAbs = $this->resolveMediaAbsolutePath($originalPath);
+                $optimizedAbs = $this->resolveMediaAbsolutePath($optimizedPath);
+
+                if ($originalAbs === null || $optimizedAbs === null || !is_file($originalAbs) || !is_file($optimizedAbs)) {
+                    continue;
+                }
+
+                $origBytes = filesize($originalAbs);
+                $optBytes = filesize($optimizedAbs);
+                if ($origBytes === false || $optBytes === false) {
+                    continue;
+                }
+
+                $storage['original_bytes'] += (int)$origBytes;
+                $storage['optimized_bytes'] += (int)$optBytes;
+            }
+        }
+
+        $storage['savings_bytes'] = max(0, $storage['original_bytes'] - $storage['optimized_bytes']);
+        $storage['optimization_ratio'] = $storage['original_bytes'] > 0
+            ? round(($storage['savings_bytes'] / $storage['original_bytes']) * 100, 2)
+            : 0.0;
+
+        $orphans = [
+            'optimized_without_queue' => $this->countOrphanOptimizedFiles($pdo),
+        ];
+
+        Response::json([
+            'success' => true,
+            'message' => 'Media processing summary',
+            'data' => [
+                'counts' => $counts,
+                'storage' => $storage,
+                'orphans' => $orphans,
+            ],
+        ]);
+    }
+
+    public function mediaProcessingJobs(): void
+    {
+        $adminId = $this->requireAdminId();
+        if ($adminId === null) {
+            return;
+        }
+
+        $pdo = self::db(); if (!$pdo) return;
+        $exists = $pdo->query("SHOW TABLES LIKE 'media_processing_queue'");
+        if (!($exists instanceof \PDOStatement) || !$exists->fetchColumn()) {
+            Response::json(['success' => true, 'data' => ['items' => [], 'count' => 0]]);
+            return;
+        }
+
+        $status = trim((string)($_GET['status'] ?? ''));
+        $allowed = ['pending', 'processing', 'completed', 'failed'];
+        $page = max(1, (int)($_GET['page'] ?? 1));
+        $limit = min(200, max(10, (int)($_GET['limit'] ?? 50)));
+        $offset = ($page - 1) * $limit;
+
+        $where = '';
+        $params = [];
+        if ($status !== '' && in_array($status, $allowed, true)) {
+            $where = 'WHERE processing_status = :processing_status';
+            $params['processing_status'] = $status;
+        }
+
+        $countStmt = $pdo->prepare('SELECT COUNT(*) FROM media_processing_queue ' . $where);
+        $countStmt->execute($params);
+        $total = (int)($countStmt->fetchColumn() ?: 0);
+
+        $sql = 'SELECT id, module_name, entity_type, entity_id, original_path, optimized_path, processing_status, attempts, last_error, created_at, processed_at, updated_at
+                FROM media_processing_queue ' . $where . ' ORDER BY id DESC LIMIT :limit OFFSET :offset';
+        $stmt = $pdo->prepare($sql);
+        foreach ($params as $k => $v) {
+            $stmt->bindValue(':' . $k, $v);
+        }
+        $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+        $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+        $stmt->execute();
+        $items = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+        Response::json([
+            'success' => true,
+            'message' => 'Media processing jobs',
+            'data' => [
+                'items' => $items,
+                'count' => $total,
+                'page' => $page,
+                'limit' => $limit,
+            ],
+        ]);
     }
 
     public function financeSummary(): void
@@ -2558,23 +3170,19 @@ final class AdminApiController
 
         if (isset($_FILES['proof']) && is_array($_FILES['proof']) && (int)($_FILES['proof']['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
             $proofFile = $_FILES['proof'];
-            $tmpName = (string)($proofFile['tmp_name'] ?? '');
-            if ($tmpName !== '' && is_uploaded_file($tmpName)) {
-                $mime = (string)(mime_content_type($tmpName) ?: '');
-                $allowed = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp'];
-                if (!isset($allowed[$mime])) {
-                    Response::json(['success' => false, 'message' => 'Proof must be JPEG, PNG, or WEBP'], 422);
-                    return;
-                }
-                $dir = $this->ensureDirectory($this->mediaBasePath() . '/payment-proofs/' . date('Y/m'));
-                $token = 'proof-' . date('His') . '-' . bin2hex(random_bytes(2));
-                $proofPath = '/uploads/media/payment-proofs/' . date('Y/m') . '/' . $token . '.' . $allowed[$mime];
-                $abs = $this->projectRoot() . str_replace('/', DIRECTORY_SEPARATOR, $proofPath);
-                if (!move_uploaded_file($tmpName, $abs)) {
-                    Response::json(['success' => false, 'message' => 'Failed to store payment proof'], 500);
-                    return;
-                }
+            $upload = UnifiedMediaService::upload($proofFile, [
+                'module' => 'byoc',
+                'entity_type' => 'invoice_payment_proof',
+                'entity_id' => $invoiceId,
+                'admin_id' => $adminId,
+                'allow_svg' => false,
+                'max_bytes' => 5 * 1024 * 1024,
+            ]);
+            if (!$upload['ok']) {
+                Response::json(['success' => false, 'message' => $upload['error']], 422);
+                return;
             }
+            $proofPath = (string)$upload['relative_url'];
         }
 
         $pdo = self::db(); if (!$pdo) return;
@@ -2787,7 +3395,7 @@ final class AdminApiController
                 throw new \RuntimeException('Alert is not linked with any order. Match it first before confirming.');
             }
 
-            $orderStmt = $pdo->prepare('SELECT id, order_status, payment_status FROM orders WHERE id = :id FOR UPDATE');
+            $orderStmt = $pdo->prepare('SELECT id, order_number, order_status, payment_status, payment_method, grand_total, COALESCE(refund_amount, 0) AS refund_amount FROM orders WHERE id = :id FOR UPDATE');
             $orderStmt->execute(['id' => $orderId]);
             $order = $orderStmt->fetch(PDO::FETCH_ASSOC);
             if (!$order) {
@@ -2806,6 +3414,43 @@ final class AdminApiController
                     'order_status' => $nextOrderStatus,
                     'id' => $orderId,
                 ]);
+
+                $recognizedAmount = max(0.0, round((float)($order['grand_total'] ?? 0) - (float)($order['refund_amount'] ?? 0), 2));
+                if ($recognizedAmount > 0) {
+                    $engine = new \App\Services\FinancialTransactionEngine();
+                    $adminName = (string)($_SESSION['admin_name'] ?? 'Admin');
+
+                    if ($currentPaymentStatus === 'credit') {
+                        $postResult = $engine->recordBalanceSettled([
+                            'order_id' => $orderId,
+                            'order_number' => (string)($order['order_number'] ?? ''),
+                            'amount' => $recognizedAmount,
+                            'payment_method' => (string)($order['payment_method'] ?? 'upi_manual'),
+                            'source_reference' => 'AdminApiController::bankAlertsConfirm',
+                            'idempotency_key' => 'bank-alert-balance-settled:' . $orderId . ':' . $alertId,
+                            'admin_id' => $adminId,
+                            'admin_name' => $adminName,
+                            'narration' => 'Credit balance settled via bank alert confirmation',
+                        ]);
+                    } else {
+                        $postResult = $engine->recordPaymentReceived([
+                            'order_id' => $orderId,
+                            'order_number' => (string)($order['order_number'] ?? ''),
+                            'amount' => $recognizedAmount,
+                            'payment_method' => (string)($order['payment_method'] ?? 'upi_manual'),
+                            'payment_status' => 'paid',
+                            'source_reference' => 'AdminApiController::bankAlertsConfirm',
+                            'idempotency_key' => 'bank-alert-payment-received:' . $orderId . ':' . $alertId,
+                            'admin_id' => $adminId,
+                            'admin_name' => $adminName,
+                            'narration' => 'Payment received via bank alert confirmation',
+                        ]);
+                    }
+
+                    if (!$postResult['success']) {
+                        error_log('[bankAlertsConfirm][fte] ' . $postResult['message']);
+                    }
+                }
             }
 
             $invoiceStmt = $pdo->prepare('SELECT id, invoice_status, grand_total FROM invoices WHERE order_id = :order_id LIMIT 1');
@@ -3538,7 +4183,7 @@ final class AdminApiController
             }
         }
 
-        $stmt = $pdo->prepare('INSERT INTO whatsapp_template_mappings (event_key, template_id, is_active, updated_by) VALUES (:event_key, :template_id, :is_active, :updated_by) ON DUPLICATE KEY UPDATE template_id = VALUES(template_id), is_active = VALUES(is_active), updated_by = VALUES(updated_by), updated_at = NOW()');
+        $stmt = $pdo->prepare('INSERT INTO whatsapp_template_mappings (event_key, template_id, is_active, updated_by) VALUES (:event_key, :template_id, :is_active, :updated_by) AS new ON DUPLICATE KEY UPDATE template_id = new.template_id, is_active = new.is_active, updated_by = new.updated_by, updated_at = NOW()');
         $stmt->execute([
             'event_key' => $eventKey,
             'template_id' => $templateId,
@@ -3688,6 +4333,97 @@ final class AdminApiController
             'event_key' => (string)($templateRow['event_key'] ?? ''),
         ]);
         Response::json(['success' => true, 'message' => 'Template updated']);
+    }
+
+    public function communicationTemplateSendTest(string $id): void
+    {
+        $adminId = $this->requireAdminId();
+        if ($adminId === null) {
+            return;
+        }
+
+        $templateId = (int)$id;
+        if ($templateId <= 0) {
+            Response::json(['success' => false, 'message' => 'Invalid template id'], 422);
+            return;
+        }
+
+        $input = $this->readJsonInput();
+        $recipientEmail = trim((string)($input['email'] ?? ''));
+        if ($recipientEmail === '' || !filter_var($recipientEmail, FILTER_VALIDATE_EMAIL)) {
+            Response::json(['success' => false, 'message' => 'A valid recipient email is required'], 422);
+            return;
+        }
+
+        $pdo = self::db(); if (!$pdo) return;
+
+        $tplStmt = $pdo->prepare('SELECT id, channel, event_key, subject, body_template FROM communication_templates WHERE id = :id LIMIT 1');
+        $tplStmt->execute(['id' => $templateId]);
+        $tpl = $tplStmt->fetch(PDO::FETCH_ASSOC);
+        if (!$tpl) {
+            Response::json(['success' => false, 'message' => 'Template not found'], 404);
+            return;
+        }
+
+        if ((string)($tpl['channel'] ?? '') !== 'email') {
+            Response::json(['success' => false, 'message' => 'Test send is only supported for email templates'], 422);
+            return;
+        }
+
+        // Build render context: branding + generic sample data
+        $branding = \App\Services\EmailBrandingService::getEmailBranding($pdo);
+        $resolver = new \App\Services\VariableResolverService($pdo);
+        $sampleCtx = $resolver->sampleContext();
+        $context = array_merge($branding, $sampleCtx);
+
+        $subject = (string)($tpl['subject'] ?? 'Test Email');
+        $body    = (string)($tpl['body_template'] ?? '');
+
+        // Render placeholders
+        foreach ($context as $key => $value) {
+            if (is_scalar($value)) {
+                $subject = str_replace('{{' . $key . '}}', (string)$value, $subject);
+                $body    = str_replace('{{' . $key . '}}', (string)$value, $body);
+            }
+        }
+
+        $previewHtml = $body;
+
+        try {
+            $smtp = \App\Services\SmtpTransportService::fromDatabase($pdo);
+            $smtp->send([$recipientEmail], '[TEST] ' . $subject, strip_tags($body), $body);
+        } catch (\Throwable $e) {
+            Response::json([
+                'success' => false,
+                'message' => 'SMTP send failed: ' . $e->getMessage(),
+                'preview_html' => $previewHtml,
+                'subject' => $subject,
+            ], 500);
+            return;
+        }
+
+        // Log to communication_logs for audit trail
+        $logStmt = $pdo->prepare(
+            'INSERT INTO communication_logs (channel, event_key, recipient, status, sent_at, created_at) VALUES (:ch, :ek, :rec, :st, NOW(), NOW())'
+        );
+        $logStmt->execute([
+            'ch'  => 'email',
+            'ek'  => 'template_test',
+            'rec' => $recipientEmail,
+            'st'  => 'sent',
+        ]);
+
+        $this->logAdminAction($pdo, $adminId, 'template_test_send', 'communication_templates', $templateId, [
+            'recipient' => $recipientEmail,
+            'event_key' => (string)($tpl['event_key'] ?? ''),
+        ]);
+
+        Response::json([
+            'success'      => true,
+            'message'      => 'Test email sent to ' . $recipientEmail,
+            'preview_html' => $previewHtml,
+            'subject'      => $subject,
+        ]);
     }
 
     public function communicationLogsList(): void
@@ -4308,18 +5044,31 @@ final class AdminApiController
         $bannerId = (int)$id;
         $input = $this->readJsonInput();
         $pdo = self::db(); if (!$pdo) return;
+        $currentStmt = $pdo->prepare('SELECT image_url FROM banners WHERE id = :id LIMIT 1');
+        $currentStmt->execute(['id' => $bannerId]);
+        $currentRow = $currentStmt->fetch(PDO::FETCH_ASSOC);
+        $oldImageUrl = (string)($currentRow['image_url'] ?? '');
+
+        $placement = (string)($input['placement'] ?? 'home_hero');
+        if (!in_array($placement, ['home_hero', 'home_mid', 'shop_top', 'course_top', 'b2b_top'], true)) {
+            Response::json(['success' => false, 'message' => 'Invalid banner placement'], 422);
+            return;
+        }
+
+        $newImageUrl = $this->nullableString($input['image_url'] ?? null);
         $stmt = $pdo->prepare('UPDATE banners SET title = :title, subtitle = :subtitle, image_url = :image_url, cta_label = :cta_label, cta_url = :cta_url, placement = :placement, is_active = :is_active, sort_order = :sort_order WHERE id = :id');
         $stmt->execute([
             'title' => trim((string)($input['title'] ?? 'Untitled Banner')),
             'subtitle' => $this->nullableString($input['subtitle'] ?? null),
-            'image_url' => $this->nullableString($input['image_url'] ?? null),
+            'image_url' => $newImageUrl,
             'cta_label' => $this->nullableString($input['cta_label'] ?? null),
             'cta_url' => $this->nullableString($input['cta_url'] ?? null),
-            'placement' => (string)($input['placement'] ?? 'home_hero'),
+            'placement' => $placement,
             'is_active' => $this->toBinaryFlag($input['is_active'] ?? 1),
             'sort_order' => (int)($input['sort_order'] ?? 0),
             'id' => $bannerId,
         ]);
+        $this->deleteMediaFileIfUnreferenced($pdo, $oldImageUrl, (string)$newImageUrl);
         Response::json(['success' => true, 'message' => 'Banner updated']);
     }
 
@@ -4329,8 +5078,13 @@ final class AdminApiController
             return;
         }
         $pdo = self::db(); if (!$pdo) return;
+        $existingStmt = $pdo->prepare('SELECT image_url FROM banners WHERE id = :id LIMIT 1');
+        $existingStmt->execute(['id' => (int)$id]);
+        $existing = $existingStmt->fetch(PDO::FETCH_ASSOC);
+        $oldImageUrl = (string)($existing['image_url'] ?? '');
         $stmt = $pdo->prepare('DELETE FROM banners WHERE id = :id');
         $stmt->execute(['id' => (int)$id]);
+        $this->deleteMediaFileIfUnreferenced($pdo, $oldImageUrl, null);
         Response::json(['success' => true, 'message' => 'Banner deleted']);
     }
 
@@ -4694,17 +5448,21 @@ final class AdminApiController
     /** @param array<string, mixed> $metadata */
     private function logAdminAction(PDO $pdo, int $adminId, string $actionType, string $targetType, ?int $targetId, array $metadata): void
     {
-        $stmt = $pdo->prepare(
-            'INSERT INTO admin_action_logs (admin_id, action_type, target_type, target_id, metadata_json)
-             VALUES (:admin_id, :action_type, :target_type, :target_id, :metadata_json)'
-        );
-        $stmt->execute([
-            'admin_id' => $adminId,
-            'action_type' => $actionType,
-            'target_type' => $targetType,
-            'target_id' => $targetId,
-            'metadata_json' => json_encode($metadata, JSON_UNESCAPED_SLASHES),
-        ]);
+        try {
+            $stmt = $pdo->prepare(
+                'INSERT INTO admin_action_logs (admin_id, action_type, target_type, target_id, metadata_json)
+                 VALUES (:admin_id, :action_type, :target_type, :target_id, :metadata_json)'
+            );
+            $stmt->execute([
+                'admin_id'      => $adminId,
+                'action_type'   => $actionType,
+                'target_type'   => $targetType,
+                'target_id'     => $targetId,
+                'metadata_json' => json_encode($metadata, JSON_UNESCAPED_SLASHES),
+            ]);
+        } catch (\Throwable $e) {
+            error_log('[logAdminAction] ' . $e->getMessage());
+        }
     }
 
     private function projectRoot(): string
@@ -4906,10 +5664,371 @@ final class AdminApiController
     private function ensureDirectory(string $path): string
     {
         if (!is_dir($path)) {
-            mkdir($path, 0775, true);
+            mkdir($path, 0777, true);
         }
+        @chmod($path, 0777);
 
         return $path;
+    }
+
+    private function effectiveUploadLimitBytes(): int
+    {
+        $uploadMax = $this->iniSizeToBytes((string)ini_get('upload_max_filesize'));
+        $postMax = $this->iniSizeToBytes((string)ini_get('post_max_size'));
+        $limits = array_values(array_filter([$uploadMax, $postMax], static function (int $value): bool {
+            return $value > 0;
+        }));
+
+        $limits[] = self::MAX_MEDIA_UPLOAD_BYTES;
+
+        return count($limits) > 0 ? min($limits) : 0;
+    }
+
+    private function uploadErrorMessage(int $errorCode): string
+    {
+        if ($errorCode === UPLOAD_ERR_INI_SIZE || $errorCode === UPLOAD_ERR_FORM_SIZE) {
+            $limit = $this->effectiveUploadLimitBytes();
+            return 'File is larger than current server upload limit' . ($limit > 0 ? ' (' . $this->formatBytes($limit) . ')' : '') . '.';
+        }
+        if ($errorCode === UPLOAD_ERR_PARTIAL) {
+            return 'Upload was interrupted. Please retry on a stable connection.';
+        }
+        if ($errorCode === UPLOAD_ERR_NO_FILE) {
+            return 'No media file uploaded.';
+        }
+        if ($errorCode === UPLOAD_ERR_NO_TMP_DIR || $errorCode === UPLOAD_ERR_CANT_WRITE) {
+            return 'Server storage is not writable for uploads.';
+        }
+        if ($errorCode === UPLOAD_ERR_EXTENSION) {
+            return 'Upload blocked by server extension policy.';
+        }
+
+        return 'Upload failed.';
+    }
+
+    private function iniSizeToBytes(string $size): int
+    {
+        $value = trim($size);
+        if ($value === '') {
+            return 0;
+        }
+
+        $unit = strtolower(substr($value, -1));
+        $bytes = (float)$value;
+
+        if ($unit === 'g') {
+            $bytes *= 1024 * 1024 * 1024;
+        } elseif ($unit === 'm') {
+            $bytes *= 1024 * 1024;
+        } elseif ($unit === 'k') {
+            $bytes *= 1024;
+        }
+
+        return (int)round($bytes);
+    }
+
+    private function formatBytes(int $bytes): string
+    {
+        if ($bytes <= 0) {
+            return '0 B';
+        }
+
+        $units = ['B', 'KB', 'MB', 'GB'];
+        $size = (float)$bytes;
+        $index = 0;
+        while ($size >= 1024 && $index < count($units) - 1) {
+            $size /= 1024;
+            $index++;
+        }
+
+        return number_format($size, $index === 0 ? 0 : 1) . ' ' . $units[$index];
+    }
+
+    private function deleteMediaFileIfUnreferenced(PDO $pdo, string $oldPath, ?string $newPath = null): void
+    {
+        $oldPath = trim($oldPath);
+        $newPath = trim((string)$newPath);
+        if ($oldPath === '' || $oldPath === $newPath || !$this->isValidMediaRelativePath($oldPath)) {
+            return;
+        }
+
+        $absolutePath = $this->resolveMediaAbsolutePath($oldPath);
+        if ($absolutePath === null) {
+            return;
+        }
+        if (!is_file($absolutePath)) {
+            return;
+        }
+
+        $referenceCount = 0;
+
+        $productStmt = $pdo->prepare('SELECT COUNT(*) FROM products WHERE featured_image = :path AND deleted_at IS NULL');
+        $productStmt->execute(['path' => $oldPath]);
+        $referenceCount += (int)($productStmt->fetchColumn() ?: 0);
+
+        $imageStmt = $pdo->prepare('SELECT COUNT(*) FROM product_images WHERE image_url = :path');
+        $imageStmt->execute(['path' => $oldPath]);
+        $referenceCount += (int)($imageStmt->fetchColumn() ?: 0);
+
+        $bannerStmt = $pdo->prepare('SELECT COUNT(*) FROM banners WHERE image_url = :path');
+        $bannerStmt->execute(['path' => $oldPath]);
+        $referenceCount += (int)($bannerStmt->fetchColumn() ?: 0);
+
+        $settingStmt = $pdo->prepare('SELECT COUNT(*) FROM settings WHERE setting_value = :path');
+        $settingStmt->execute(['path' => $oldPath]);
+        $referenceCount += (int)($settingStmt->fetchColumn() ?: 0);
+
+        if ($referenceCount === 0) {
+            @unlink($absolutePath);
+            if ($this->mediaAssetsTableExists($pdo)) {
+                $deleteAssetStmt = $pdo->prepare('DELETE FROM media_assets WHERE canonical_path = :path OR original_path = :path');
+                $deleteAssetStmt->execute(['path' => $oldPath]);
+            }
+        }
+    }
+
+    /** @return array<string,string> */
+    private function allowedMediaMimeMap(): array
+    {
+        return [
+            'image/jpeg' => 'jpg',
+            'image/png' => 'png',
+            'image/webp' => 'webp',
+            'image/gif' => 'gif',
+            'image/svg+xml' => 'svg',
+            'video/mp4' => 'mp4',
+            'video/webm' => 'webm',
+            'video/quicktime' => 'mov',
+            'video/x-msvideo' => 'avi',
+            'video/x-matroska' => 'mkv',
+            'video/x-m4v' => 'm4v',
+            'video/mpeg' => 'mpeg',
+            'video/mp2t' => 'mpg',
+        ];
+    }
+
+    /** @return array<int,string> */
+    private function allowedMediaExtensions(): array
+    {
+        return ['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg', 'mp4', 'mov', 'avi', 'mkv', 'webm', 'm4v', 'mpg', 'mpeg'];
+    }
+
+    private function detectMediaMimeType(string $path): string
+    {
+        if (function_exists('finfo_open')) {
+            $finfo = finfo_open(FILEINFO_MIME_TYPE);
+            if ($finfo !== false) {
+                $mime = (string)finfo_file($finfo, $path);
+                finfo_close($finfo);
+                return $mime;
+            }
+        }
+
+        return (string)(mime_content_type($path) ?: '');
+    }
+
+    private function isValidMediaRelativePath(string $path): bool
+    {
+        return (str_starts_with($path, '/uploads/media/') || str_starts_with($path, '/public/uploads/'))
+            && strpos($path, '..') === false
+            && strpos($path, "\0") === false;
+    }
+
+    private function resolveMediaAbsolutePath(string $relativePath): ?string
+    {
+        if (!$this->isValidMediaRelativePath($relativePath)) {
+            return null;
+        }
+
+        if (str_starts_with($relativePath, '/public/uploads/')) {
+            $root = $this->projectRoot() . DIRECTORY_SEPARATOR . 'public' . DIRECTORY_SEPARATOR . 'uploads';
+            $baseReal = realpath($root);
+            if ($baseReal === false) {
+                return null;
+            }
+
+            $trimmed = ltrim(substr($relativePath, strlen('/public/uploads/')), '/');
+            if ($trimmed === '') {
+                return null;
+            }
+
+            $absolutePath = $baseReal . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $trimmed);
+            $parent = dirname($absolutePath);
+            if (!is_dir($parent)) {
+                return null;
+            }
+            $parentReal = realpath($parent);
+            if ($parentReal === false || !str_starts_with($parentReal, $baseReal)) {
+                return null;
+            }
+
+            return $absolutePath;
+        }
+
+        $base = $this->mediaBasePath();
+        $baseReal = realpath($base);
+        if ($baseReal === false) {
+            return null;
+        }
+
+        $trimmed = ltrim(substr($relativePath, strlen('/uploads/media/')), '/');
+        if ($trimmed === '') {
+            return null;
+        }
+
+        $absolutePath = $baseReal . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $trimmed);
+        $parentReal = realpath(dirname($absolutePath));
+        if ($parentReal === false || !str_starts_with($parentReal, $baseReal)) {
+            return null;
+        }
+
+        return $absolutePath;
+    }
+
+    private function queueMediaTranscodeJob(PDO $pdo, string $sourcePath, string $canonicalPath, int $adminId): void
+    {
+        $payload = [
+            'source_path' => $sourcePath,
+            'canonical_path' => $canonicalPath,
+            'admin_id' => $adminId,
+        ];
+
+        $stmt = $pdo->prepare('INSERT INTO queue_jobs (job_type, payload_json, status, available_at, attempts) VALUES ("media_transcode", :payload_json, "queued", NOW(), 0)');
+        $stmt->execute(['payload_json' => json_encode($payload, JSON_UNESCAPED_SLASHES)]);
+    }
+
+    /** @param array<string,mixed> $asset */
+    private function upsertMediaAssetRecord(PDO $pdo, array $asset): void
+    {
+        if (!$this->mediaAssetsTableExists($pdo)) {
+            return;
+        }
+
+        $stmt = $pdo->prepare('INSERT INTO media_assets (original_path, canonical_path, original_filename, mime_type, media_type, file_size, conversion_status, conversion_error, version_token, uploaded_by_admin_id, uploaded_at) VALUES (:original_path, :canonical_path, :original_filename, :mime_type, :media_type, :file_size, :conversion_status, :conversion_error, :version_token, :uploaded_by_admin_id, NOW()) ON DUPLICATE KEY UPDATE original_path = VALUES(original_path), original_filename = VALUES(original_filename), mime_type = VALUES(mime_type), media_type = VALUES(media_type), file_size = VALUES(file_size), conversion_status = VALUES(conversion_status), conversion_error = VALUES(conversion_error), version_token = VALUES(version_token), uploaded_by_admin_id = VALUES(uploaded_by_admin_id), updated_at = NOW()');
+        $stmt->execute([
+            'original_path' => (string)($asset['original_path'] ?? ''),
+            'canonical_path' => (string)($asset['canonical_path'] ?? ''),
+            'original_filename' => (string)($asset['original_filename'] ?? ''),
+            'mime_type' => (string)($asset['mime_type'] ?? ''),
+            'media_type' => (string)($asset['media_type'] ?? 'image'),
+            'file_size' => (int)($asset['file_size'] ?? 0),
+            'conversion_status' => (string)($asset['conversion_status'] ?? 'ready'),
+            'conversion_error' => $this->nullableString($asset['conversion_error'] ?? null),
+            'version_token' => (string)time(),
+            'uploaded_by_admin_id' => isset($asset['uploaded_by_admin_id']) ? (int)$asset['uploaded_by_admin_id'] : null,
+        ]);
+    }
+
+    /** @return array<string,array<string,mixed>> */
+    private function fetchMediaAssetMetadataMap(PDO $pdo): array
+    {
+        if (!$this->mediaAssetsTableExists($pdo)) {
+            return [];
+        }
+
+        $stmt = $pdo->query('SELECT original_path, canonical_path, original_filename, mime_type, media_type, file_size, conversion_status, conversion_error, uploaded_at, updated_at, version_token FROM media_assets ORDER BY updated_at DESC LIMIT 500');
+        if (!($stmt instanceof \PDOStatement)) {
+            return [];
+        }
+
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $map = [];
+        foreach ($rows as $row) {
+            $originalPath = (string)($row['original_path'] ?? '');
+            $canonicalPath = (string)($row['canonical_path'] ?? '');
+            $status = (string)($row['conversion_status'] ?? 'ready');
+            $preferredPath = ($status === 'ready' && $canonicalPath !== '') ? $canonicalPath : $originalPath;
+            if ($preferredPath === '') {
+                continue;
+            }
+            $map[$originalPath] = [
+                'canonical_path' => $canonicalPath,
+                'original_filename' => (string)($row['original_filename'] ?? ''),
+                'mime' => (string)($row['mime_type'] ?? ''),
+                'media_type' => (string)($row['media_type'] ?? ''),
+                'size' => (int)($row['file_size'] ?? 0),
+                'conversion_status' => $status,
+                'conversion_error' => (string)($row['conversion_error'] ?? ''),
+                'uploaded_at' => (string)($row['uploaded_at'] ?? ''),
+                'updated_at' => (string)($row['updated_at'] ?? ''),
+                'url' => $preferredPath . '?v=' . rawurlencode((string)($row['version_token'] ?? '0')),
+            ];
+            if ($canonicalPath !== '') {
+                $map[$canonicalPath] = $map[$originalPath];
+            }
+        }
+
+        return $map;
+    }
+
+    private function countMediaPathReferences(PDO $pdo, string $path): int
+    {
+        $total = 0;
+        $queries = [
+            'SELECT COUNT(*) FROM products WHERE featured_image = :path AND deleted_at IS NULL',
+            'SELECT COUNT(*) FROM product_images WHERE image_url = :path',
+            'SELECT COUNT(*) FROM banners WHERE image_url = :path',
+            'SELECT COUNT(*) FROM settings WHERE setting_value = :path',
+        ];
+        foreach ($queries as $query) {
+            $stmt = $pdo->prepare($query);
+            $stmt->execute(['path' => $path]);
+            $total += (int)($stmt->fetchColumn() ?: 0);
+        }
+        return $total;
+    }
+
+    private function mediaAssetsTableExists(PDO $pdo): bool
+    {
+        if ($this->mediaAssetsTableExists !== null) {
+            return $this->mediaAssetsTableExists;
+        }
+
+        try {
+            $stmt = $pdo->query("SHOW TABLES LIKE 'media_assets'");
+            $this->mediaAssetsTableExists = $stmt instanceof \PDOStatement && (bool)$stmt->fetchColumn();
+        } catch (Throwable) {
+            $this->mediaAssetsTableExists = false;
+        }
+
+        return $this->mediaAssetsTableExists;
+    }
+
+    private function countOrphanOptimizedFiles(PDO $pdo): int
+    {
+        $baseDir = $this->projectRoot() . DIRECTORY_SEPARATOR . 'public' . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'optimized';
+        if (!is_dir($baseDir)) {
+            return 0;
+        }
+
+        $known = [];
+        $stmt = $pdo->query('SELECT optimized_path FROM media_processing_queue');
+        if ($stmt instanceof \PDOStatement) {
+            while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                $path = trim((string)($row['optimized_path'] ?? ''));
+                if ($path !== '') {
+                    $known[$path] = true;
+                }
+            }
+        }
+
+        $count = 0;
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($baseDir, \FilesystemIterator::SKIP_DOTS)
+        );
+
+        foreach ($iterator as $fileInfo) {
+            if (!$fileInfo instanceof \SplFileInfo || !$fileInfo->isFile()) {
+                continue;
+            }
+            $path = str_replace($this->projectRoot(), '', $fileInfo->getPathname());
+            $path = str_replace('\\', '/', $path);
+            if (!isset($known[$path])) {
+                $count++;
+            }
+        }
+
+        return $count;
     }
 
     /** @return array<int, array<string, mixed>> */
@@ -5078,44 +6197,6 @@ final class AdminApiController
         return in_array($availability, ['in_stock', 'out_of_stock', 'preorder', 'draft'], true) ? $availability : 'in_stock';
     }
 
-    private function isValidOrderStatusTransition(string $from, string $to, string $fulfilmentMode): bool
-    {
-        if ($from === $to) {
-            return true;
-        }
-
-        $map = [
-            'pending' => ['confirmed', 'cancelled'],
-            // Allow quick-close flow for operational teams that mark ready and completed in one step.
-            'confirmed' => ['in_preparation', 'completed', 'cancelled'],
-            'in_preparation' => ['out_for_delivery', 'ready_for_pickup', 'completed', 'cancelled'],
-            'out_for_delivery' => ['completed', 'cancelled'],
-            'ready_for_pickup' => ['completed', 'cancelled'],
-            'completed' => [],
-            'cancelled' => [],
-        ];
-
-        $allowedNext = $map[$from] ?? [];
-        if (!in_array($to, $allowedNext, true)) {
-            return false;
-        }
-
-        $normalizedMode = strtolower(trim($fulfilmentMode));
-        if ($normalizedMode === 'pickup') {
-            if ($to === 'out_for_delivery') {
-                return false;
-            }
-        }
-
-        if ($normalizedMode === 'delivery' || $normalizedMode === 'custom_delivery') {
-            if ($to === 'ready_for_pickup') {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
     private function isValidPaymentStatusTransition(string $from, string $to): bool
     {
         if ($from === $to) {
@@ -5123,10 +6204,18 @@ final class AdminApiController
         }
 
         $map = [
-            'pending' => ['paid', 'failed'],
-            'paid' => ['refunded'],
-            'failed' => ['pending', 'paid'],
-            'refunded' => [],
+            'pending'            => ['paid', 'failed', 'under_review'],
+            'under_review'       => ['paid', 'rejected', 'pending'],
+            'paid'               => ['refunded', 'partially_refunded', 'refund_pending'],
+            'credit'             => ['refunded'],
+            'refund_pending'     => ['partially_refunded', 'refunded', 'paid'],
+            'partially_refunded' => ['refunded', 'refund_pending'],
+            'refunded'           => [],
+            'failed'             => ['pending', 'paid'],
+            'rejected'           => ['pending'],
+            'refunded'     => [],
+            'credit'       => ['refunded'],
+            'partial'      => ['confirmed', 'paid', 'refunded'],
         ];
 
         return in_array($to, $map[$from] ?? [], true);
@@ -5240,4 +6329,749 @@ final class AdminApiController
         $text = preg_replace('/[^a-z0-9]+/', '-', $text) ?? '';
         return trim($text, '-');
     }
+
+    // =========================================================================
+    // SLOT MANAGEMENT — ADMIN API ENDPOINTS
+    // =========================================================================
+
+    /** GET /admin/api/slots — list all slots with today's usage */
+    public function slotsList(): void
+    {
+        $adminId = $this->requireAdminId(); if ($adminId === null) return;
+        $pdo = self::db(); if (!$pdo) return;
+
+        $stmt = $pdo->prepare(
+            'SELECT s.*,
+                    COALESCE(sc_today.booked_count, 0) AS booked_today
+             FROM order_slots s
+             LEFT JOIN slot_capacities sc_today
+               ON sc_today.slot_id = s.id AND sc_today.booking_date = CURDATE()
+             ORDER BY s.slot_type, s.display_order, s.start_time'
+        );
+        $stmt->execute();
+        $slots = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        Response::json(['success' => true, 'data' => ['slots' => $slots]]);
+    }
+
+    /** POST /admin/api/slots — create a new slot */
+    public function slotCreate(): void
+    {
+        $adminId = $this->requireAdminId(); if ($adminId === null) return;
+        $pdo = self::db(); if (!$pdo) return;
+
+        $input = $this->readJsonInput();
+        $required = ['slot_type', 'slot_name', 'slot_label', 'start_time', 'end_time'];
+        foreach ($required as $f) {
+            if (empty($input[$f])) {
+                Response::json(['success' => false, 'message' => "Field '{$f}' is required"], 422);
+                return;
+            }
+        }
+
+        if (!in_array($input['slot_type'], ['delivery', 'pickup'], true)) {
+            Response::json(['success' => false, 'message' => 'slot_type must be delivery or pickup'], 422);
+            return;
+        }
+
+        $svc = new \App\Services\SlotService($pdo);
+        $id  = $svc->createSlot($input);
+
+        Response::json([
+            'success' => true,
+            'message' => 'Slot created.',
+            'data'    => ['id' => $id],
+        ], 201);
+    }
+
+    /** PATCH /admin/api/slots/:id — update slot */
+    public function slotUpdate(string $id): void
+    {
+        $adminId = $this->requireAdminId(); if ($adminId === null) return;
+        $pdo = self::db(); if (!$pdo) return;
+
+        $slotId = (int)$id;
+        $input  = $this->readJsonInput();
+
+        if ($slotId <= 0) {
+            Response::json(['success' => false, 'message' => 'Invalid slot id'], 422);
+            return;
+        }
+
+        $svc     = new \App\Services\SlotService($pdo);
+        $updated = $svc->updateSlot($slotId, $input);
+
+        Response::json([
+            'success' => $updated,
+            'message' => $updated ? 'Slot updated.' : 'Slot not found.',
+        ]);
+    }
+
+    /** DELETE /admin/api/slots/:id — deactivate slot */
+    public function slotDelete(string $id): void
+    {
+        $adminId = $this->requireAdminId(); if ($adminId === null) return;
+        $pdo = self::db(); if (!$pdo) return;
+
+        $slotId = (int)$id;
+        if ($slotId <= 0) {
+            Response::json(['success' => false, 'message' => 'Invalid slot id'], 422);
+            return;
+        }
+
+        $svc = new \App\Services\SlotService($pdo);
+        $svc->toggleSlotActive($slotId, false);
+
+        Response::json(['success' => true, 'message' => 'Slot deactivated.']);
+    }
+
+    /** POST /admin/api/slots/:id/toggle — toggle active/inactive */
+    public function slotToggle(string $id): void
+    {
+        $adminId = $this->requireAdminId(); if ($adminId === null) return;
+        $pdo = self::db(); if (!$pdo) return;
+
+        $slotId = (int)$id;
+        $input  = $this->readJsonInput();
+
+        if ($slotId <= 0) {
+            Response::json(['success' => false, 'message' => 'Invalid slot id'], 422);
+            return;
+        }
+
+        $active = (bool)($input['is_active'] ?? true);
+        $svc    = new \App\Services\SlotService($pdo);
+        $svc->toggleSlotActive($slotId, $active);
+
+        Response::json([
+            'success' => true,
+            'message' => $active ? 'Slot activated.' : 'Slot paused.',
+        ]);
+    }
+
+    /** GET /admin/api/slots/:id/exceptions — list exceptions for a slot */
+    public function slotExceptionsList(string $id): void
+    {
+        $adminId = $this->requireAdminId(); if ($adminId === null) return;
+        $pdo = self::db(); if (!$pdo) return;
+
+        $slotId = (int)$id;
+        if ($slotId <= 0) {
+            Response::json(['success' => false, 'message' => 'Invalid slot id'], 422);
+            return;
+        }
+
+        $svc  = new \App\Services\SlotService($pdo);
+        $list = $svc->listExceptions($slotId);
+
+        Response::json(['success' => true, 'data' => ['exceptions' => $list]]);
+    }
+
+    /** POST /admin/api/slots/:id/exceptions — upsert exception/holiday */
+    public function slotExceptionCreate(string $id): void    {
+        $adminId = $this->requireAdminId(); if ($adminId === null) return;
+        $pdo = self::db(); if (!$pdo) return;
+
+        $slotId = (int)$id;
+        $input  = $this->readJsonInput();
+
+        if ($slotId <= 0) {
+            Response::json(['success' => false, 'message' => 'Invalid slot id'], 422);
+            return;
+        }
+
+        $exDate = trim((string)($input['exception_date'] ?? ''));
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $exDate)) {
+            Response::json(['success' => false, 'message' => 'exception_date must be YYYY-MM-DD'], 422);
+            return;
+        }
+
+        $input['slot_id']        = $slotId;
+        $input['exception_date'] = $exDate;
+
+        $svc = new \App\Services\SlotService($pdo);
+        $svc->upsertException($input);
+
+        Response::json(['success' => true, 'message' => 'Exception saved.']);
+    }
+
+    /** DELETE /admin/api/slot-exceptions — delete exception by slot+date */
+    public function slotExceptionDelete(): void
+    {
+        $adminId = $this->requireAdminId(); if ($adminId === null) return;
+        $pdo = self::db(); if (!$pdo) return;
+
+        $slotId = (int)($_GET['slot_id'] ?? 0);
+        $date   = trim((string)($_GET['date'] ?? ''));
+
+        if ($slotId <= 0 || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+            Response::json(['success' => false, 'message' => 'slot_id and date (YYYY-MM-DD) are required'], 422);
+            return;
+        }
+
+        $svc = new \App\Services\SlotService($pdo);
+        $svc->deleteException($slotId, $date);
+
+        Response::json(['success' => true, 'message' => 'Exception removed.']);
+    }
+
+    /** GET /admin/api/slots/usage?date=YYYY-MM-DD — live usage for a date */
+    public function slotUsage(): void
+    {
+        $adminId = $this->requireAdminId(); if ($adminId === null) return;
+        $pdo = self::db(); if (!$pdo) return;
+
+        $date = trim((string)($_GET['date'] ?? (new \DateTimeImmutable('now'))->format('Y-m-d')));
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+            Response::json(['success' => false, 'message' => 'date must be YYYY-MM-DD'], 422);
+            return;
+        }
+
+        $stmt = $pdo->prepare(
+            'SELECT
+               s.id, s.slot_type, s.slot_name, s.slot_label,
+               s.start_time, s.end_time,
+               s.max_orders,
+               s.is_active,
+               COALESCE(sc.booked_count, 0)                 AS booked_count,
+               COALESCE(ex.override_capacity, s.max_orders) AS effective_capacity,
+               COALESCE(ex.is_closed, 0)                    AS is_exception_closed,
+               ex.note                                       AS exception_note
+             FROM order_slots s
+             LEFT JOIN slot_capacities sc
+               ON sc.slot_id = s.id AND sc.booking_date = :date1
+             LEFT JOIN order_slot_exceptions ex
+               ON ex.slot_id = s.id AND ex.exception_date = :date2
+             ORDER BY s.slot_type, s.display_order, s.start_time'
+        );
+        $stmt->execute(['date1' => $date, 'date2' => $date]);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Enrich with remaining/fast-selling flags
+        $data = array_map(static function (array $row): array {
+            $booked    = (int)$row['booked_count'];
+            $cap       = (int)$row['effective_capacity'];
+            $remaining = max(0, $cap - $booked);
+            $row['remaining']      = $remaining;
+            $row['is_full']        = $booked >= $cap;
+            $row['is_fast_selling'] = !$row['is_full'] && $remaining < ceil($cap * 0.30);
+            $row['pct_booked']     = $cap > 0 ? round($booked / $cap * 100, 1) : 0;
+            return $row;
+        }, $rows);
+
+        Response::json([
+            'success' => true,
+            'data'    => [
+                'date'  => $date,
+                'slots' => $data,
+            ],
+        ]);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // REFUND ENDPOINTS
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * POST /api/admin/orders/:id/refund/process
+     * Atomic single-step refund — processes immediately with no approval queue.
+     * Required permissions: can_approve_refund (or super_admin / can_force_refund)
+     */
+    public function refundProcess(string $id): void
+    {
+        $this->requireAdminAuth();
+
+        if (!$this->hasPermission('can_approve_refund') && !$this->hasPermission('can_force_refund')) {
+            $this->jsonError('Insufficient permissions to process refunds', 403);
+            return;
+        }
+
+        $orderId = (int)$id;
+        if ($orderId <= 0) {
+            $this->jsonError('Invalid order ID', 400);
+            return;
+        }
+
+        $body = $this->getJsonBody();
+
+        $refundAmount       = isset($body['refund_amount'])        ? (float)$body['refund_amount']        : 0.0;
+        $reasonCode         = isset($body['reason_code'])          ? trim((string)$body['reason_code'])         : '';
+        $reasonNotes        = isset($body['reason_notes'])         ? trim((string)$body['reason_notes'])        : '';
+        $settlementRef      = isset($body['settlement_reference']) ? trim((string)$body['settlement_reference']) : '';
+        $settlementProofUrl = isset($body['settlement_proof_url']) ? trim((string)$body['settlement_proof_url']) : '';
+
+        if ($refundAmount <= 0) {
+            $this->jsonError('refund_amount must be greater than zero', 400);
+            return;
+        }
+
+        $pdo       = \App\Core\Database::getConnection();
+        $adminId   = (int)($this->session['admin'] ?? 0);
+        $adminRole = (string)($this->session['admin_role'] ?? '');
+        $adminPerms = (array)($this->session['admin_permissions'] ?? []);
+
+        $service = new \App\Services\RefundService();
+        $result  = $service->processRefund($pdo, $orderId, [
+            'refund_amount'        => $refundAmount,
+            'reason_code'          => $reasonCode,
+            'reason_notes'         => $reasonNotes,
+            'settlement_reference' => $settlementRef,
+            'settlement_proof_url' => $settlementProofUrl,
+        ], $adminId, [
+            'admin_role'        => $adminRole,
+            'admin_permissions' => $adminPerms,
+            'ip_address'        => $_SERVER['REMOTE_ADDR'] ?? '',
+            'admin_name'        => (string)($this->session['admin_name'] ?? 'Admin'),
+        ]);
+
+        if (!$result['success']) {
+            $this->jsonError($result['message'], 422);
+            return;
+        }
+
+        // Fire order automation side-effects after commit
+        try {
+            $automation = new \App\Services\OrderAutomationService();
+            $automation->handleStatusChange($pdo, $orderId, $result['order_status'], $adminId);
+        } catch (\Throwable $e) {
+            error_log('[refundProcess] Automation error (non-fatal) for order #' . $orderId . ': ' . $e->getMessage());
+        }
+
+        $this->json([
+            'success'       => true,
+            'message'       => $result['message'],
+            'refund_type'   => $result['refund_type'],
+            'refund_amount' => $refundAmount,
+            'order_status'  => $result['order_status'],
+            'refund_number' => $result['refund_number'],
+        ]);
+    }
+
+    /**
+     * POST /api/admin/refunds/upload-proof
+     * Upload a settlement proof file (image or PDF, max 5 MB).
+     * Returns: { url: string }
+     */
+    public function refundUploadProof(): void
+    {
+        $this->requireAdminAuth();
+
+        if (!$this->hasPermission('can_approve_refund') && !$this->hasPermission('can_force_refund')) {
+            $this->jsonError('Insufficient permissions', 403);
+            return;
+        }
+
+        if (empty($_FILES['proof']) || $_FILES['proof']['error'] !== UPLOAD_ERR_OK) {
+            $this->jsonError('No file uploaded or upload error', 400);
+            return;
+        }
+
+        $file    = $_FILES['proof'];
+        $maxSize = 5 * 1024 * 1024; // 5 MB
+        if ($file['size'] > $maxSize) {
+            $this->jsonError('File exceeds 5 MB limit', 400);
+            return;
+        }
+
+        $finfo    = new \finfo(FILEINFO_MIME_TYPE);
+        $mimeType = $finfo->file($file['tmp_name']);
+        $allowed  = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+        if (!in_array($mimeType, $allowed, true)) {
+            $this->jsonError('Only JPEG, PNG, WebP and PDF files are allowed', 400);
+            return;
+        }
+
+        // Route images through unified media service; keep PDF handling local.
+        if (str_starts_with((string)$mimeType, 'image/')) {
+            $upload = UnifiedMediaService::upload($file, [
+                'module' => 'byoc',
+                'entity_type' => 'refund_proof',
+                'entity_id' => 0,
+                'admin_id' => (int)($_SESSION['admin_id'] ?? 0),
+                'allow_svg' => false,
+                'max_bytes' => $maxSize,
+            ]);
+            if (!$upload['ok']) {
+                $this->jsonError($upload['error'], 500);
+                return;
+            }
+
+            $this->json(['success' => true, 'url' => (string)$upload['relative_url']]);
+            return;
+        }
+
+        $ext = 'pdf';
+        $filename  = 'proof_' . date('YmdHis') . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
+        $uploadDir = rtrim((string)(defined('APP_ROOT') ? APP_ROOT : dirname(__DIR__, 2)), '/\\') . '/public/uploads/refund-proofs/';
+
+        if (!is_dir($uploadDir)) {
+            mkdir($uploadDir, 0755, true);
+        }
+
+        $destPath = $uploadDir . $filename;
+        if (!move_uploaded_file($file['tmp_name'], $destPath)) {
+            $this->jsonError('Failed to save uploaded file', 500);
+            return;
+        }
+
+        $this->json(['success' => true, 'url' => 'uploads/refund-proofs/' . $filename]);
+    }
+
+    /**
+     * GET /api/admin/refunds/report
+     * Aggregated refund data for the report page.
+     */
+    public function refundReport(): void
+    {
+        $this->requireAdminAuth();
+
+        $pdo      = \App\Core\Database::getConnection();
+        $dateFrom = trim((string)($_GET['date_from'] ?? date('Y-m-01')));
+        $dateTo   = trim((string)($_GET['date_to']   ?? date('Y-m-d')));
+
+        // Clamp dates to sane values
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateFrom)) {
+            $dateFrom = date('Y-m-01');
+        }
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateTo)) {
+            $dateTo = date('Y-m-d');
+        }
+
+        $stmt = $pdo->prepare(
+            'SELECT rt.id, rt.order_id, rt.refund_number, rt.refund_type,
+                    rt.reason_code, rt.reason_notes, rt.approved_amount,
+                    rt.settlement_reference, rt.processed_at,
+                    o.order_number, o.customer_name, o.customer_email,
+                    CONCAT(a.first_name, " ", a.last_name) AS processed_by_name
+             FROM refund_transactions rt
+             JOIN orders o  ON o.id = rt.order_id
+             LEFT JOIN admins a ON a.id = rt.approved_by_admin_id
+             WHERE rt.status = "processed"
+               AND DATE(rt.processed_at) BETWEEN :date_from AND :date_to
+             ORDER BY rt.processed_at DESC
+             LIMIT 500'
+        );
+        $stmt->execute(['date_from' => $dateFrom, 'date_to' => $dateTo]);
+        $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+
+        $totalAmount    = array_sum(array_column($rows, 'approved_amount'));
+        $partialCount   = count(array_filter($rows, static fn($r) => $r['refund_type'] === 'partial'));
+        $fullCount      = count(array_filter($rows, static fn($r) => $r['refund_type'] === 'full'));
+
+        $this->json([
+            'success'       => true,
+            'date_from'     => $dateFrom,
+            'date_to'       => $dateTo,
+            'total_amount'  => round($totalAmount, 2),
+            'partial_count' => $partialCount,
+            'full_count'    => $fullCount,
+            'rows'          => $rows,
+        ]);
+    }
+
+    /**
+     * POST /api/admin/orders/:id/refund/request
+     * Submit a refund request for an order.
+     * Required permissions: order_refund
+     */
+    public function refundRequest(string $id): void
+    {
+        $adminId = $this->requireAdminId();
+        if ($adminId === null) {
+            return;
+        }
+
+        if (!$this->requirePermission('order_refund')) {
+            return;
+        }
+
+        $orderId = (int)$id;
+        if ($orderId <= 0) {
+            Response::json(['success' => false, 'message' => 'Invalid order id'], 422);
+            return;
+        }
+
+        $input = $this->readJsonInput();
+        $reasonCode   = trim((string)($input['reason_code']   ?? ''));
+        $reasonNotes  = trim((string)($input['reason_notes']  ?? ''));
+        $requestedAmt = isset($input['requested_amount']) ? (float)$input['requested_amount'] : null;
+
+        if ($reasonCode === '') {
+            Response::json(['success' => false, 'message' => 'reason_code is required'], 422);
+            return;
+        }
+        if ($requestedAmt === null || $requestedAmt <= 0) {
+            Response::json(['success' => false, 'message' => 'requested_amount must be a positive number'], 422);
+            return;
+        }
+
+        $pdo = self::db();
+        if (!$pdo) {
+            return;
+        }
+
+        $service = new \App\Services\RefundService();
+        $result  = $service->submitRequest($pdo, $orderId, [
+            'reason_code'      => $reasonCode,
+            'reason_notes'     => $reasonNotes,
+            'requested_amount' => $requestedAmt,
+        ], $adminId, [
+            'admin_role'        => (string)($_SESSION['admin_role']        ?? ''),
+            'admin_permissions' => (array) ($_SESSION['admin_permissions'] ?? []),
+            'ip_address'        => $_SERVER['REMOTE_ADDR'] ?? '',
+        ]);
+
+        $statusCode = $result['success'] ? 200 : 422;
+        Response::json($result, $statusCode);
+    }
+
+    /**
+     * POST /api/admin/refunds/:id/approve
+     * Approve a pending refund transaction.
+     * Required permissions: can_approve_refund OR can_force_refund
+     */
+    public function refundApprove(string $id): void
+    {
+        $adminId = $this->requireAdminId();
+        if ($adminId === null) {
+            return;
+        }
+
+        $adminPermissions = (array)($_SESSION['admin_permissions'] ?? []);
+        $adminRole        = (string)($_SESSION['admin_role']        ?? '');
+        $hasPermission    = $adminRole === 'super_admin'
+            || in_array('can_approve_refund', $adminPermissions, true)
+            || in_array('can_force_refund', $adminPermissions, true);
+
+        if (!$hasPermission) {
+            Response::json(['success' => false, 'message' => 'Insufficient permissions to approve refunds'], 403);
+            return;
+        }
+
+        $refundTxId = (int)$id;
+        if ($refundTxId <= 0) {
+            Response::json(['success' => false, 'message' => 'Invalid refund transaction id'], 422);
+            return;
+        }
+
+        $input          = $this->readJsonInput();
+        $approvedAmount = isset($input['approved_amount']) ? (float)$input['approved_amount'] : null;
+
+        if ($approvedAmount === null || $approvedAmount <= 0) {
+            Response::json(['success' => false, 'message' => 'approved_amount must be a positive number'], 422);
+            return;
+        }
+
+        $pdo = self::db();
+        if (!$pdo) {
+            return;
+        }
+
+        $service = new \App\Services\RefundService();
+        $result  = $service->approve($pdo, $refundTxId, $approvedAmount, $adminId, [
+            'admin_role'        => $adminRole,
+            'admin_permissions' => $adminPermissions,
+            'ip_address'        => $_SERVER['REMOTE_ADDR'] ?? '',
+            'admin_name'        => (string)($_SESSION['admin_name'] ?? 'Admin'),
+        ]);
+
+        $statusCode = $result['success'] ? 200 : 422;
+        Response::json($result, $statusCode);
+    }
+
+    /**
+     * POST /api/admin/refunds/:id/reject
+     * Reject a pending refund transaction.
+     * Required permissions: can_approve_refund OR can_force_refund
+     */
+    public function refundReject(string $id): void
+    {
+        $adminId = $this->requireAdminId();
+        if ($adminId === null) {
+            return;
+        }
+
+        $adminPermissions = (array)($_SESSION['admin_permissions'] ?? []);
+        $adminRole        = (string)($_SESSION['admin_role']        ?? '');
+        $hasPermission    = $adminRole === 'super_admin'
+            || in_array('can_approve_refund', $adminPermissions, true)
+            || in_array('can_force_refund', $adminPermissions, true);
+
+        if (!$hasPermission) {
+            Response::json(['success' => false, 'message' => 'Insufficient permissions to reject refunds'], 403);
+            return;
+        }
+
+        $refundTxId = (int)$id;
+        if ($refundTxId <= 0) {
+            Response::json(['success' => false, 'message' => 'Invalid refund transaction id'], 422);
+            return;
+        }
+
+        $input = $this->readJsonInput();
+        $notes = trim((string)($input['notes'] ?? ''));
+
+        $pdo = self::db();
+        if (!$pdo) {
+            return;
+        }
+
+        $service = new \App\Services\RefundService();
+        $result  = $service->reject($pdo, $refundTxId, $notes, $adminId, [
+            'admin_role'        => $adminRole,
+            'admin_permissions' => $adminPermissions,
+            'ip_address'        => $_SERVER['REMOTE_ADDR'] ?? '',
+        ]);
+
+        $statusCode = $result['success'] ? 200 : 422;
+        Response::json($result, $statusCode);
+    }
+
+    /**
+     * GET /api/admin/refunds
+     * Paginated list of refund transactions.
+     * Required permissions: can_approve_refund OR can_view_refund_reports
+     */
+    public function refundsList(): void
+    {
+        $adminId = $this->requireAdminId();
+        if ($adminId === null) {
+            return;
+        }
+
+        $adminPermissions = (array)($_SESSION['admin_permissions'] ?? []);
+        $adminRole        = (string)($_SESSION['admin_role']        ?? '');
+        $hasPermission    = $adminRole === 'super_admin'
+            || in_array('can_approve_refund', $adminPermissions, true)
+            || in_array('can_force_refund', $adminPermissions, true)
+            || in_array('can_view_refund_reports', $adminPermissions, true);
+
+        if (!$hasPermission) {
+            Response::json(['success' => false, 'message' => 'Insufficient permissions'], 403);
+            return;
+        }
+
+        $pdo = self::db();
+        if (!$pdo) {
+            return;
+        }
+
+        $page     = max(1, (int)($_GET['page']     ?? 1));
+        $perPage  = min(100, max(10, (int)($_GET['per_page'] ?? 25)));
+        $status   = trim((string)($_GET['status']  ?? ''));
+        $offset   = ($page - 1) * $perPage;
+
+        $allowedStatuses = ['pending_approval', 'approved', 'rejected', 'processed'];
+        $where  = [];
+        $params = [];
+
+        if ($status !== '' && in_array($status, $allowedStatuses, true)) {
+            $where[]           = 'rt.status = :status';
+            $params['status']  = $status;
+        }
+
+        $whereClause = $where ? 'WHERE ' . implode(' AND ', $where) : '';
+
+        $countStmt = $pdo->prepare("SELECT COUNT(*) FROM refund_transactions rt $whereClause");
+        $countStmt->execute($params);
+        $total = (int)$countStmt->fetchColumn();
+
+        $listParams        = $params;
+        $listParams['lim'] = $perPage;
+        $listParams['off'] = $offset;
+
+        $stmt = $pdo->prepare(
+            "SELECT rt.id, rt.refund_number, rt.order_id, rt.refund_type, rt.reason_code,
+                    rt.reason_notes, rt.requested_amount, rt.approved_amount, rt.status,
+                    rt.fraud_flags, rt.requested_at, rt.approved_at, rt.processed_at,
+                    o.order_number, o.customer_name, o.customer_phone,
+                    req.name AS requested_by_name,
+                    apv.name AS approved_by_name
+             FROM   refund_transactions rt
+             JOIN   orders  o   ON o.id  = rt.order_id
+             LEFT JOIN admins req ON req.id = rt.requested_by_admin_id
+             LEFT JOIN admins apv ON apv.id = rt.approved_by_admin_id
+             $whereClause
+             ORDER BY rt.requested_at DESC
+             LIMIT :lim OFFSET :off"
+        );
+        $stmt->bindValue(':lim', $perPage, \PDO::PARAM_INT);
+        $stmt->bindValue(':off', $offset,  \PDO::PARAM_INT);
+        foreach ($params as $key => $val) {
+            $stmt->bindValue(':' . $key, $val);
+        }
+        $stmt->execute();
+        $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+
+        Response::json([
+            'success'     => true,
+            'data'        => $rows,
+            'total'       => $total,
+            'page'        => $page,
+            'per_page'    => $perPage,
+            'total_pages' => (int)ceil($total / $perPage),
+        ]);
+    }
+
+    /**
+     * GET /api/admin/orders/:id/refund-history
+     * Returns the order status history + all refund transactions for one order.
+     * Required permissions: orders (any admin with order access)
+     */
+    public function refundHistory(string $id): void
+    {
+        $adminId = $this->requireAdminId();
+        if ($adminId === null) {
+            return;
+        }
+
+        if (!$this->requirePermission('orders')) {
+            return;
+        }
+
+        $orderId = (int)$id;
+        if ($orderId <= 0) {
+            Response::json(['success' => false, 'message' => 'Invalid order id'], 422);
+            return;
+        }
+
+        $pdo = self::db();
+        if (!$pdo) {
+            return;
+        }
+
+        $histStmt = $pdo->prepare(
+            "SELECT osh.id, osh.previous_status, osh.new_status, osh.reason,
+                    osh.created_at, a.name AS changed_by_name
+             FROM   order_status_history osh
+             LEFT JOIN admins a ON a.id = osh.changed_by_admin_id
+             WHERE  osh.order_id = :order_id
+             ORDER BY osh.created_at ASC"
+        );
+        $histStmt->execute(['order_id' => $orderId]);
+        $statusHistory = $histStmt->fetchAll(\PDO::FETCH_ASSOC);
+
+        $refStmt = $pdo->prepare(
+            "SELECT rt.id, rt.refund_number, rt.refund_type, rt.reason_code,
+                    rt.reason_notes, rt.requested_amount, rt.approved_amount,
+                    rt.status, rt.fraud_flags, rt.requested_at, rt.approved_at,
+                    rt.processed_at,
+                    req.name AS requested_by_name,
+                    apv.name AS approved_by_name
+             FROM   refund_transactions rt
+             LEFT JOIN admins req ON req.id = rt.requested_by_admin_id
+             LEFT JOIN admins apv ON apv.id = rt.approved_by_admin_id
+             WHERE  rt.order_id = :order_id
+             ORDER BY rt.requested_at ASC"
+        );
+        $refStmt->execute(['order_id' => $orderId]);
+        $refundTxns = $refStmt->fetchAll(\PDO::FETCH_ASSOC);
+
+        Response::json([
+            'success'        => true,
+            'status_history' => $statusHistory,
+            'refund_history' => $refundTxns,
+        ]);
+    }
+
 }

@@ -3,7 +3,7 @@ $pageTitle = 'Manage Admins';
 require_once __DIR__ . '/includes/auth.php';
 require_permission_for_current_admin_page();
 require_once __DIR__ . '/includes/db.php';
-include __DIR__ . '/layout.php';
+require_once __DIR__ . '/layout.php';
 
 $status = trim((string)($_GET['status'] ?? ''));
 $message = trim((string)($_GET['message'] ?? ''));

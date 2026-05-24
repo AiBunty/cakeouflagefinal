@@ -1,4 +1,4 @@
-<main data-page="shop">
+<main data-page="shop" data-browse-page="shop">
 
   <!-- Shop Hero Banner -->
   <section class="shop-hero">
@@ -53,7 +53,6 @@
             </div>
           </div>
 
- <!-- Filters + Grid 
           <div class="filter-group">
             <h3 class="filter-group__title">Dietary</h3>
             <div class="filter-group__options">
@@ -64,21 +63,29 @@
           </div>
 
           <div class="filter-group">
-            <h3 class="filter-group__title">Fulfilment</h3>
+            <h3 class="filter-group__title">Price Range</h3>
             <div class="filter-group__options">
-              <label class="filter-chip"><input type="checkbox" name="fulfilment" value="delivery" /> <span>Home Delivery</span></label>
-              <label class="filter-chip"><input type="checkbox" name="fulfilment" value="pickup" /> <span>Store Pickup</span></label>
+              <select id="priceBucket" class="shop-sort-select" aria-label="Price bucket">
+                <option value="">All ranges</option>
+                <option value="under_500">Under ₹500</option>
+                <option value="500_1000">₹500-₹1000</option>
+                <option value="1000_2000">₹1000-₹2000</option>
+                <option value="above_2000">Above ₹2000</option>
+              </select>
+              <input type="number" id="maxPriceInput" min="100" step="100" placeholder="Custom max price" class="shop-search-input" style="margin-top:8px;" />
             </div>
           </div>
--->
+
           <div class="filter-group">
-            <h3 class="filter-group__title">Price Range</h3>
-            <div class="price-range">
-              <input type="range" id="priceRange" min="0" max="5000" step="100" value="5000" />
-              <div class="price-range__labels">
-                <span>₹0</span>
-                <span id="priceRangeVal">₹5000</span>
-              </div>
+            <h3 class="filter-group__title">Features</h3>
+            <div class="filter-group__options">
+              <label class="filter-chip"><input type="checkbox" name="featureFlag" value="is_bestseller" /> <span>Bestseller</span></label>
+              <label class="filter-chip"><input type="checkbox" name="featureFlag" value="is_chef_special" /> <span>Chef's Special</span></label>
+              <label class="filter-chip"><input type="checkbox" name="featureFlag" value="customizable" /> <span>Customizable</span></label>
+              <label class="filter-chip"><input type="checkbox" name="featureFlag" value="topper_enabled" /> <span>Topper Available</span></label>
+              <label class="filter-chip"><input type="checkbox" name="featureFlag" value="note_enabled" /> <span>Note on Cake</span></label>
+              <label class="filter-chip"><input type="checkbox" name="featureFlag" value="same_day" /> <span>Same Day Delivery</span></label>
+              <label class="filter-chip"><input type="checkbox" name="featureFlag" value="express" /> <span>Express Delivery</span></label>
             </div>
           </div>
 
@@ -89,11 +96,11 @@
         <!-- Main Content -->
         <div class="shop-content">
           <!-- Toolbar -->
-          <div class="shop-toolbar">
+          <div class="shop-toolbar" id="shopToolbar">
             <div class="shop-toolbar__left">
               <button class="btn btn--outline btn--sm" id="toggleSidebar" aria-expanded="false" aria-controls="shopSidebar">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="15" y2="12"/><line x1="3" y1="18" x2="10" y2="18"/></svg>
-                Filters
+                Filter
               </button>
               <span class="shop-count" id="shopCount">Loading...</span>
             </div>
@@ -117,6 +124,21 @@
                 </button>
               </div>
             </div>
+          </div>
+
+          <div class="browse-header">
+            <p class="browse-header__crumb">Home / Shop</p>
+            <h2 class="browse-header__title">All Cakes & Desserts</h2>
+          </div>
+
+          <div class="shop-quick-chips" id="shopQuickChips" aria-label="Quick filters">
+            <button type="button" class="shop-quick-chip is-active" data-quick-filter="all">All</button>
+            <button type="button" class="shop-quick-chip" data-quick-filter="eggless">Eggless</button>
+            <button type="button" class="shop-quick-chip" data-quick-filter="vegan">Vegan</button>
+            <button type="button" class="shop-quick-chip" data-quick-filter="under1000">Under ₹1000</button>
+            <button type="button" class="shop-quick-chip" data-quick-filter="bestseller">Bestseller</button>
+            <button type="button" class="shop-quick-chip" data-quick-filter="sameDay">Same Day Delivery</button>
+            <button type="button" class="shop-quick-chip" data-quick-filter="chefSpecial">Chef Special</button>
           </div>
 
           <!-- Active filter tags -->
@@ -147,6 +169,16 @@
       </div>
     </div>
   </section>
+
+  <div class="shop-mobile-actions" id="shopMobileActions" aria-label="Shop actions">
+    <button type="button" class="shop-mobile-actions__btn" id="mobileFilterBtn">Filter</button>
+    <button type="button" class="shop-mobile-actions__btn" id="mobileSortBtn">Sort</button>
+    <button type="button" class="shop-mobile-actions__btn" id="mobileSearchBtn">Search</button>
+    <a class="shop-mobile-actions__btn shop-mobile-actions__btn--cart" id="mobileCartBtn" href="/cart">
+      Cart
+      <span class="shop-mobile-actions__count" id="mobileShopCartCount">0</span>
+    </a>
+  </div>
 
 </main>
 

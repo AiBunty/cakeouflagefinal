@@ -63,33 +63,56 @@ final class Database
             ?: Env::get('DB_CHARSET_LIVE', 'utf8mb4');
         $connectTimeout = max(2, (int)Env::get('DB_CONNECT_TIMEOUT', '5'));
 
-        $candidates = [
-            [
-                'host' => (string)$host,
-                'port' => (string)$port,
-                'db' => (string)$dbName,
-                'user' => (string)$user,
-                'pass' => (string)$password,
-            ],
-        ];
-
+        // In Docker, 'localhost' resolves to a Unix socket that doesn't exist in the container.
+        // Skip it entirely and connect directly to the Docker Compose 'db' service via TCP.
         $isDockerRuntime = is_file('/.dockerenv') || getenv('APP_USE_DOCKER_DB') === '1';
         $hostLower = strtolower(trim((string)$host));
-        if ($isDockerRuntime && ($hostLower === '' || $hostLower === 'localhost' || $hostLower === '127.0.0.1')) {
-            $candidates[] = [
-                'host' => 'db',
-                'port' => '3306',
-                'db' => 'cakeouflage_local',
-                'user' => 'cakeouflage',
-                'pass' => 'cakeouflage',
+
+        if ($isDockerRuntime && in_array($hostLower, ['', 'localhost', '127.0.0.1'], true)) {
+            $candidates = [
+                ['host' => 'db', 'port' => ($port !== '' ? (string)$port : '3306'), 'db' => (string)$dbName, 'user' => (string)$user, 'pass' => (string)$password],
+                ['host' => 'db', 'port' => '3306', 'db' => 'cakeouflage_local', 'user' => 'cakeouflage', 'pass' => 'cakeouflage'],
+                ['host' => 'db', 'port' => '3306', 'db' => 'cakeouflage_local', 'user' => 'root', 'pass' => 'root'],
             ];
-            $candidates[] = [
-                'host' => 'db',
-                'port' => '3306',
-                'db' => 'cakeouflage_local',
-                'user' => 'root',
-                'pass' => 'root',
+        } else {
+            $candidates = [
+                [
+                    'host' => (string)$host,
+                    'port' => (string)$port,
+                    'db' => (string)$dbName,
+                    'user' => (string)$user,
+                    'pass' => (string)$password,
+                ],
             ];
+            if ($isDockerRuntime) {
+                $candidates[] = ['host' => 'db', 'port' => '3306', 'db' => 'cakeouflage_local', 'user' => 'cakeouflage', 'pass' => 'cakeouflage'];
+                $candidates[] = ['host' => 'db', 'port' => '3306', 'db' => 'cakeouflage_local', 'user' => 'root', 'pass' => 'root'];
+            } elseif ($hostLower === 'localhost') {
+                // Shared-hosting stacks may require TCP localhost instead of a Unix socket path.
+                $candidates[] = [
+                    'host' => '127.0.0.1',
+                    'port' => ($port !== '' ? (string)$port : '3306'),
+                    'db' => (string)$dbName,
+                    'user' => (string)$user,
+                    'pass' => (string)$password,
+                ];
+            } elseif ($hostLower !== '' && $hostLower !== '127.0.0.1') {
+                // Some hosting providers block external DB endpoints from local PHP runtime.
+                $candidates[] = [
+                    'host' => '127.0.0.1',
+                    'port' => '3306',
+                    'db' => (string)$dbName,
+                    'user' => (string)$user,
+                    'pass' => (string)$password,
+                ];
+                $candidates[] = [
+                    'host' => 'localhost',
+                    'port' => '3306',
+                    'db' => (string)$dbName,
+                    'user' => (string)$user,
+                    'pass' => (string)$password,
+                ];
+            }
         }
 
         $lastException = null;

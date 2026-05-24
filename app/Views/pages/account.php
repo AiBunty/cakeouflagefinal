@@ -68,7 +68,7 @@
           <div id="ordersListContainer">
             <div class="empty-state">
               <span class="empty-state__icon">📦</span>
-              <p>No orders yet. <a href="<?= $baseUrl ?>/shop" class="link">Browse our cakes →</a></p>
+              <p>No orders yet. <a href="<?= $baseUrl ?>/category" class="link">Browse our cakes →</a></p>
             </div>
           </div>
         </section>
@@ -80,7 +80,7 @@
           <div class="product-grid" id="wishlistContainer">
             <div class="empty-state">
               <span class="empty-state__icon">❤️</span>
-              <p>No saved items yet. <a href="<?= $baseUrl ?>/shop" class="link">Start browsing →</a></p>
+              <p>No saved items yet. <a href="<?= $baseUrl ?>/category" class="link">Start browsing →</a></p>
             </div>
           </div>
         </section>

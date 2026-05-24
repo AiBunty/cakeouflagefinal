@@ -46,12 +46,14 @@ $sql = '
         OR u.full_name LIKE ?
         OR u.email LIKE ?
         OR REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(u.phone, " ", ""), "-", ""), "+", ""), "(", ""), ")", "") LIKE ?
+        OR u.phone_e164 LIKE ?
       )
     GROUP BY u.id
     ORDER BY
       CASE
         WHEN REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(u.phone, " ", ""), "-", ""), "+", ""), "(", ""), ")", "") = ? THEN 0
-        ELSE 1
+        WHEN u.phone_e164 LIKE ? THEN 1
+        ELSE 2
       END,
       last_order_at DESC,
       u.id DESC
@@ -66,7 +68,9 @@ if (!$stmt) {
 }
 
 $exactPhone = $normalized;
-$stmt->bind_param('sssssi', $searchTerm, $searchTerm, $searchTerm, $phoneSearchTerm, $exactPhone, $limit);
+// Params: phone LIKE, name LIKE, email LIKE, stripped-phone LIKE, phone_e164 LIKE,
+//         ORDER CASE exact-phone, ORDER CASE phone_e164 LIKE, LIMIT
+$stmt->bind_param('sssssssi', $searchTerm, $searchTerm, $searchTerm, $phoneSearchTerm, $phoneSearchTerm, $exactPhone, $phoneSearchTerm, $limit);
 $stmt->execute();
 $result = $stmt->get_result();
 

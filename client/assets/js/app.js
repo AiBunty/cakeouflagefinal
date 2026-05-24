@@ -22,6 +22,16 @@ document.addEventListener("DOMContentLoaded", () => {
     const countEl = document.getElementById("shopCount");
     const priceRange = document.getElementById("priceRange");
     const priceRangeVal = document.getElementById("priceRangeVal");
+    const sidebar = document.getElementById("shopSidebar");
+    const sidebarBackdrop = document.getElementById("sidebarBackdrop");
+    const sidebarToggle = document.getElementById("toggleSidebar");
+    const sidebarClose = document.getElementById("sidebarClose");
+    const activeFiltersEl = document.getElementById("activeFilters");
+    const quickChips = Array.from(document.querySelectorAll("[data-quick-filter]"));
+    const mobileFilterBtn = document.getElementById("mobileFilterBtn");
+    const mobileSortBtn = document.getElementById("mobileSortBtn");
+    const mobileSearchBtn = document.getElementById("mobileSearchBtn");
+    const mobileShopCartCount = document.getElementById("mobileShopCartCount");
 
     if (!grid) {
       return;
@@ -42,6 +52,91 @@ document.addEventListener("DOMContentLoaded", () => {
       return node ? String(node.value) : "";
     };
 
+    const setDrawerOpen = (isOpen) => {
+      if (!sidebar || !sidebarBackdrop) {
+        return;
+      }
+      sidebar.classList.toggle("is-open", isOpen);
+      sidebarBackdrop.classList.toggle("is-open", isOpen);
+      sidebarBackdrop.hidden = !isOpen;
+      if (sidebarToggle) {
+        sidebarToggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+      }
+      if (!isOpen) {
+        sidebarToggle?.focus();
+      }
+    };
+
+    const syncMobileCartCount = () => {
+      if (!mobileShopCartCount) return;
+      const count = Number(window.localStorage.getItem("cakeouflage_cart_count") || 0);
+      mobileShopCartCount.textContent = String(Math.max(0, count));
+    };
+
+    const renderLoadingSkeletons = () => {
+      grid.innerHTML = Array.from({ length: 8 })
+        .map(() => `
+          <article class="product-card product-card--loading" aria-hidden="true">
+            <div class="product-card__media skeleton"></div>
+            <div class="product-card__body">
+              <span class="skeleton" style="height:14px;width:72%;display:block;border-radius:8px;"></span>
+              <span class="skeleton" style="height:11px;width:52%;display:block;border-radius:8px;margin-top:8px;"></span>
+              <span class="skeleton" style="height:18px;width:36%;display:block;border-radius:8px;margin-top:10px;"></span>
+            </div>
+          </article>
+        `)
+        .join("");
+    };
+
+    const setQuickChip = (name) => {
+      quickChips.forEach((chip) => {
+        chip.classList.toggle("is-active", chip.getAttribute("data-quick-filter") === name);
+      });
+    };
+
+    const renderActiveFilters = () => {
+      if (!activeFiltersEl) {
+        return;
+      }
+      const chips = [];
+      const categoryNode = document.querySelector('input[name="filterCat"]:checked');
+      const categoryText = (categoryNode?.nextElementSibling?.textContent || "").trim();
+      if (categoryNode && categoryNode.value && categoryText) {
+        chips.push({ key: "category", label: categoryText });
+      }
+
+      const vegNode = document.querySelector('input[name="filterVeg"]:checked');
+      if (vegNode && vegNode.value !== "") {
+        chips.push({ key: "veg", label: vegNode.value === "1" ? "Veg" : "Non-Veg" });
+      }
+
+      Array.from(document.querySelectorAll('input[name="dietary"]:checked')).forEach((node) => {
+        const label = (node.parentElement?.textContent || "").trim();
+        if (label) {
+          chips.push({ key: `dietary:${node.value}`, label });
+        }
+      });
+
+      if (priceRange && Number(priceRange.value) < 5000) {
+        chips.push({ key: "price", label: `Under ₹${priceRange.value}` });
+      }
+
+      if (searchEl && searchEl.value.trim() !== "") {
+        chips.push({ key: "search", label: `Search: ${searchEl.value.trim()}` });
+      }
+
+      if (!chips.length) {
+        activeFiltersEl.hidden = true;
+        activeFiltersEl.innerHTML = "";
+        return;
+      }
+
+      activeFiltersEl.hidden = false;
+      activeFiltersEl.innerHTML = chips
+        .map((chip) => `<button type="button" class="shop-active-filter" data-remove-filter="${chip.key}">${chip.label} <span aria-hidden="true">×</span></button>`)
+        .join("");
+    };
+
     const loadCategories = async () => {
       const payload = await utils.apiGet("/api/catalog/categories");
       const items = payload.data?.items || [];
@@ -57,7 +152,7 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     const loadProducts = async () => {
-      grid.innerHTML = '<article class="card"><p class="text-muted">Loading products...</p></article>';
+      renderLoadingSkeletons();
 
       const params = new URLSearchParams();
       if (searchEl && searchEl.value.trim()) params.set("q", searchEl.value.trim());
@@ -85,6 +180,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (!items.length) {
         grid.innerHTML = '<article class="card"><p class="text-muted">No products matched your current filters.</p></article>';
+        renderActiveFilters();
         return;
       }
 
@@ -93,27 +189,42 @@ document.addEventListener("DOMContentLoaded", () => {
           const imageUrl = utils.safeImage(item.image || item.featured_image || "", utils.productPlaceholder);
           const hoverUrl = item.hover_image ? utils.safeImage(item.hover_image, "") : "";
           const hasHover = Boolean(hoverUrl);
+          const badges = [];
+          if (String(item.dietary_tag || "").toLowerCase() === "eggless") badges.push("Eggless");
+          if (Number(item.is_chef_special || 0) === 1) badges.push("Bestseller");
+          if (Number(item.topper_enabled || 0) === 1) badges.push("Topper Available");
+          if (Number(item.note_enabled || 0) === 1) badges.push("Message on Cake");
+          if (String(item.customisation_note || "").trim() !== "") badges.push("Customizable");
+          const badgeHtml = badges.slice(0, 3).map((badge) => `<span class="product-card__badge">${badge}</span>`).join("");
           return `
             <article class="product-card">
               <a class="product-card__image-wrap${item.is_chef_special ? ' is-chefs-special' : ''}${hasHover ? ' has-hover-image' : ''}" href="${BASE}/product/${item.slug}">
-                <img class="product-card__image${hasHover ? ' product-card__image--primary' : ''}" src="${imageUrl}" alt="${item.name}" loading="lazy" width="400" height="400" onerror="this.onerror=null;this.src='${utils.productPlaceholder}'" />
-                ${hasHover ? `<img class="product-card__image product-card__image--hover" src="${hoverUrl}" alt="${item.name} — alternate view" loading="lazy" width="400" height="400" />` : ""}
+                <img class="product-card__image${hasHover ? ' product-card__image--primary' : ''}" src="${imageUrl}" alt="${item.name}" loading="lazy" width="400" height="500" onerror="this.onerror=null;this.src='${utils.productPlaceholder}'" />
+                ${hasHover ? `<img class="product-card__image product-card__image--hover" src="${hoverUrl}" alt="${item.name} alternate view" loading="lazy" width="400" height="500" />` : ""}
+                <div class="product-card__badge-row">${badgeHtml}</div>
                 <span class="product-card__veg-badge veg-dot veg-dot--${item.is_veg ? 'veg' : 'nonveg'}" title="${item.is_veg ? 'Vegetarian' : 'Non-Vegetarian'}"></span>
               </a>
-              <h3>${item.name}</h3>
-              <p class="text-muted">${item.category_name} | ${item.dietary_tag}</p>
-              <p>Starting from ${utils.formatInr(item.starting_price)}</p>
-              <div class="product-card__actions">
-               <a class="btn btn--secondary" href="${BASE}/product/${item.slug}">View Product</a>
-                <button class="btn btn--primary" type="button" data-add-product="${item.id}" data-add-variant="${item.default_variant_id || ""}">Add</button>
+              <div class="product-card__body">
+                <h3 class="product-card__title">${item.name}</h3>
+                <p class="product-card__meta">${item.category_name || "Cake"}${item.dietary_tag ? ` · ${item.dietary_tag}` : ""}</p>
+                <div class="product-card__footer">
+                  <p class="product-card__price">${utils.formatInr(item.starting_price)}</p>
+                </div>
+                <div class="product-card__actions">
+                  <a class="btn-card-secondary" href="${BASE}/product/${item.slug}">View Details</a>
+                  <button class="btn-card-primary product-card__quick-add" type="button" data-add-product="${item.id}" data-add-variant="${item.default_variant_id || ""}">Quick Add</button>
+                </div>
               </div>
             </article>
           `;
         })
         .join("");
+
+      renderActiveFilters();
     };
 
     applyBtn?.addEventListener("click", () => {
+      setDrawerOpen(false);
       void loadProducts();
     });
 
@@ -133,7 +244,7 @@ document.addEventListener("DOMContentLoaded", () => {
         priceRange.value = "5000";
       }
       if (priceRangeVal) {
-        priceRangeVal.textContent = "Rs5000";
+        priceRangeVal.textContent = "₹5000";
       }
       if (searchEl) {
         searchEl.value = "";
@@ -141,6 +252,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (sortEl) {
         sortEl.value = "latest";
       }
+      setQuickChip("all");
       void loadProducts();
     });
 
@@ -152,6 +264,59 @@ document.addEventListener("DOMContentLoaded", () => {
 
     sortEl?.addEventListener("change", () => {
       void loadProducts();
+    });
+
+    sidebarToggle?.addEventListener("click", () => {
+      const isOpen = sidebar?.classList.contains("is-open") === true;
+      setDrawerOpen(!isOpen);
+    });
+    sidebarClose?.addEventListener("click", () => setDrawerOpen(false));
+    sidebarBackdrop?.addEventListener("click", () => setDrawerOpen(false));
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        setDrawerOpen(false);
+      }
+    });
+
+    quickChips.forEach((chip) => {
+      chip.addEventListener("click", () => {
+        const mode = chip.getAttribute("data-quick-filter") || "all";
+        setQuickChip(mode);
+
+        if (mode === "all") {
+          clearBtn?.click();
+          return;
+        }
+
+        if (mode === "veg") {
+          const vegRadio = document.querySelector('input[name="filterVeg"][value="1"]');
+          if (vegRadio) vegRadio.checked = true;
+        }
+        if (mode === "eggless") {
+          const eggless = document.querySelector('input[name="dietary"][value="eggless"]');
+          if (eggless) eggless.checked = true;
+        }
+        if (mode === "vegan") {
+          const vegan = document.querySelector('input[name="dietary"][value="vegan"]');
+          if (vegan) vegan.checked = true;
+        }
+        if (mode === "under1000" && priceRange) {
+          priceRange.value = "1000";
+          if (priceRangeVal) priceRangeVal.textContent = "₹1000";
+        }
+
+        void loadProducts();
+      });
+    });
+
+    mobileFilterBtn?.addEventListener("click", () => setDrawerOpen(true));
+    mobileSearchBtn?.addEventListener("click", () => {
+      searchEl?.focus();
+      searchEl?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+    mobileSortBtn?.addEventListener("click", () => {
+      sortEl?.focus();
+      sortEl?.scrollIntoView({ behavior: "smooth", block: "center" });
     });
 
     searchEl?.addEventListener("keydown", (event) => {
@@ -174,15 +339,58 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const variantId = Number(target.dataset.addVariant || 0);
       try {
+        target.setAttribute("aria-busy", "true");
+        target.textContent = "Adding...";
         await window.CakeouflageCart?.addItem(productId, variantId || null, 1);
         target.textContent = "Added";
+        setTimeout(() => {
+          target.textContent = "Quick Add";
+          target.removeAttribute("aria-busy");
+        }, 1200);
+        syncMobileCartCount();
       } catch (error) {
+        target.textContent = "Quick Add";
+        target.removeAttribute("aria-busy");
         alert(error.message);
       }
     });
 
+    activeFiltersEl?.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      const chip = target.closest("[data-remove-filter]");
+      if (!(chip instanceof HTMLElement)) return;
+      const key = chip.getAttribute("data-remove-filter") || "";
+
+      if (key === "category") {
+        const allCat = document.querySelector('input[name="filterCat"][value=""]');
+        if (allCat) allCat.checked = true;
+      }
+      if (key === "veg") {
+        const allVeg = document.querySelector('input[name="filterVeg"][value=""]');
+        if (allVeg) allVeg.checked = true;
+      }
+      if (key.startsWith("dietary:")) {
+        const val = key.split(":")[1] || "";
+        const input = document.querySelector(`input[name="dietary"][value="${val}"]`);
+        if (input) input.checked = false;
+      }
+      if (key === "price" && priceRange) {
+        priceRange.value = "5000";
+        if (priceRangeVal) priceRangeVal.textContent = "₹5000";
+      }
+      if (key === "search" && searchEl) {
+        searchEl.value = "";
+      }
+
+      void loadProducts();
+    });
+
+    window.addEventListener("cart:updated", syncMobileCartCount);
+
     try {
       await loadCategories();
+      syncMobileCartCount();
       await loadProducts();
     } catch (error) {
       grid.innerHTML = `<article class="card"><p class="text-muted">${error.message}</p></article>`;
@@ -1406,6 +1614,223 @@ document.addEventListener("DOMContentLoaded", () => {
     const token = form?.getAttribute("data-token") || "";
     const quoteAmount = parseFloat(form?.getAttribute("data-quote-amount") || "0");
     const advanceAmount = Math.round(quoteAmount * 0.5 * 100) / 100;
+    const eventDate = form?.getAttribute("data-event-date") || "";
+
+    // Dynamic QR + UPI deep-link based on selected payment type
+    const upiId = "anshpopo013-1@okaxis";
+    const updateQr = (amount) => {
+      const upiLink = `upi://pay?pa=${upiId}&pn=Cakeouflage&am=${amount.toFixed(2)}&cu=INR&tn=BYOC+Quote+Payment`;
+      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(upiLink)}`;
+      const qrImg = document.getElementById("byocUpiQr");
+      const deepLink = document.getElementById("byocUpiDeepLink");
+      const label = document.getElementById("byocQrAmountLabel");
+      if (qrImg) qrImg.src = qrUrl;
+      if (deepLink) deepLink.href = upiLink;
+      if (label) label.textContent = `\u20b9${Math.round(amount)}`;
+    };
+    const payFull = document.getElementById("byocPayFull");
+    const payAdv = document.getElementById("byocPayAdvance");
+    if (payFull) payFull.addEventListener("change", () => { if (payFull.checked) updateQr(quoteAmount); });
+    if (payAdv) payAdv.addEventListener("change", () => { if (payAdv.checked) updateQr(advanceAmount); });
+
+    // Fulfillment type + slot loading
+    const deliverySection = document.getElementById("byocDeliverySection");
+    const slotSection = document.getElementById("byocSlotSection");
+    const slotSelect = document.getElementById("byocSlotSelect");
+    const slotStatusEl = document.getElementById("byocSlotStatus");
+
+    const escHtml = (s) => String(s || "").replace(/[<>"'&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;", "&": "&amp;" }[c] || c));
+
+    const loadByocSlots = async (mode) => {
+      if (!slotSection || !eventDate) return;
+      slotSection.style.display = "block";
+      if (slotSelect) slotSelect.innerHTML = '<option value="0">Loading slots\u2026</option>';
+      if (slotStatusEl) { slotStatusEl.style.display = "block"; slotStatusEl.textContent = "Loading available slots\u2026"; }
+      try {
+        const r = await fetch(`/api/fulfilment/slots?mode=${encodeURIComponent(mode)}&date=${encodeURIComponent(eventDate)}`);
+        const d = await r.json();
+        const items = Array.isArray(d?.data?.items) ? d.data.items : [];
+        if (items.length === 0) {
+          if (slotSelect) slotSelect.innerHTML = '<option value="0">No slots available for this date</option>';
+          if (slotStatusEl) { slotStatusEl.style.display = "block"; slotStatusEl.textContent = "No slots available for this date."; }
+        } else {
+          if (slotSelect) {
+            slotSelect.innerHTML = '<option value="0">\u2014 Choose a slot (optional) \u2014</option>' +
+              items.map((s) => `<option value="${Number(s.id) || 0}">${escHtml(s.slot_label || s.slot_name || "Slot")}</option>`).join("");
+          }
+          if (slotStatusEl) slotStatusEl.style.display = "none";
+        }
+      } catch (_) {
+        if (slotSelect) slotSelect.innerHTML = '<option value="0">Could not load slots</option>';
+        if (slotStatusEl) { slotStatusEl.style.display = "block"; slotStatusEl.textContent = "Could not load slots."; }
+      }
+    };
+
+    const setFulfillmentMode = (mode) => {
+      if (deliverySection) {
+        deliverySection.style.display = mode === "delivery" ? "block" : "none";
+        const streetInput = document.getElementById("byocStreet");
+        const pincodeInput = document.getElementById("byocPincode");
+        if (streetInput) streetInput.required = mode === "delivery";
+        if (pincodeInput) pincodeInput.required = mode === "delivery";
+      }
+      if (eventDate) loadByocSlots(mode);
+    };
+
+    const fulfillDeliveryRadio = document.getElementById("byocFulfilDelivery");
+    const fulfillPickupRadio = document.getElementById("byocFulfilPickup");
+    if (fulfillDeliveryRadio) fulfillDeliveryRadio.addEventListener("change", () => { if (fulfillDeliveryRadio.checked) setFulfillmentMode("delivery"); });
+    if (fulfillPickupRadio) fulfillPickupRadio.addEventListener("change", () => { if (fulfillPickupRadio.checked) setFulfillmentMode("pickup"); });
+    // Load initial state
+    setFulfillmentMode("delivery");
+
+    // Use My Location button
+    const useLocationBtn = document.getElementById("byocUseLocationBtn");
+    const locationStatus = document.getElementById("byocLocationStatus");
+    if (useLocationBtn) {
+      useLocationBtn.addEventListener("click", () => {
+        if (!navigator.geolocation) {
+          if (locationStatus) { locationStatus.style.display = "block"; locationStatus.textContent = "Geolocation not supported."; }
+          return;
+        }
+        if (locationStatus) { locationStatus.style.display = "block"; locationStatus.textContent = "Detecting location\u2026"; }
+        navigator.geolocation.getCurrentPosition(
+          async (pos) => {
+            const lat = pos.coords.latitude;
+            const lon = pos.coords.longitude;
+            const mapsLink = `https://www.google.com/maps?q=${lat},${lon}`;
+            const mapsInput = document.getElementById("byocMapsLink");
+            if (mapsInput) mapsInput.value = mapsLink;
+            try {
+              const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`, { headers: { "Accept-Language": "en" } });
+              const d = await r.json();
+              const streetInput = document.getElementById("byocStreet");
+              const pincodeInput = document.getElementById("byocPincode");
+              const addr = d.address || {};
+              const road = addr.road || addr.neighbourhood || addr.suburb || "";
+              const street = [road, addr.village || addr.city_district || addr.city || ""].filter(Boolean).join(", ");
+              if (streetInput && street) streetInput.value = street;
+              if (pincodeInput && addr.postcode) pincodeInput.value = addr.postcode;
+              if (locationStatus) locationStatus.textContent = "Location detected. Please verify the address.";
+            } catch (_) {
+              if (locationStatus) locationStatus.textContent = "Could not reverse-geocode location.";
+            }
+          },
+          () => { if (locationStatus) locationStatus.textContent = "Location access denied."; }
+        );
+      });
+    }
+
+    const setStatus = (message, isError = false) => {
+      if (!status) {
+        return;
+      }
+      status.textContent = message;
+      status.classList.toggle("is-error", !!isError);
+    };
+
+    // Coupon apply button — validates on submission; this just shows immediate feedback
+    const byocCouponInput = document.getElementById("byocCouponInput");
+    const byocApplyCouponBtn = document.getElementById("byocApplyCouponBtn");
+    const byocCouponMsg = document.getElementById("byocCouponMsg");
+    if (byocApplyCouponBtn && byocCouponInput) {
+      byocApplyCouponBtn.addEventListener("click", () => {
+        const code = byocCouponInput.value.trim().toUpperCase();
+        byocCouponInput.value = code;
+        if (!byocCouponMsg) return;
+        byocCouponMsg.style.display = "block";
+        if (!code) {
+          byocCouponMsg.style.color = "#e11d48";
+          byocCouponMsg.textContent = "Please enter a coupon code.";
+        } else {
+          byocCouponMsg.style.color = "#059669";
+          byocCouponMsg.textContent = `Coupon "${code}" will be validated on order confirmation.`;
+        }
+      });
+    }
+
+    form?.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!token) {
+        setStatus("Quote token is missing.", true);
+        return;
+      }
+
+      const fulfillmentType = document.getElementById("byocFulfilPickup")?.checked ? "pickup" : "delivery";
+      const deliveryStreet = (document.getElementById("byocStreet")?.value || "").trim();
+      const deliveryPincode = (document.getElementById("byocPincode")?.value || "").trim();
+      const deliveryMapsLink = (document.getElementById("byocMapsLink")?.value || "").trim();
+      const selectedSlotId = Number(slotSelect?.value || "0") || 0;
+
+      if (fulfillmentType === "delivery") {
+        if (!deliveryStreet) {
+          setStatus("Please enter your delivery street address.", true);
+          document.getElementById("byocStreet")?.focus();
+          return;
+        }
+        if (!deliveryPincode) {
+          setStatus("Please enter your postal code.", true);
+          document.getElementById("byocPincode")?.focus();
+          return;
+        }
+      }
+
+      const csrf = utils.getCsrfToken();
+      const body = new FormData();
+      if (csrf) {
+        body.append("_csrf", csrf);
+      }
+      body.append("fulfillment_type", fulfillmentType);
+      body.append("slot_id", String(selectedSlotId));
+      body.append("delivery_street", deliveryStreet);
+      body.append("delivery_pincode", deliveryPincode);
+      body.append("delivery_maps_link", deliveryMapsLink);
+      const paymentType = document.getElementById("byocPayFull")?.checked ? "full" : "advance_50";
+      body.append("payment_type", paymentType);
+      body.append("advance_amount", String(paymentType === "full" ? Math.ceil(quoteAmount) : Math.ceil(quoteAmount * 0.5)));
+
+      const byocCouponCode = (document.getElementById("byocCouponInput")?.value || "").trim().toUpperCase();
+      if (byocCouponCode) {
+        body.append("coupon_code", byocCouponCode);
+      }
+
+      if (submitBtn) {
+        submitBtn.disabled = true;
+      }
+      setStatus("Accepting your quote...");
+
+      try {
+        const response = await fetch(`/api/inquiries/custom-cake/quote-accept/${encodeURIComponent(token)}`, {
+          method: "POST",
+          credentials: "same-origin",
+          body,
+          headers: csrf ? { "X-CSRF-Token": csrf } : {},
+        });
+
+        const payload = await response.json().catch(() => null);
+        if (!response.ok || !payload || payload.success === false) {
+          throw new Error(payload?.message || "Could not accept quote right now.");
+        }
+
+        const confirmationUrl = payload?.data?.confirmation_url;
+        if (confirmationUrl) {
+          window.location.href = confirmationUrl;
+          return;
+        }
+        const orderNumber = payload?.data?.order_number ? ` (${payload.data.order_number})` : "";
+        setStatus(`Quote accepted! Order confirmed${orderNumber}. Our team will contact you to confirm delivery.`);
+        if (submitBtn) {
+          submitBtn.remove();
+        }
+      } catch (error) {
+        setStatus(error.message || "Could not accept quote right now.", true);
+      } finally {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+        }
+      }
+    });
+  };
 
     // Dynamic QR + UPI deep-link based on selected payment type
     const upiId = "anshpopo013-1@okaxis";

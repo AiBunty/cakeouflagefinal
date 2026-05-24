@@ -1,6 +1,6 @@
 <?php
 $pageTitle = 'Payment Verification Queue';
-include 'layout.php';
+require_once __DIR__ . '/layout.php';
 
 $statusFilter = trim((string)($_GET['status'] ?? 'open'));
 if (!in_array($statusFilter, ['open', 'pending', 'matched_auto', 'confirmed', 'rejected', 'duplicate', 'ignored'], true)) {

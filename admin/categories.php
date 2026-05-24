@@ -1,9 +1,8 @@
 <?php
-$pageTitle = "Categories";
-include "layout.php";
-
-
-require __DIR__ . '/includes/db.php';
+// Auth must load before the POST handler so $conn is available and the
+// admin session is validated before any form processing occurs.
+require_once __DIR__ . '/includes/auth.php';
+require_once __DIR__ . '/../app/Services/UnifiedMediaService.php';
 
 function cat_h(string $value): string {
   return htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
@@ -18,7 +17,7 @@ function cat_unique_slug(mysqli $conn, string $baseSlug, int $categoryId): strin
   $slug = $baseSlug;
   $suffix = 2;
   while (true) {
-    $check = $conn->prepare('SELECT id FROM categories WHERE slug = ? AND id != ? LIMIT 1');
+    $check = safePrepare($conn, 'SELECT id FROM categories WHERE slug = ? AND id != ? LIMIT 1');
     $check->bind_param('si', $slug, $categoryId);
     $check->execute();
     $result = $check->get_result();
@@ -80,32 +79,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string)($_POST['action'] ?? '') ==
 
   $newImagePath = $currentImage !== '' ? $currentImage : null;
   if (!empty($_FILES['image']['name']) && (int)($_FILES['image']['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
-    $tmp = (string)($_FILES['image']['tmp_name'] ?? '');
-    $ext = strtolower((string)pathinfo((string)($_FILES['image']['name'] ?? ''), PATHINFO_EXTENSION));
-    $allowed = array('jpg', 'jpeg', 'png', 'webp', 'gif');
-    if ($tmp !== '' && in_array($ext, $allowed, true)) {
-      $imgName = time() . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
-      $uploadDir = '../client/assets/images/categories/';
-      if (!is_dir($uploadDir)) {
-        mkdir($uploadDir, 0777, true);
-      }
-      $uploadPath = $uploadDir . $imgName;
-      if (move_uploaded_file($tmp, $uploadPath)) {
-        $newImagePath = '/client/assets/images/categories/' . $imgName;
-      }
+    $upload = \App\Services\UnifiedMediaService::upload(
+      $_FILES['image'],
+      [
+        'module' => 'category',
+        'entity_type' => 'category',
+        'entity_id' => $id,
+        'admin_id' => (int)($_SESSION['admin_id'] ?? 0),
+        'allow_svg' => false,
+        'replace_paths' => $currentImage !== '' ? [$currentImage] : [],
+      ]
+    );
+    if ($upload['ok']) {
+      $newImagePath = $upload['relative_url'];
+    } else {
+      error_log('[categories.php] category image upload failed: ' . $upload['error']);
     }
   }
 
   $baseSlug = cat_slugify($name);
   $slug = cat_unique_slug($conn, $baseSlug, $id);
 
-  $stmt = $conn->prepare('UPDATE categories SET name = ?, slug = ?, parent_id = ?, image = ?, sort_order = ?, is_active = ?, updated_at = NOW() WHERE id = ? LIMIT 1');
-  $stmt->bind_param('ssisiii', $name, $slug, $parentId, $newImagePath, $sortOrder, $isActive, $id);
-  $ok = $stmt->execute();
+  try {
+    $stmt = safePrepare($conn, 'UPDATE categories SET name = ?, slug = ?, parent_id = ?, image = ?, sort_order = ?, is_active = ?, updated_at = NOW() WHERE id = ? LIMIT 1');
+    $stmt->bind_param('ssisiii', $name, $slug, $parentId, $newImagePath, $sortOrder, $isActive, $id);
+    $ok = $stmt->execute();
+  } catch (RuntimeException $e) {
+    header('Location: categories.php?updated=0');
+    exit;
+  }
 
   header('Location: categories.php?updated=' . ($ok ? '1' : '0'));
   exit;
 }
+
+// All POST processing is done — now it is safe to output HTML.
+$pageTitle = "Categories";
+require_once __DIR__ . '/layout.php';
 
 $flashUpdated = isset($_GET['updated']) ? (int)$_GET['updated'] : null;
 $focusCategoryId = isset($_GET['focus']) ? (int)$_GET['focus'] : 0;

@@ -1,10 +1,36 @@
 <?php
+// Buffer all output so that debug warnings from db.php cannot emit bytes before
+// session headers / redirect Location headers are sent by this page.
+ob_start();
+// Allow enough time for SMTP round-trips (connect + EHLO + STARTTLS + AUTH + DATA).
+@set_time_limit(120);
+
 session_name('cakeouflage_sid');
 session_start();
 
-require __DIR__ . '/includes/db.php';
+require_once __DIR__ . '/includes/db.php';
 require_once __DIR__ . '/includes/auth.php';
 require_once dirname(__DIR__) . '/app/Services/MailService.php';
+
+function admin_login_is_dev_mode(): bool
+{
+  $appEnv = strtolower((string) (\App\Core\Env::get('APP_ENV', 'production') ?? 'production'));
+  $appDebug = strtolower((string) (\App\Core\Env::get('APP_DEBUG', 'false') ?? 'false')) === 'true';
+  return $appDebug || $appEnv === 'local' || $appEnv === 'development';
+}
+
+function admin_auth_email_ref(string $email): string
+{
+  return substr(hash('sha256', strtolower(trim($email))), 0, 12);
+}
+
+/** @param array<string,mixed> $context */
+function admin_auth_log(string $event, array $context = []): void
+{
+  $payload = ['event' => $event, 'time' => gmdate('c')] + $context;
+  $json = json_encode($payload, JSON_UNESCAPED_SLASHES);
+  error_log('[admin_auth] ' . ($json !== false ? $json : $event));
+}
 
 // Already logged in
 if (isset($_SESSION['admin'])) {
@@ -121,43 +147,42 @@ function find_active_admin_for_login(mysqli $conn, string $login): ?array
   return $row ?: null;
 }
 
-/**
- * Store an OTP for the given email.
- * Returns 'ok', 'cooldown' (too soon after last request), or 'error'.
- * Expiry is computed entirely in MySQL to avoid PHP/MySQL timezone mismatch.
- */
-function store_admin_otp(mysqli $conn, string $email, string $otp): string
+function is_admin_otp_on_cooldown(mysqli $conn, string $email): bool
 {
-  // Server-side cooldown: deny if an OTP was issued less than 60 seconds ago
-  $coolStmt = $conn->prepare('SELECT created_at FROM otp_verifications WHERE email = ? ORDER BY created_at DESC LIMIT 1');
-  if ($coolStmt) {
-    $coolStmt->bind_param('s', $email);
-    $coolStmt->execute();
-    $coolResult = $coolStmt->get_result();
-    $coolRow    = $coolResult ? $coolResult->fetch_assoc() : null;
-    $coolStmt->close();
-    if ($coolRow && (time() - strtotime((string)$coolRow['created_at'])) < 60) {
-      return 'cooldown';
-    }
+  $stmt = $conn->prepare('SELECT 1 FROM otp_verifications WHERE email = ? AND created_at > (NOW() - INTERVAL 60 SECOND) LIMIT 1');
+  if (!$stmt) {
+    return false;
   }
+  $stmt->bind_param('s', $email);
+  $stmt->execute();
+  $result = $stmt->get_result();
+  $active = $result && $result->fetch_row();
+  $stmt->close();
+  return (bool) $active;
+}
 
-  $deleteStmt = $conn->prepare('DELETE FROM otp_verifications WHERE email = ?');
-  if (!$deleteStmt) {
-    return 'error';
+function clear_admin_otp_rows(mysqli $conn, string $email): bool
+{
+  $stmt = $conn->prepare('DELETE FROM otp_verifications WHERE email = ?');
+  if (!$stmt) {
+    return false;
   }
-  $deleteStmt->bind_param('s', $email);
-  $deleteStmt->execute();
-  $deleteStmt->close();
+  $stmt->bind_param('s', $email);
+  $ok = $stmt->execute();
+  $stmt->close();
+  return (bool) $ok;
+}
 
-  // Use MySQL's own clock so expiry is always consistent with verify's NOW() check
-  $insertStmt = $conn->prepare('INSERT INTO otp_verifications (email, otp, expires_at) VALUES (?, ?, NOW() + INTERVAL 5 MINUTE)');
-  if (!$insertStmt) {
-    return 'error';
+function insert_admin_otp_row(mysqli $conn, string $email, string $otp): bool
+{
+  $stmt = $conn->prepare('INSERT INTO otp_verifications (email, otp, expires_at) VALUES (?, ?, NOW() + INTERVAL 5 MINUTE)');
+  if (!$stmt) {
+    return false;
   }
-  $insertStmt->bind_param('ss', $email, $otp);
-  $ok = $insertStmt->execute();
-  $insertStmt->close();
-  return $ok ? 'ok' : 'error';
+  $stmt->bind_param('ss', $email, $otp);
+  $ok = $stmt->execute();
+  $stmt->close();
+  return (bool) $ok;
 }
 
 /**
@@ -216,9 +241,17 @@ function verify_admin_otp(mysqli $conn, string $email, string $otp, string &$rea
 
 $error = '';
 $info = '';
+$otpSentThisRequest = false;
+$otpSendFailedThisRequest = false;
+$showOtpStep = false;
 $prefillLogin = trim((string) ($_POST['login'] ?? $_SESSION['admin_login_identifier'] ?? ''));
 
-ensure_admin_identity($conn);
+$allowRuntimeIdentityMutation = admin_login_is_dev_mode();
+if ($allowRuntimeIdentityMutation) {
+  ensure_admin_identity($conn);
+} else {
+  admin_auth_log('runtime_identity_mutation_skipped', ['reason' => 'non_dev_environment']);
+}
 
 // Bootstrap the first admin account if table is empty.
 $adminCountResult = $conn->query("SELECT COUNT(*) AS total FROM admins");
@@ -226,7 +259,7 @@ $adminCount = (int) (($adminCountResult && $adminCountResult->num_rows === 1)
   ? $adminCountResult->fetch_assoc()['total']
   : 0);
 
-if ($adminCount === 0) {
+if ($adminCount === 0 && $allowRuntimeIdentityMutation) {
   $seedStmt = $conn->prepare(
     "INSERT INTO admins (full_name, email, password_hash, role, is_active) VALUES (?, ?, ?, 'super_admin', 1)"
   );
@@ -254,23 +287,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $_SESSION['admin_login_identifier'] = $login;
 
         if ($action === 'verify_otp') {
+          $showOtpStep = true;
           $otp = preg_replace('/\D+/', '', (string) ($_POST['otp'] ?? '')) ?? '';
           if (strlen($otp) !== 6) {
             $error = 'Enter a valid 6-digit OTP.';
           } else {
             $verifyReason = '';
             if (!verify_admin_otp($conn, $adminEmail, $otp, $verifyReason)) {
+              admin_auth_log('otp_verify_failure', [
+                'email_ref' => admin_auth_email_ref($adminEmail),
+                'reason' => $verifyReason,
+              ]);
               if ($verifyReason === 'locked') {
                 $error = 'Too many failed attempts. Please request a new OTP.';
               } else {
                 $error = 'Invalid or expired OTP. Please request a new OTP.';
               }
             } else {
+              session_regenerate_id(true);
+              admin_auth_log('session_regenerated', [
+                'email_ref' => admin_auth_email_ref($adminEmail),
+              ]);
+
               $_SESSION['admin'] = (int) $admin['id'];
               $_SESSION['admin_id'] = (int) $admin['id'];
               $_SESSION['admin_name'] = $admin['full_name'];
               $_SESSION['admin_role'] = $admin['role'];
               $_SESSION['admin_department_label'] = $admin['department_label'] ?? '';
+              admin_auth_log('otp_verify_success', [
+                'email_ref' => admin_auth_email_ref($adminEmail),
+                'admin_id' => (int) $admin['id'],
+              ]);
               unset($_SESSION['admin_login_identifier']);
               admin_load_permissions($conn, (int) $admin['id']);
 
@@ -279,27 +326,60 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
           }
         } else {
-          $otp = (string) random_int(100000, 999999);
-          $storeResult = store_admin_otp($conn, $adminEmail, $otp);
-          if ($storeResult === 'ok') {
-            try {
-              \App\Services\MailService::sendOtp($adminEmail, $otp, $admin['full_name'] ?? 'Admin');
-              $info = 'OTP sent to ' . htmlspecialchars($adminEmail, ENT_QUOTES, 'UTF-8') . '. It is valid for 5 minutes.';
-            } catch (\Throwable $e) {
-              error_log('Admin OTP send failed for ' . $adminEmail . ': ' . $e->getMessage());
-              $error = 'Unable to send OTP email right now. Please try again.';
-            }
-          } elseif ($storeResult === 'cooldown') {
+          if (is_admin_otp_on_cooldown($conn, $adminEmail)) {
+            $showOtpStep = true;
             $error = 'Please wait 60 seconds before requesting a new OTP.';
+            admin_auth_log('otp_cooldown_block', [
+              'email_ref' => admin_auth_email_ref($adminEmail),
+            ]);
           } else {
-            $error = 'Unable to generate OTP right now. Please try again.';
+          $otp = (string) random_int(100000, 999999);
+          admin_auth_log('otp_generated', [
+            'email_ref' => admin_auth_email_ref($adminEmail),
+            'otp_length' => strlen($otp),
+          ]);
+          try {
+            admin_auth_log('otp_send_attempt', [
+              'email_ref' => admin_auth_email_ref($adminEmail),
+            ]);
+            \App\Services\MailService::sendOtp($adminEmail, $otp, $admin['full_name'] ?? 'Admin');
+
+            $clearOk = clear_admin_otp_rows($conn, $adminEmail);
+            $insertOk = insert_admin_otp_row($conn, $adminEmail, $otp);
+            if (!$insertOk) {
+              clear_admin_otp_rows($conn, $adminEmail);
+              $otpSendFailedThisRequest = true;
+              $error = 'Unable to finalize OTP right now. Please request a new OTP.';
+              admin_auth_log('otp_send_failure', [
+                'email_ref' => admin_auth_email_ref($adminEmail),
+                'reason' => 'otp_persist_failed',
+                'cleanup_before_insert' => $clearOk,
+              ]);
+            } else {
+              $showOtpStep = true;
+              $otpSentThisRequest = true;
+              $info = 'OTP sent to ' . htmlspecialchars($adminEmail, ENT_QUOTES, 'UTF-8') . '. It is valid for 5 minutes.';
+              admin_auth_log('otp_send_success', [
+                'email_ref' => admin_auth_email_ref($adminEmail),
+              ]);
+            }
+          } catch (\Throwable $e) {
+            clear_admin_otp_rows($conn, $adminEmail);
+            $otpSendFailedThisRequest = true;
+            error_log('SMTP ERROR: ' . $e->getMessage());
+            error_log('SMTP OTP META: ' . json_encode(\App\Services\MailService::getOtpSmtpRuntimeMeta()));
+            $error = 'Unable to send OTP email right now. Please try again.';
+            admin_auth_log('otp_send_failure', [
+              'email_ref' => admin_auth_email_ref($adminEmail),
+              'reason' => 'smtp_send_failed',
+              'error_class' => get_class($e),
+            ]);
+          }
           }
         }
       }
     }
 }
-
-$otpSentThisRequest = $info !== '';
 ?>
 
 <!DOCTYPE html>
@@ -338,8 +418,18 @@ $otpSentThisRequest = $info !== '';
       margin-bottom: 20px;
     }
 
+    .logo a {
+      display: inline-flex;
+      justify-content: center;
+      align-items: center;
+    }
+
     .logo img {
-      width: 160px;
+      display: block;
+      width: auto;
+      height: 76px;
+      max-width: min(240px, 82vw);
+      object-fit: contain;
     }
 
     h2 {
@@ -404,7 +494,9 @@ $otpSentThisRequest = $info !== '';
 <div class="login-container">
 
   <div class="logo">
-    <img src="../client/assets/images/mainlogo.svg" alt="Logo">
+    <a href="/" aria-label="Cakeouflage home">
+      <img src="/client/assets/images/mainlogo.svg" alt="Cakeouflage Logo">
+    </a>
   </div>
 
   <h2>Admin Login</h2>
@@ -422,14 +514,14 @@ $otpSentThisRequest = $info !== '';
       <input type="text" name="login" value="<?= htmlspecialchars($prefillLogin, ENT_QUOTES, 'UTF-8') ?>" required>
     </div>
 
-    <div class="input-group">
+    <div class="input-group" id="adminOtpInputGroup" style="<?= $showOtpStep ? '' : 'display:none;' ?>">
       <label>OTP</label>
       <input type="text" name="otp" maxlength="6" inputmode="numeric" pattern="[0-9]{6}" placeholder="Enter 6-digit OTP">
     </div>
 
-    <div style="display:flex;gap:10px;">
-      <button class="btn" name="action" value="send_otp" type="submit" id="adminSendOtpBtn">Send OTP</button>
-      <button class="btn" name="action" value="verify_otp" type="submit">Verify OTP & Login</button>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <button class="btn" name="action" value="send_otp" type="submit" id="adminSendOtpBtn"><?= $showOtpStep ? 'Resend OTP' : 'Send OTP' ?></button>
+      <button class="btn" name="action" value="verify_otp" type="submit" id="adminVerifyOtpBtn" style="<?= $showOtpStep ? '' : 'display:none;' ?>">Verify OTP & Login</button>
     </div>
     <div id="adminOtpCooldownHint" style="margin-top:8px;font-size:12px;color:#666;"></div>
   </form>
@@ -443,27 +535,60 @@ $otpSentThisRequest = $info !== '';
 <script>
 document.addEventListener("DOMContentLoaded", () => {
   const OTP_COOLDOWN_MS = 60000;
-  const OTP_STORAGE_KEY = "otp_cooldown_admin_login_until";
   const otpSentThisRequest = <?= $otpSentThisRequest ? 'true' : 'false' ?>;
+  const otpSendFailedThisRequest = <?= $otpSendFailedThisRequest ? 'true' : 'false' ?>;
+  const showOtpStep = <?= $showOtpStep ? 'true' : 'false' ?>;
 
   const form = document.querySelector("form[method='POST']");
   const sendBtn = document.getElementById("adminSendOtpBtn");
+  const verifyBtn = document.getElementById("adminVerifyOtpBtn");
+  const otpGroup = document.getElementById("adminOtpInputGroup");
   const loginInput = form ? form.querySelector('input[name="login"]') : null;
   const hintEl = document.getElementById("adminOtpCooldownHint");
   const defaultSendText = sendBtn ? sendBtn.textContent : "Send OTP";
 
-  if (!form || !sendBtn || !loginInput || !hintEl) {
+  if (!form || !sendBtn || !loginInput || !hintEl || !otpGroup || !verifyBtn) {
     return;
   }
 
   let cooldownTimer = null;
 
-  const readCooldownUntil = () => {
-    const value = Number(window.localStorage.getItem(OTP_STORAGE_KEY) || "0");
+  const normalizeLogin = (value) => String(value || "").trim().toLowerCase();
+  const storageKeyForLogin = (value) => {
+    const normalized = normalizeLogin(value);
+    return normalized ? `admin_otp_cooldown_${encodeURIComponent(normalized)}` : "";
+  };
+
+  const clearUiToDefault = () => {
+    sendBtn.disabled = false;
+    sendBtn.textContent = defaultSendText;
+    hintEl.textContent = "";
+  };
+
+  const readCooldownUntil = (loginValue) => {
+    const key = storageKeyForLogin(loginValue);
+    if (!key) {
+      return 0;
+    }
+    const value = Number(window.localStorage.getItem(key) || "0");
     return Number.isFinite(value) ? value : 0;
   };
 
-  const startCooldownUi = (untilEpochMs) => {
+  const clearCooldown = (loginValue) => {
+    const key = storageKeyForLogin(loginValue);
+    if (key) {
+      window.localStorage.removeItem(key);
+    }
+  };
+
+  const setCooldown = (loginValue, untilEpochMs) => {
+    const key = storageKeyForLogin(loginValue);
+    if (key) {
+      window.localStorage.setItem(key, String(untilEpochMs));
+    }
+  };
+
+  const startCooldownUi = (untilEpochMs, loginValue) => {
     const tick = () => {
       const remainingMs = untilEpochMs - Date.now();
       if (remainingMs <= 0) {
@@ -471,10 +596,8 @@ document.addEventListener("DOMContentLoaded", () => {
           window.clearInterval(cooldownTimer);
           cooldownTimer = null;
         }
-        sendBtn.disabled = false;
-        sendBtn.textContent = defaultSendText;
-        hintEl.textContent = "";
-        window.localStorage.removeItem(OTP_STORAGE_KEY);
+        clearUiToDefault();
+        clearCooldown(loginValue);
         return;
       }
 
@@ -491,15 +614,42 @@ document.addEventListener("DOMContentLoaded", () => {
     cooldownTimer = window.setInterval(tick, 250);
   };
 
+  const applyCooldownFromCurrentLogin = () => {
+    const currentLogin = String(loginInput.value || "").trim();
+    const existingCooldownUntil = readCooldownUntil(currentLogin);
+    if (existingCooldownUntil > Date.now()) {
+      startCooldownUi(existingCooldownUntil, currentLogin);
+    } else {
+      if (cooldownTimer) {
+        window.clearInterval(cooldownTimer);
+        cooldownTimer = null;
+      }
+      clearUiToDefault();
+      clearCooldown(currentLogin);
+    }
+  };
+
   if (otpSentThisRequest) {
+    otpGroup.style.display = "";
+    verifyBtn.style.display = "";
+    const currentLogin = String(loginInput.value || "").trim();
     const cooldownUntil = Date.now() + OTP_COOLDOWN_MS;
-    window.localStorage.setItem(OTP_STORAGE_KEY, String(cooldownUntil));
+    setCooldown(currentLogin, cooldownUntil);
+    startCooldownUi(cooldownUntil, currentLogin);
+  } else if (otpSendFailedThisRequest) {
+    clearCooldown(loginInput.value);
+    clearUiToDefault();
+    otpGroup.style.display = showOtpStep ? "" : "none";
+    verifyBtn.style.display = showOtpStep ? "" : "none";
+  } else {
+    otpGroup.style.display = showOtpStep ? "" : "none";
+    verifyBtn.style.display = showOtpStep ? "" : "none";
+    applyCooldownFromCurrentLogin();
   }
 
-  const existingCooldownUntil = readCooldownUntil();
-  if (existingCooldownUntil > Date.now()) {
-    startCooldownUi(existingCooldownUntil);
-  }
+  loginInput.addEventListener("input", () => {
+    applyCooldownFromCurrentLogin();
+  });
 
   form.addEventListener("submit", (event) => {
     const submitter = event.submitter;
@@ -511,6 +661,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!String(loginInput.value || "").trim()) {
         return;
       }
+      clearCooldown(loginInput.value);
       sendBtn.disabled = true;
       sendBtn.textContent = "Sending...";
       hintEl.textContent = "Sending OTP...";

@@ -89,7 +89,7 @@ function save_crm_follow_up_settings($conn, $settings, $adminId)
     $defaults = crm_follow_up_setting_defaults();
     $allowedKeys = array_keys($defaults);
 
-    $stmt = $conn->prepare('INSERT INTO settings (setting_key, setting_value, updated_by_admin_id) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_by_admin_id = VALUES(updated_by_admin_id)');
+    $stmt = $conn->prepare('INSERT INTO settings (setting_key, setting_value, updated_by_admin_id) VALUES (?, ?, ?) AS new ON DUPLICATE KEY UPDATE setting_value = new.setting_value, updated_by_admin_id = new.updated_by_admin_id');
     foreach ($allowedKeys as $key) {
         $value = isset($settings[$key]) ? (string) $settings[$key] : $defaults[$key];
         $stmt->bind_param('ssi', $key, $value, $adminId);
@@ -143,11 +143,170 @@ function reset_crm_token($conn, $id)
     return $stmt->execute();
 }
 
-function log_crm_push($conn, $name, $mobile, $status, $response)
+function extract_automation_id_from_url(string $url): string
 {
-    $stmt = $conn->prepare('INSERT INTO crm_push_logs (name, mobile, status, response, created_at) VALUES (?, ?, ?, ?, NOW())');
-    $stmt->bind_param('ssss', $name, $mobile, $status, $response);
-    return $stmt->execute();
+    if (preg_match('#automations/([^/]+)/execute#', $url, $m)) {
+        return $m[1];
+    }
+    return '';
+}
+
+function mask_api_token(string $token): string
+{
+    $len = strlen($token);
+    if ($len === 0) {
+        return '';
+    }
+    if ($len <= 8) {
+        return str_repeat('*', $len);
+    }
+    return substr($token, 0, 4) . '***' . substr($token, -4);
+}
+
+/**
+ * Execute a live CRM push via real cURL POST with JSON body.
+ * Returns detailed result array — never fakes success.
+ *
+ * @param array<string,mixed> $row  crm_settings row (must have endpoint, api_token, setting_key)
+ */
+function execute_crm_test_push(array $row, string $name, string $email, string $phone): array
+{
+    $endpoint = trim((string)($row['endpoint'] ?? ''));
+    $apiToken = trim((string)($row['api_token'] ?? ''));
+
+    if ($endpoint === '' || $apiToken === '') {
+        return [
+            'ok' => false, 'http_status' => 0, 'response_raw' => '',
+            'response_decoded' => null, 'curl_error' => '',
+            'time_ms' => 0, 'payload' => null,
+            'execution_status' => 'not_configured',
+            'error_message' => 'Endpoint or API token is empty',
+        ];
+    }
+
+    // Validate contact fields
+    $nameTrimmed  = trim($name);
+    $emailTrimmed = trim($email);
+    $phoneTrimmed = trim($phone);
+    if ($nameTrimmed === '' || ($emailTrimmed === '' && $phoneTrimmed === '')) {
+        return [
+            'ok' => false, 'http_status' => 0, 'response_raw' => '',
+            'response_decoded' => null, 'curl_error' => '',
+            'time_ms' => 0, 'payload' => null,
+            'execution_status' => 'validation_failed',
+            'error_message' => $nameTrimmed === ''
+                ? 'contact_name is required'
+                : 'contact_email or contact_phone is required',
+        ];
+    }
+
+    // Normalise phone: ensure +CountryCode prefix
+    $phoneNorm = $phoneTrimmed;
+    if ($phoneNorm !== '' && $phoneNorm[0] !== '+') {
+        $digits = preg_replace('/\D+/', '', $phoneNorm) ?: '';
+        if ($digits !== '') {
+            if (strpos($digits, '91') !== 0) {
+                $digits = '91' . $digits;
+            }
+            $phoneNorm = '+' . $digits;
+        }
+    }
+
+    $payload = [
+        'api_token'     => $apiToken,
+        'contact_name'  => $nameTrimmed,
+        'contact_email' => $emailTrimmed,
+        'contact_phone' => $phoneNorm,
+        'contact.name'  => $nameTrimmed,
+        'contact.email' => $emailTrimmed,
+        'contact.phone' => $phoneNorm,
+        'contact.mobile'=> $phoneNorm,
+    ];
+    $bodyJson = json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+
+    $startTime = microtime(true);
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL,            $endpoint);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POST,           true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS,     $bodyJson);
+    curl_setopt($ch, CURLOPT_HTTPHEADER,     ['Content-Type: application/json', 'Accept: application/json']);
+    curl_setopt($ch, CURLOPT_TIMEOUT,        15);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+    $responseRaw = curl_exec($ch);
+    $curlError   = curl_error($ch);
+    $httpCode    = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    $timeMs = (int)round((microtime(true) - $startTime) * 1000);
+
+    $responseDecoded = null;
+    if ($responseRaw !== false && $responseRaw !== '') {
+        $dec = json_decode((string)$responseRaw, true);
+        if (is_array($dec)) {
+            $responseDecoded = $dec;
+        }
+    }
+
+    // Success: HTTP 200 AND {"status":"success"}
+    $ok = false;
+    $errorMessage = '';
+    $executionStatus = 'failed';
+    if ($responseRaw === false || $curlError !== '') {
+        $errorMessage    = $curlError !== '' ? $curlError : 'curl_exec returned false';
+    } elseif ($httpCode !== 200) {
+        $errorMessage    = 'HTTP ' . $httpCode . ' received (expected 200)';
+    } elseif (is_array($responseDecoded) && ($responseDecoded['status'] ?? '') === 'success') {
+        $ok              = true;
+        $executionStatus = 'success';
+    } else {
+        $errorMessage    = 'Response did not contain {"status":"success"}';
+    }
+
+    return [
+        'ok'               => $ok,
+        'http_status'      => $httpCode,
+        'response_raw'     => $responseRaw !== false ? (string)$responseRaw : '',
+        'response_decoded' => $responseDecoded,
+        'curl_error'       => $curlError,
+        'time_ms'          => $timeMs,
+        'payload'          => $payload,
+        'execution_status' => $executionStatus,
+        'error_message'    => $errorMessage,
+    ];
+}
+
+function log_crm_push(
+    $conn,
+    string $name,
+    string $mobile,
+    string $status,
+    string $response,
+    string $trigger_key = '',
+    string $endpoint = '',
+    string $automation_id = '',
+    string $api_token_masked = '',
+    ?string $payload_json = null,
+    ?int $http_status = null,
+    string $execution_status = '',
+    string $error_message = '',
+    int $response_time_ms = 0
+): bool {
+    $stmt = $conn->prepare(
+        'INSERT INTO crm_push_logs'
+        . ' (name, mobile, trigger_key, endpoint, status, automation_id, api_token_masked,'
+        . '  payload_json, http_status, execution_status, error_message, response_time_ms, response, created_at)'
+        . ' VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())'
+    );
+    $stmt->bind_param(
+        'ssssssssissis',
+        $name, $mobile, $trigger_key, $endpoint, $status,
+        $automation_id, $api_token_masked,
+        $payload_json, $http_status,
+        $execution_status, $error_message, $response_time_ms,
+        $response
+    );
+    return (bool)$stmt->execute();
 }
 
 function fetch_crm_push_logs($conn, $limit)
@@ -161,4 +320,42 @@ function fetch_crm_push_logs($conn, $limit)
         $rows[] = $row;
     }
     return $rows;
+}
+
+function fetch_crm_diagnostics($conn): array
+{
+    $result = [];
+
+    // Per-trigger: last push stats
+    $sql = '
+        SELECT
+            cpl.trigger_key,
+            cpl.endpoint,
+            cpl.automation_id,
+            cpl.payload_json,
+            cpl.response,
+            cpl.http_status,
+            cpl.execution_status,
+            cpl.error_message,
+            cpl.response_time_ms,
+            cpl.created_at,
+            SUM(CASE WHEN cpl2.execution_status = \'success\' THEN 1 ELSE 0 END) AS successes_7d,
+            COUNT(cpl2.id) AS total_7d
+        FROM crm_push_logs cpl
+        INNER JOIN (
+            SELECT trigger_key, MAX(id) AS max_id
+            FROM crm_push_logs
+            GROUP BY trigger_key
+        ) latest ON latest.trigger_key = cpl.trigger_key AND latest.max_id = cpl.id
+        LEFT JOIN crm_push_logs cpl2
+            ON cpl2.trigger_key = cpl.trigger_key
+            AND cpl2.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+        GROUP BY cpl.id
+        ORDER BY cpl.created_at DESC
+    ';
+    $qResult = $conn->query($sql);
+    while ($qResult && ($row = $qResult->fetch_assoc())) {
+        $result[] = $row;
+    }
+    return $result;
 }

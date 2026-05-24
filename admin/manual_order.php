@@ -5,9 +5,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $pageTitle = "Manual Order Punch";
-include "layout.php";
+require_once __DIR__ . '/layout.php';
 
-require __DIR__ . '/includes/db.php';
+require_once __DIR__ . '/includes/db.php';
+
+// Load active order slots for POS slot picker
+$activeSlotsData = [];
+if (!empty($conn)) {
+    $slotRes = $conn->query('SELECT id, slot_name, slot_label, slot_type FROM order_slots WHERE is_active = 1 ORDER BY id ASC');
+    if ($slotRes) {
+        while ($row = $slotRes->fetch_assoc()) {
+            $activeSlotsData[] = ['id' => (int)$row['id'], 'slot_name' => $row['slot_name'], 'slot_label' => $row['slot_label'], 'slot_type' => $row['slot_type']];
+        }
+        $slotRes->free();
+    }
+}
+$activeSlotsJson = json_encode($activeSlotsData, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE);
 
 if (!isset($_SESSION['manual_order_idempotency_key']) || !is_string($_SESSION['manual_order_idempotency_key'])) {
     $_SESSION['manual_order_idempotency_key'] = bin2hex(random_bytes(16));
@@ -196,6 +209,41 @@ $createdPaymentStatus = trim((string)($_GET['payment_status'] ?? ''));
     cursor: not-allowed;
   }
 
+  .pos-mode-toggle {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .pos-mode-btn {
+    flex: 1;
+    padding: 11px 10px;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+  }
+  .pos-mode-btn--active {
+    background: #80001F;
+    color: #fff;
+    border: 2px solid #80001F;
+  }
+  .pos-mode-btn--inactive {
+    background: #fff;
+    color: #80001F;
+    border: 2px solid rgba(128,0,31,0.35);
+  }
+  .pos-ready-notice {
+    background: #f0fdf4;
+    border: 1px solid #86efac;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 0.85rem;
+    margin-bottom: 14px;
+    color: #166534;
+    display: none;
+  }
+
   .btn-manual-secondary {
     border: 1px solid rgba(128, 0, 31, 0.24);
     border-radius: 10px;
@@ -326,6 +374,24 @@ $createdPaymentStatus = trim((string)($_GET['payment_status'] ?? ''));
     color: #666;
   }
 
+  .search-result-badges {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: 4px;
+  }
+
+  .search-result-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: #fff0f4;
+    color: #80001F;
+    font-size: 0.72rem;
+    font-weight: 700;
+  }
+
   .items-table {
     width: 100%;
     border-collapse: collapse;
@@ -377,6 +443,31 @@ $createdPaymentStatus = trim((string)($_GET['payment_status'] ?? ''));
     border-radius: 6px;
     padding: 6px 8px;
     font-size: 0.85rem;
+  }
+
+  .item-topper-select,
+  .item-note-input {
+    width: 100%;
+    border: 1px solid rgba(128, 0, 31, 0.2);
+    border-radius: 6px;
+    padding: 6px 8px;
+    font-size: 0.84rem;
+    background: #fff;
+  }
+
+  .item-note-input {
+    min-height: 66px;
+    resize: vertical;
+  }
+
+  .item-detail-stack {
+    display: grid;
+    gap: 6px;
+  }
+
+  .item-detail-hint {
+    font-size: 0.72rem;
+    color: #7f6973;
   }
 
   .order-total-box {
@@ -448,12 +539,22 @@ $createdPaymentStatus = trim((string)($_GET['payment_status'] ?? ''));
     <input type="hidden" name="idempotency_key" value="<?= htmlspecialchars($idempotencyKey) ?>">
     <input type="hidden" name="order_items" id="orderItemsInput" value="[]">
     <input type="hidden" name="matched_user_id" id="matchedUserId" value="0">
+    <input type="hidden" name="order_mode" id="orderModeInput" value="scheduled_custom">
+
+    <!-- Order Mode Toggle -->
+    <div class="pos-mode-toggle">
+      <button type="button" id="modeScheduledBtn" onclick="setOrderMode('scheduled_custom')" class="pos-mode-btn pos-mode-btn--active">📅 Scheduled Order</button>
+      <button type="button" id="modeReadyPosBtn" onclick="setOrderMode('ready_pos')" class="pos-mode-btn pos-mode-btn--inactive">⚡ Ready Cake POS</button>
+    </div>
+    <div class="pos-ready-notice" id="readyPosNotice">
+      ⚡ <strong>Ready Cake POS:</strong> For over-the-counter cakes already made. No slot booking required. Order auto-confirmed.
+    </div>
 
     <div class="manual-grid">
       <div class="manual-field">
         <label for="customer_phone">Customer Mobile (Master)</label>
         <div class="customer-lookup-wrap">
-          <input type="tel" id="customer_phone" name="customer_phone" required maxlength="15" placeholder="Enter mobile number" inputmode="numeric" pattern="[0-9]{10,15}" autocomplete="off">
+          <input type="tel" id="customer_phone" name="customer_phone" required maxlength="20" placeholder="Enter mobile number" pattern="[0-9+\-\s]{7,20}" autocomplete="off">
           <div id="customerLookupDropdown" class="customer-lookup-dropdown"></div>
         </div>
         <div id="customerLookupStatus" class="customer-status">Enter mobile first. Existing customer data auto-fills.</div>
@@ -508,12 +609,19 @@ $createdPaymentStatus = trim((string)($_GET['payment_status'] ?? ''));
         </select>
       </div>
       <div class="manual-field">
-        <label for="scheduled_slot">Delivery Date & Time</label>
-        <input type="datetime-local" id="scheduled_slot" name="scheduled_slot">
+        <label for="coupon_code">Coupon Code (optional)</label>
+        <input type="text" id="coupon_code" name="coupon_code" maxlength="50" placeholder="e.g. SAVE50" style="text-transform:uppercase">
       </div>
-      <div class="manual-field">
-        <label for="scheduled_slot_label">Slot Label</label>
-        <input type="text" id="scheduled_slot_label" name="scheduled_slot_label" maxlength="120" placeholder="e.g. 2 PM - 4 PM">
+      <div class="manual-field" id="slotBookingDateField">
+        <label for="slot_booking_date">Booking Date (Slot System)</label>
+        <input type="date" id="slot_booking_date" name="slot_booking_date" min="<?= date('Y-m-d') ?>">
+      </div>
+      <div class="manual-field" id="slotPickerField" style="display:none;">
+        <label for="slot_id">Slot</label>
+        <select id="slot_id" name="slot_id">
+          <option value="0">Select date first...</option>
+        </select>
+        <input type="hidden" name="slot_label" id="slotLabelInput">
       </div>
     </div>
 
@@ -530,6 +638,8 @@ $createdPaymentStatus = trim((string)($_GET['payment_status'] ?? ''));
             <th style="width:170px">Variant</th>
             <th style="width:80px">Qty</th>
             <th style="width:100px">Unit Price</th>
+            <th style="width:170px">Topper</th>
+            <th style="width:220px">Note on Cake</th>
             <th style="width:100px">Line Total</th>
             <th style="width:50px"></th>
           </tr>
@@ -620,6 +730,9 @@ $createdPaymentStatus = trim((string)($_GET['payment_status'] ?? ''));
   let searchDebounceTimer;
   let customerLookupTimer;
   let latestSearchResults = [];
+  let availableToppers = [];
+
+  const ACTIVE_SLOTS = <?= $activeSlotsJson ?>;
 
   function togglePorterNotice(value) {
     const notice = document.getElementById('porterNoticeManual');
@@ -629,6 +742,68 @@ $createdPaymentStatus = trim((string)($_GET['payment_status'] ?? ''));
     const field = document.getElementById('advanceAmountField');
     if (field) field.style.display = value === 'partial' ? 'block' : 'none';
   }
+
+  function setOrderMode(mode) {
+    document.getElementById('orderModeInput').value = mode;
+    const scheduledBtn   = document.getElementById('modeScheduledBtn');
+    const posBtn         = document.getElementById('modeReadyPosBtn');
+    const posNotice      = document.getElementById('readyPosNotice');
+    const bookingDateFld = document.getElementById('slotBookingDateField');
+    const slotPickerFld  = document.getElementById('slotPickerField');
+    const fulfilSelect   = document.getElementById('fulfilment_mode');
+    const statusSelect   = document.getElementById('order_status');
+    if (mode === 'ready_pos') {
+      posBtn.classList.replace('pos-mode-btn--inactive', 'pos-mode-btn--active');
+      scheduledBtn.classList.replace('pos-mode-btn--active', 'pos-mode-btn--inactive');
+      posNotice.style.display = 'block';
+      if (bookingDateFld) bookingDateFld.style.display  = 'none';
+      if (slotPickerFld)  slotPickerFld.style.display   = 'none';
+      if (fulfilSelect) { fulfilSelect.value = 'pickup'; togglePorterNotice('pickup'); }
+      if (statusSelect)   statusSelect.value = 'confirmed';
+    } else {
+      scheduledBtn.classList.replace('pos-mode-btn--inactive', 'pos-mode-btn--active');
+      posBtn.classList.replace('pos-mode-btn--active', 'pos-mode-btn--inactive');
+      posNotice.style.display = 'none';
+      if (bookingDateFld) bookingDateFld.style.display  = '';
+      updateSlotDropdown();
+    }
+  }
+
+  function updateSlotDropdown() {
+    const dateVal      = document.getElementById('slot_booking_date')?.value || '';
+    const fulfilMode   = document.getElementById('fulfilment_mode')?.value || 'delivery';
+    const slotSelect   = document.getElementById('slot_id');
+    const slotPickerFld = document.getElementById('slotPickerField');
+    if (!slotSelect) return;
+    if (!dateVal) {
+      slotSelect.innerHTML = '<option value="0">Select date first...</option>';
+      if (slotPickerFld) slotPickerFld.style.display = 'none';
+      return;
+    }
+    const mode = (fulfilMode === 'pickup') ? 'pickup' : 'delivery';
+    const filtered = ACTIVE_SLOTS.filter(s => !s.slot_type || s.slot_type === mode || s.slot_type === 'both');
+    if (filtered.length === 0) {
+      slotSelect.innerHTML = '<option value="0">No slots available</option>';
+    } else {
+      slotSelect.innerHTML = '<option value="0">\u2014 Select a slot \u2014</option>' +
+        filtered.map(s => `<option value="${s.id}">${escapeHtml(s.slot_label || s.slot_name)}</option>`).join('');
+    }
+    if (slotPickerFld) slotPickerFld.style.display = '';
+    document.getElementById('slotLabelInput').value = '';
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    document.getElementById('slot_id')?.addEventListener('change', function () {
+      const selected = ACTIVE_SLOTS.find(s => String(s.id) === this.value);
+      document.getElementById('slotLabelInput').value = selected ? (selected.slot_label || selected.slot_name) : '';
+    });
+    document.getElementById('slot_booking_date')?.addEventListener('change', updateSlotDropdown);
+    document.getElementById('fulfilment_mode')?.addEventListener('change', function () {
+      if (document.getElementById('orderModeInput').value !== 'ready_pos') updateSlotDropdown();
+    });
+    // Initialise to scheduled mode
+    setOrderMode('scheduled_custom');
+  });
 
   const productSearch = document.getElementById('productSearch');
   const searchDropdown = document.getElementById('searchDropdown');
@@ -674,8 +849,30 @@ $createdPaymentStatus = trim((string)($_GET['payment_status'] ?? ''));
       });
   }
 
+  function loadAvailableToppers() {
+    return fetch('/api/toppers')
+      .then(r => r.json())
+      .then(data => {
+        availableToppers = data && data.success && Array.isArray(data.data) ? data.data : [];
+        renderItemsTable();
+      })
+      .catch(() => {
+        availableToppers = [];
+        renderItemsTable();
+      });
+  }
+
+  function resolveTopperById(topperId) {
+    const normalizedId = Number(topperId) || 0;
+    if (normalizedId <= 0 || !Array.isArray(availableToppers)) {
+      return null;
+    }
+
+    return availableToppers.find(topper => Number(topper.id) === normalizedId) || null;
+  }
+
   function normalizePhoneInput(value) {
-    return String(value || '').replace(/\D+/g, '').slice(0, 15);
+    return String(value || '').replace(/\D+/g, '').slice(0, 20);
   }
 
   function lockCustomerIdentity() {
@@ -925,7 +1122,13 @@ $createdPaymentStatus = trim((string)($_GET['payment_status'] ?? ''));
       variant_id: selectedVariantId,
       variant_label: defaultVariant ? defaultVariant.label : null,
       variant_options: variantOptions,
-      note: ''
+      topper_enabled: Boolean(product?.topper_enabled),
+      note_enabled: Boolean(product?.note_enabled),
+      cake_message: '',
+      topper_id: null,
+      topper_name_snapshot: null,
+      topper_price: 0,
+      is_custom_item: false
     };
 
     orderItems.push(item);
@@ -956,7 +1159,14 @@ $createdPaymentStatus = trim((string)($_GET['payment_status'] ?? ''));
       quantity: qty,
       variant_id: null,
       variant_label: null,
-      note: ''
+      variant_options: [],
+      topper_enabled: false,
+      note_enabled: false,
+      cake_message: '',
+      topper_id: null,
+      topper_name_snapshot: null,
+      topper_price: 0,
+      is_custom_item: true
     });
 
     document.getElementById('customItemName').value = '';
@@ -1009,6 +1219,40 @@ $createdPaymentStatus = trim((string)($_GET['payment_status'] ?? ''));
     renderItemsTable();
   }
 
+  function updateTopper(index, selectedTopperId) {
+    if (!orderItems[index]) {
+      return;
+    }
+
+    const topper = resolveTopperById(selectedTopperId);
+    if (!selectedTopperId || !topper) {
+      orderItems[index].topper_id = null;
+      orderItems[index].topper_name_snapshot = null;
+      orderItems[index].topper_price = 0;
+      renderItemsTable();
+      return;
+    }
+
+    orderItems[index].topper_id = Number(topper.id);
+    orderItems[index].topper_name_snapshot = String(topper.name || '');
+    orderItems[index].topper_price = Number(topper.price) || 0;
+    renderItemsTable();
+  }
+
+  function updateCakeMessage(index, value) {
+    if (!orderItems[index]) {
+      return;
+    }
+
+    orderItems[index].cake_message = String(value || '').trim().substring(0, 200);
+  }
+
+  window.updateVariant = updateVariant;
+  window.updateItem = updateItem;
+  window.updateTopper = updateTopper;
+  window.updateCakeMessage = updateCakeMessage;
+  window.removeItem = removeItem;
+
   function renderItemsTable() {
     if (orderItems.length === 0) {
       itemsTable.style.display = 'none';
@@ -1024,11 +1268,30 @@ $createdPaymentStatus = trim((string)($_GET['payment_status'] ?? ''));
 
     let total = 0;
     itemsTableBody.innerHTML = orderItems.map((item, idx) => {
-      const lineTotal = item.quantity * item.unit_price;
+      const topperPrice = Number(item.topper_price) || 0;
+      const lineTotal = item.quantity * (Number(item.unit_price) + topperPrice);
       total += lineTotal;
       const variantOptions = Array.isArray(item.variant_options) ? item.variant_options : [];
       const hasVariants = variantOptions.length > 0;
       const selectedVariant = Number(item.variant_id || 0);
+      const selectedTopper = Number(item.topper_id || 0);
+      const topperCell = item.topper_enabled
+        ? `<div class="item-detail-stack">
+            <select class="item-topper-select" onchange="updateTopper(${idx}, this.value)">
+              <option value="">— No Topper —</option>
+              ${availableToppers.map(topper => {
+                const topperId = Number(topper.id) || 0;
+                const topperLabel = `${escapeHtml(topper.name || 'Topper')}${Number(topper.price) > 0 ? ' (+₹' + Number(topper.price).toFixed(2) + ')' : ''}`;
+                return `<option value="${topperId}" ${topperId === selectedTopper ? 'selected' : ''}>${topperLabel}</option>`;
+              }).join('')}
+            </select>
+            <div class="item-detail-hint">Topper price is added to this item total.</div>
+          </div>`
+        : '<span style="font-size:0.8rem;color:#8f7681;">—</span>';
+      const noteCell = item.note_enabled
+        ? `<textarea class="item-note-input" maxlength="200" placeholder="Note on cake" oninput="updateCakeMessage(${idx}, this.value)">${escapeHtml(item.cake_message || '')}</textarea>
+           <div class="item-detail-hint">Max 200 characters.</div>`
+        : '<span style="font-size:0.8rem;color:#8f7681;">—</span>';
       const variantCell = hasVariants
         ? `<select class="item-price-input" style="width:100%;" onchange="updateVariant(${idx}, this.value)">
             ${variantOptions.map(v => `<option value="${v.id}" ${Number(v.id) === selectedVariant ? 'selected' : ''}>${escapeHtml(v.label)}</option>`).join('')}
@@ -1040,6 +1303,8 @@ $createdPaymentStatus = trim((string)($_GET['payment_status'] ?? ''));
           <td>${variantCell}</td>
           <td><input type="number" class="item-qty-input" value="${item.quantity}" min="1" onchange="updateItem(${idx}, 'quantity', this.value)"></td>
           <td><input type="number" class="item-price-input" value="${item.unit_price.toFixed(2)}" min="0" step="0.01" onchange="updateItem(${idx}, 'unit_price', this.value)"></td>
+          <td>${topperCell}</td>
+          <td>${noteCell}</td>
           <td>Rs ${lineTotal.toFixed(2)}</td>
           <td><button type="button" class="item-remove" onclick="removeItem(${idx})">Remove</button></td>
         </tr>
@@ -1064,6 +1329,20 @@ $createdPaymentStatus = trim((string)($_GET['payment_status'] ?? ''));
       e.preventDefault();
       alert('Please add at least one item to the order');
     }
+
+    orderItemsInput.value = JSON.stringify(orderItems.map(item => ({
+      product_id: Number(item.product_id) || 0,
+      name: String(item.name || '').trim(),
+      unit_price: Number(item.unit_price) || 0,
+      quantity: Math.max(Number(item.quantity) || 1, 1),
+      variant_id: item.variant_id ? Number(item.variant_id) : null,
+      variant_label: item.variant_label || null,
+      cake_message: String(item.cake_message || '').trim().substring(0, 200),
+      topper_id: item.topper_id ? Number(item.topper_id) : null,
+      topper_name_snapshot: item.topper_name_snapshot || null,
+      topper_price: Number(item.topper_price) || 0,
+      is_custom_item: Boolean(item.is_custom_item)
+    })));
   });
 
   // Auto-open invoice modal after successful order creation
@@ -1114,4 +1393,6 @@ $createdPaymentStatus = trim((string)($_GET['payment_status'] ?? ''));
       });
     }
   })();
+
+  loadAvailableToppers();
 </script>

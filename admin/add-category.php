@@ -1,8 +1,9 @@
 <?php
 $pageTitle = "Add Category";
-include "layout.php";
+require_once __DIR__ . '/layout.php';
 
-require __DIR__ . '/includes/db.php';
+require_once __DIR__ . '/includes/db.php';
+require_once __DIR__ . '/../app/Services/UnifiedMediaService.php';
 /* ---------- HANDLE SUBMIT ---------- */
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
@@ -17,19 +18,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   // image upload (optional)
   $db_image_path = NULL;
   if (!empty($_FILES['image']['name'])) {
-    $imgName = time() . "_" . basename($_FILES['image']['name']);
-    $tmp     = $_FILES['image']['tmp_name'];
-
-    $uploadDir  = "../client/assets/images/categories/";
-    if (!is_dir($uploadDir)) {
-      mkdir($uploadDir, 0777, true);
-    }
-
-    $uploadPath = $uploadDir . $imgName;
-
-    if (move_uploaded_file($tmp, $uploadPath)) {
-      // DB मध्ये absolute web path
-      $db_image_path = "/client/assets/images/categories/" . $imgName;
+    $upload = \App\Services\UnifiedMediaService::upload(
+      $_FILES['image'],
+      [
+        'module' => 'category',
+        'entity_type' => 'category',
+        'entity_id' => 0,
+        'admin_id' => (int)($_SESSION['admin_id'] ?? 0),
+        'allow_svg' => false,
+      ]
+    );
+    if ($upload['ok']) {
+      $db_image_path = $upload['relative_url'];
+    } else {
+      error_log('[add-category.php] category image upload failed: ' . $upload['error']);
     }
   }
 

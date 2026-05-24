@@ -1,492 +1,176 @@
-[20-May-2026 11:57:45 UTC] PHP Fatal error:  Uncaught RuntimeException: Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.2.0". You are running 8.1.34. in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
+[22-May-2026 16:16:32 Asia/Kolkata] SMTP OTP SEND SUCCESS: {"host":"smtp.dcoresystems.com","port":587,"encryption":"tls","auth_enabled":true,"username_set":true,"from_email_set":true}
+[22-May-2026 17:26:08 Asia/Kolkata] SMTP OTP SEND SUCCESS: {"host":"smtp.dcoresystems.com","port":587,"encryption":"tls","auth_enabled":true,"username_set":true,"from_email_set":true}
+[22-May-2026 17:51:28 Asia/Kolkata] SMTP OTP SEND SUCCESS: {"host":"smtp.dcoresystems.com","port":587,"encryption":"tls","auth_enabled":true,"username_set":true,"from_email_set":true}
+[22-May-2026 18:41:57 Asia/Kolkata] SMTP OTP SEND SUCCESS: {"host":"smtp.dcoresystems.com","port":587,"encryption":"tls","auth_enabled":true,"username_set":true,"from_email_set":true}
+[22-May-2026 18:44:09 Asia/Kolkata] [ORDER_FAIL] {"module":"placeOrder","error":"SQLSTATE[42S22]: Column not found: 1054 Unknown column 'delivery_street' in 'field list'","file":"\/var\/www\/html\/app\/Controllers\/ApiController.php","line":1652,"user_id":1,"cart_id":2,"order_number":"CKF-20260522-942436","in_tx":false}
+[22-May-2026 18:44:39 Asia/Kolkata] [ORDER_FAIL] {"module":"placeOrder","error":"SQLSTATE[42S22]: Column not found: 1054 Unknown column 'delivery_street' in 'field list'","file":"\/var\/www\/html\/app\/Controllers\/ApiController.php","line":1652,"user_id":1,"cart_id":2,"order_number":"CKF-20260522-632727","in_tx":false}
+[22-May-2026 19:04:46 Asia/Kolkata] [2026-05-22T19:04:46+05:30] SQLSTATE[01000]: Warning: 1265 Data truncated for column 'payment_method' at row 1 in /var/www/html/_test_slot_hold.php:26\n#0 /var/www/html/_test_slot_hold.php(26): PDOStatement->execute(Array)
+#1 {main}
+[22-May-2026 19:04:46 Asia/Kolkata] PHP Warning:  Cannot modify header information - headers already sent by (output started at /var/www/html/_test_slot_hold.php:21) in /var/www/html/app/bootstrap.php on line 57
+[22-May-2026 19:05:13 Asia/Kolkata] [SlotService] holdSlot exception: SQLSTATE[23000]: Integrity constraint violation: 1052 Column 'id' in field list is ambiguous
+[22-May-2026 19:05:13 Asia/Kolkata] [2026-05-22T19:05:13+05:30] Slot hold failed. Please try again. in /var/www/html/app/Services/SlotService.php:327\n#0 /var/www/html/_test_slot_hold.php(31): App\Services\SlotService->holdSlot(1, '2026-05-24', 1, 60)
+#1 {main}
+[22-May-2026 19:05:13 Asia/Kolkata] PHP Warning:  Cannot modify header information - headers already sent by (output started at /var/www/html/_test_slot_hold.php:21) in /var/www/html/app/bootstrap.php on line 57
+[22-May-2026 19:05:38 Asia/Kolkata] [SlotService] holdSlot exception: SQLSTATE[23000]: Integrity constraint violation: 1052 Column 'id' in field list is ambiguous
+[22-May-2026 19:05:59 Asia/Kolkata] [SlotService] logEvent failed: SQLSTATE[01000]: Warning: 1265 Data truncated for column 'event_type' at row 1
+[22-May-2026 19:05:59 Asia/Kolkata] [SlotService] logEvent failed: SQLSTATE[01000]: Warning: 1265 Data truncated for column 'event_type' at row 1
+[22-May-2026 21:07:24 Asia/Kolkata] [SlotService] holdSlot exception: SQLSTATE[23000]: Integrity constraint violation: 1452 Cannot add or update a child row: a foreign key constraint fails (`cakeouflage_local`.`slot_reservations`, CONSTRAINT `fk_sr_order` FOREIGN KEY (`order_id`) REFERENCES `orders` (`id`) ON DELETE CASCADE)
+[22-May-2026 21:12:23 Asia/Kolkata] [SlotService] holdSlot exception: SQLSTATE[23000]: Integrity constraint violation: 1452 Cannot add or update a child row: a foreign key constraint fails (`cakeouflage_local`.`slot_reservations`, CONSTRAINT `fk_sr_order` FOREIGN KEY (`order_id`) REFERENCES `orders` (`id`) ON DELETE CASCADE)
+[22-May-2026 21:12:54 Asia/Kolkata] [SlotService] holdSlot exception: SQLSTATE[23000]: Integrity constraint violation: 1452 Cannot add or update a child row: a foreign key constraint fails (`cakeouflage_local`.`slot_reservations`, CONSTRAINT `fk_sr_order` FOREIGN KEY (`order_id`) REFERENCES `orders` (`id`) ON DELETE CASCADE)
+[22-May-2026 21:16:50 Asia/Kolkata] BYOC quote accept failed: SQLSTATE[01000]: Warning: 1265 Data truncated for column 'payment_status' at row 1
+[22-May-2026 21:22:35 Asia/Kolkata] BYOC quote accept failed: There is no active transaction
+[23-May-2026 13:53:12 Asia/Kolkata] [2026-05-23T13:53:12+05:30] SQLSTATE[42S02]: Base table or view not found: 1146 Table 'cakeouflage_local.admin_action_logs' doesn't exist in /var/www/html/app/Controllers/AdminApiController.php:5106\n#0 /var/www/html/app/Controllers/AdminApiController.php(5106): PDO->prepare('INSERT INTO adm...')
+#1 /var/www/html/app/Controllers/AdminApiController.php(4071): App\Controllers\AdminApiController->logAdminAction(Object(PDO), 1, 'template_test_s...', 'communication_t...', 19, Array)
+#2 [internal function]: App\Controllers\AdminApiController->communicationTemplateSendTest('19')
+#3 /var/www/html/app/Core/App.php(329): call_user_func_array(Array, Array)
+#4 /var/www/html/index.php(50): App\Core\App->run()
+#5 {main}
+[23-May-2026 18:09:32 Asia/Kolkata] PHP Warning:  mysqli::query(): (42S22/1054): Unknown column 'req.name' in 'field list' in /var/www/html/admin/refunds.php on line 48
+[23-May-2026 18:10:52 Asia/Kolkata] PHP Warning:  move_uploaded_file(/var/www/html/uploads/branding/email_logo_url-mainlogo-181052-4b9c.svg): Failed to open stream: Permission denied in /var/www/html/app/Controllers/AdminApiController.php on line 2434
+[23-May-2026 18:10:52 Asia/Kolkata] PHP Warning:  move_uploaded_file(): Unable to move &quot;/tmp/phpPtNbvG&quot; to &quot;/var/www/html/uploads/branding/email_logo_url-mainlogo-181052-4b9c.svg&quot; in /var/www/html/app/Controllers/AdminApiController.php on line 2434
+[23-May-2026 18:10:52 Asia/Kolkata] PHP Warning:  Cannot modify header information - headers already sent by (output started at /var/www/html/app/Controllers/AdminApiController.php:2434) in /var/www/html/app/Core/Response.php on line 12
+[23-May-2026 18:11:02 Asia/Kolkata] PHP Warning:  move_uploaded_file(/var/www/html/uploads/branding/navbar_logo_url-mainlogo-181102-d7ca.svg): Failed to open stream: Permission denied in /var/www/html/app/Controllers/AdminApiController.php on line 2434
+[23-May-2026 18:11:02 Asia/Kolkata] PHP Warning:  move_uploaded_file(): Unable to move &quot;/tmp/php6MRlUw&quot; to &quot;/var/www/html/uploads/branding/navbar_logo_url-mainlogo-181102-d7ca.svg&quot; in /var/www/html/app/Controllers/AdminApiController.php on line 2434
+[23-May-2026 18:11:02 Asia/Kolkata] PHP Warning:  Cannot modify header information - headers already sent by (output started at /var/www/html/app/Controllers/AdminApiController.php:2434) in /var/www/html/app/Core/Response.php on line 12
+[23-May-2026 18:11:06 Asia/Kolkata] PHP Warning:  move_uploaded_file(/var/www/html/uploads/branding/footer_logo_url-whitelogo-181106-b07a.png): Failed to open stream: Permission denied in /var/www/html/app/Controllers/AdminApiController.php on line 2445
+[23-May-2026 18:11:06 Asia/Kolkata] PHP Warning:  move_uploaded_file(): Unable to move &quot;/tmp/phpNJXyRs&quot; to &quot;/var/www/html/uploads/branding/footer_logo_url-whitelogo-181106-b07a.png&quot; in /var/www/html/app/Controllers/AdminApiController.php on line 2445
+[23-May-2026 18:11:06 Asia/Kolkata] PHP Warning:  Cannot modify header information - headers already sent by (output started at /var/www/html/app/Controllers/AdminApiController.php:2445) in /var/www/html/app/Core/Response.php on line 12
+[23-May-2026 18:12:31 Asia/Kolkata] PHP Warning:  move_uploaded_file(/var/www/html/uploads/branding/footer_logo_url-whitelogo-181231-e834.png): Failed to open stream: Permission denied in /var/www/html/app/Controllers/AdminApiController.php on line 2445
+[23-May-2026 18:12:31 Asia/Kolkata] PHP Warning:  move_uploaded_file(): Unable to move &quot;/tmp/phpWjt4EV&quot; to &quot;/var/www/html/uploads/branding/footer_logo_url-whitelogo-181231-e834.png&quot; in /var/www/html/app/Controllers/AdminApiController.php on line 2445
+[23-May-2026 18:12:31 Asia/Kolkata] PHP Warning:  Cannot modify header information - headers already sent by (output started at /var/www/html/app/Controllers/AdminApiController.php:2445) in /var/www/html/app/Core/Response.php on line 12
+[23-May-2026 18:17:30 Asia/Kolkata] PHP Warning:  Cannot modify header information - headers already sent by (output started at /var/www/html/admin/layout.php:54) in /var/www/html/admin/categories.php on line 106
+[23-May-2026 19:42:25 Asia/Kolkata] PHP Warning:  move_uploaded_file(/var/www/html/uploads/branding/email_logo_url-mainlogo-194225-ec7c.svg): Failed to open stream: Permission denied in /var/www/html/app/Controllers/AdminApiController.php on line 2434
+[23-May-2026 19:42:25 Asia/Kolkata] PHP Warning:  move_uploaded_file(): Unable to move &quot;/tmp/phpvMJpQG&quot; to &quot;/var/www/html/uploads/branding/email_logo_url-mainlogo-194225-ec7c.svg&quot; in /var/www/html/app/Controllers/AdminApiController.php on line 2434
+[23-May-2026 19:42:37 Asia/Kolkata] PHP Warning:  move_uploaded_file(/var/www/html/uploads/branding/navbar_logo_url-mainlogo-194237-8ba6.svg): Failed to open stream: Permission denied in /var/www/html/app/Controllers/AdminApiController.php on line 2434
+[23-May-2026 19:42:37 Asia/Kolkata] PHP Warning:  move_uploaded_file(): Unable to move &quot;/tmp/php2UlOA7&quot; to &quot;/var/www/html/uploads/branding/navbar_logo_url-mainlogo-194237-8ba6.svg&quot; in /var/www/html/app/Controllers/AdminApiController.php on line 2434
+[23-May-2026 19:42:40 Asia/Kolkata] PHP Warning:  move_uploaded_file(/var/www/html/uploads/branding/footer_logo_url-whitelogo-194240-3cde.png): Failed to open stream: Permission denied in /var/www/html/app/Controllers/AdminApiController.php on line 2445
+[23-May-2026 19:42:40 Asia/Kolkata] PHP Warning:  move_uploaded_file(): Unable to move &quot;/tmp/phpZrTbFX&quot; to &quot;/var/www/html/uploads/branding/footer_logo_url-whitelogo-194240-3cde.png&quot; in /var/www/html/app/Controllers/AdminApiController.php on line 2445
+[23-May-2026 20:35:15 Asia/Kolkata] [2026-05-23T20:35:14+05:30] Class "App\Services\DOMDocument" not found in /var/www/html/app/Services/ImageUploadService.php:219\n#0 /var/www/html/app/Services/ImageUploadService.php(169): App\Services\ImageUploadService::sanitizeSvg('<?xml version="...')
+#1 /var/www/html/app/Controllers/AdminApiController.php(2429): App\Services\ImageUploadService::upload(Array, '/var/www/html/p...', '/public/uploads...', Array)
+#2 [internal function]: App\Controllers\AdminApiController->brandingUpload()
+#3 /var/www/html/app/Core/App.php(338): call_user_func_array(Array, Array)
+#4 /var/www/html/index.php(54): App\Core\App->run()
+#5 {main}
+[23-May-2026 20:36:00 Asia/Kolkata] [2026-05-23T20:36:00+05:30] Class "App\Services\DOMDocument" not found in /var/www/html/app/Services/ImageUploadService.php:219\n#0 /var/www/html/app/Services/ImageUploadService.php(169): App\Services\ImageUploadService::sanitizeSvg('<?xml version="...')
+#1 /var/www/html/app/Controllers/AdminApiController.php(2429): App\Services\ImageUploadService::upload(Array, '/var/www/html/p...', '/public/uploads...', Array)
+#2 [internal function]: App\Controllers\AdminApiController->brandingUpload()
+#3 /var/www/html/app/Core/App.php(338): call_user_func_array(Array, Array)
+#4 /var/www/html/index.php(54): App\Core\App->run()
+#5 {main}
+[24-May-2026 08:27:24 Asia/Kolkata] SMTP OTP SEND SUCCESS: {"host":"smtp.dcoresystems.com","port":587,"encryption":"tls","auth_enabled":true,"username_set":true,"from_email_set":true}
+[24-May-2026 08:28:32 Asia/Kolkata] [SlotService] holdSlot exception: SQLSTATE[23000]: Integrity constraint violation: 1452 Cannot add or update a child row: a foreign key constraint fails (`cakeouflage_local`.`slot_reservations`, CONSTRAINT `fk_sr_order` FOREIGN KEY (`order_id`) REFERENCES `orders` (`id`) ON DELETE CASCADE)
+[24-May-2026 08:29:25 Asia/Kolkata] [SlotService] holdSlot exception: SQLSTATE[23000]: Integrity constraint violation: 1452 Cannot add or update a child row: a foreign key constraint fails (`cakeouflage_local`.`slot_reservations`, CONSTRAINT `fk_sr_order` FOREIGN KEY (`order_id`) REFERENCES `orders` (`id`) ON DELETE CASCADE)
+[24-May-2026 08:29:43 Asia/Kolkata] [admin_auth] {"event":"runtime_identity_mutation_skipped","time":"2026-05-24T02:59:43+00:00","reason":"non_dev_environment"}
+[24-May-2026 08:29:51 Asia/Kolkata] [admin_auth] {"event":"runtime_identity_mutation_skipped","time":"2026-05-24T02:59:51+00:00","reason":"non_dev_environment"}
+[24-May-2026 08:29:51 Asia/Kolkata] [admin_auth] {"event":"otp_generated","time":"2026-05-24T02:59:51+00:00","email_ref":"697e8521818b","otp_length":6}
+[24-May-2026 08:29:52 Asia/Kolkata] [admin_auth] {"event":"otp_send_attempt","time":"2026-05-24T02:59:51+00:00","email_ref":"697e8521818b"}
+[24-May-2026 08:29:57 Asia/Kolkata] SMTP OTP SEND SUCCESS: {"host":"smtp.dcoresystems.com","port":587,"encryption":"tls","auth_enabled":true,"username_set":true,"from_email_set":true}
+[24-May-2026 08:29:57 Asia/Kolkata] [admin_auth] {"event":"otp_send_success","time":"2026-05-24T02:59:57+00:00","email_ref":"697e8521818b"}
+[24-May-2026 08:30:11 Asia/Kolkata] [admin_auth] {"event":"runtime_identity_mutation_skipped","time":"2026-05-24T03:00:11+00:00","reason":"non_dev_environment"}
+[24-May-2026 08:30:11 Asia/Kolkata] [admin_auth] {"event":"session_regenerated","time":"2026-05-24T03:00:11+00:00","email_ref":"697e8521818b"}
+[24-May-2026 08:30:11 Asia/Kolkata] [admin_auth] {"event":"otp_verify_success","time":"2026-05-24T03:00:11+00:00","email_ref":"697e8521818b","admin_id":1}
+[24-May-2026 08:30:19 Asia/Kolkata] PHP Fatal error:  Cannot redeclare safePrepare() (previously declared in /var/www/html/admin/includes/db.php:84) in /var/www/html/admin/includes/db.php on line 84
+[24-May-2026 08:30:19 Asia/Kolkata] [2026-05-24T08:30:19+05:30] Fatal error: Cannot redeclare safePrepare() (previously declared in /var/www/html/admin/includes/db.php:84) in /var/www/html/admin/includes/db.php:84
+[24-May-2026 03:00:20 UTC] [2026-05-24T03:00:20+00:00] Optional vendor autoload skipped: Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.2.0". You are running 8.1.34.
+[24-May-2026 08:30:26 Asia/Kolkata] [2026-05-24T08:30:26+05:30] Database connection failed. in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:144\n#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\scripts\media-migrate-optimize.php(44): App\Core\Database::getConnection()
+#1 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\scripts\media-migrate-optimize.php(353): MediaMigrateOptimizeCommand->__construct(Array)
+#2 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\media.php(17): require('D:\\GITHUB Proje...')
+#3 {main}
+[24-May-2026 08:30:37 Asia/Kolkata] PHP Fatal error:  Cannot redeclare safePrepare() (previously declared in /var/www/html/admin/includes/db.php:84) in /var/www/html/admin/includes/db.php on line 84
+[24-May-2026 08:30:37 Asia/Kolkata] [2026-05-24T08:30:37+05:30] Fatal error: Cannot redeclare safePrepare() (previously declared in /var/www/html/admin/includes/db.php:84) in /var/www/html/admin/includes/db.php:84
+[24-May-2026 08:32:36 Asia/Kolkata] PHP Fatal error:  Cannot redeclare safePrepare() (previously declared in /var/www/html/admin/includes/db.php:84) in /var/www/html/admin/includes/db.php on line 84
+[24-May-2026 08:32:36 Asia/Kolkata] [2026-05-24T08:32:36+05:30] Fatal error: Cannot redeclare safePrepare() (previously declared in /var/www/html/admin/includes/db.php:84) in /var/www/html/admin/includes/db.php:84
+[24-May-2026 08:32:49 Asia/Kolkata] PHP Fatal error:  Cannot redeclare safePrepare() (previously declared in /var/www/html/admin/includes/db.php:84) in /var/www/html/admin/includes/db.php on line 84
+[24-May-2026 08:32:49 Asia/Kolkata] [2026-05-24T08:32:49+05:30] Fatal error: Cannot redeclare safePrepare() (previously declared in /var/www/html/admin/includes/db.php:84) in /var/www/html/admin/includes/db.php:84
+[24-May-2026 08:33:18 Asia/Kolkata] PHP Fatal error:  Cannot redeclare safePrepare() (previously declared in /var/www/html/admin/includes/db.php:84) in /var/www/html/admin/includes/db.php on line 84
+[24-May-2026 08:33:18 Asia/Kolkata] [2026-05-24T08:33:18+05:30] Fatal error: Cannot redeclare safePrepare() (previously declared in /var/www/html/admin/includes/db.php:84) in /var/www/html/admin/includes/db.php:84
+[24-May-2026 08:33:20 Asia/Kolkata] PHP Fatal error:  Cannot redeclare safePrepare() (previously declared in /var/www/html/admin/includes/db.php:84) in /var/www/html/admin/includes/db.php on line 84
+[24-May-2026 08:33:20 Asia/Kolkata] [2026-05-24T08:33:20+05:30] Fatal error: Cannot redeclare safePrepare() (previously declared in /var/www/html/admin/includes/db.php:84) in /var/www/html/admin/includes/db.php:84
+[24-May-2026 08:33:28 Asia/Kolkata] PHP Warning:  mysqli::query(): (42S22/1054): Unknown column 'req.name' in 'field list' in /var/www/html/admin/refunds.php on line 48
+[24-May-2026 08:34:10 Asia/Kolkata] PHP Fatal error:  Cannot redeclare safePrepare() (previously declared in /var/www/html/admin/includes/db.php:84) in /var/www/html/admin/includes/db.php on line 84
+[24-May-2026 08:34:10 Asia/Kolkata] [2026-05-24T08:34:10+05:30] Fatal error: Cannot redeclare safePrepare() (previously declared in /var/www/html/admin/includes/db.php:84) in /var/www/html/admin/includes/db.php:84
+[24-May-2026 08:34:31 Asia/Kolkata] PHP Fatal error:  Cannot redeclare safePrepare() (previously declared in /var/www/html/admin/includes/db.php:84) in /var/www/html/admin/includes/db.php on line 84
+[24-May-2026 08:34:31 Asia/Kolkata] [2026-05-24T08:34:31+05:30] Fatal error: Cannot redeclare safePrepare() (previously declared in /var/www/html/admin/includes/db.php:84) in /var/www/html/admin/includes/db.php:84
+[24-May-2026 08:35:02 Asia/Kolkata] PHP Fatal error:  Cannot redeclare safePrepare() (previously declared in /var/www/html/admin/includes/db.php:84) in /var/www/html/admin/includes/db.php on line 84
+[24-May-2026 08:35:02 Asia/Kolkata] [2026-05-24T08:35:02+05:30] Fatal error: Cannot redeclare safePrepare() (previously declared in /var/www/html/admin/includes/db.php:84) in /var/www/html/admin/includes/db.php:84
+[24-May-2026 08:35:26 Asia/Kolkata] PHP Fatal error:  Cannot redeclare safePrepare() (previously declared in /var/www/html/admin/includes/db.php:84) in /var/www/html/admin/includes/db.php on line 84
+[24-May-2026 08:35:26 Asia/Kolkata] [2026-05-24T08:35:26+05:30] Fatal error: Cannot redeclare safePrepare() (previously declared in /var/www/html/admin/includes/db.php:84) in /var/www/html/admin/includes/db.php:84
+[24-May-2026 08:35:46 Asia/Kolkata] PHP Fatal error:  Cannot redeclare safePrepare() (previously declared in /var/www/html/admin/includes/db.php:84) in /var/www/html/admin/includes/db.php on line 84
+[24-May-2026 08:35:46 Asia/Kolkata] [2026-05-24T08:35:46+05:30] Fatal error: Cannot redeclare safePrepare() (previously declared in /var/www/html/admin/includes/db.php:84) in /var/www/html/admin/includes/db.php:84
+[24-May-2026 08:36:27 Asia/Kolkata] PHP Fatal error:  Cannot redeclare safePrepare() (previously declared in /var/www/html/admin/includes/db.php:84) in /var/www/html/admin/includes/db.php on line 84
+[24-May-2026 08:36:27 Asia/Kolkata] [2026-05-24T08:36:27+05:30] Fatal error: Cannot redeclare safePrepare() (previously declared in /var/www/html/admin/includes/db.php:84) in /var/www/html/admin/includes/db.php:84
+[24-May-2026 09:27:44 Asia/Kolkata] [admin_auth] {"event":"runtime_identity_mutation_skipped","time":"2026-05-24T03:57:44+00:00","reason":"non_dev_environment"}
+[24-May-2026 09:27:56 Asia/Kolkata] [admin_auth] {"event":"runtime_identity_mutation_skipped","time":"2026-05-24T03:57:56+00:00","reason":"non_dev_environment"}
+[24-May-2026 09:27:56 Asia/Kolkata] [admin_auth] {"event":"otp_generated","time":"2026-05-24T03:57:56+00:00","email_ref":"697e8521818b","otp_length":6}
+[24-May-2026 09:27:56 Asia/Kolkata] [admin_auth] {"event":"otp_send_attempt","time":"2026-05-24T03:57:56+00:00","email_ref":"697e8521818b"}
+[24-May-2026 09:28:01 Asia/Kolkata] SMTP OTP SEND SUCCESS: {"host":"smtp.dcoresystems.com","port":587,"encryption":"tls","auth_enabled":true,"username_set":true,"from_email_set":true}
+[24-May-2026 09:28:01 Asia/Kolkata] [admin_auth] {"event":"otp_send_success","time":"2026-05-24T03:58:01+00:00","email_ref":"697e8521818b"}
+[24-May-2026 09:28:14 Asia/Kolkata] [admin_auth] {"event":"runtime_identity_mutation_skipped","time":"2026-05-24T03:58:14+00:00","reason":"non_dev_environment"}
+[24-May-2026 09:28:14 Asia/Kolkata] [admin_auth] {"event":"session_regenerated","time":"2026-05-24T03:58:14+00:00","email_ref":"697e8521818b"}
+[24-May-2026 09:28:14 Asia/Kolkata] [admin_auth] {"event":"otp_verify_success","time":"2026-05-24T03:58:14+00:00","email_ref":"697e8521818b","admin_id":1}
+[24-May-2026 04:00:42 UTC] [2026-05-24T04:00:42+00:00] Optional vendor autoload skipped: Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.2.0". You are running 8.1.34.
+[24-May-2026 09:30:48 Asia/Kolkata] [2026-05-24T09:30:48+05:30] Database connection failed. in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\Core\Database.php:144\n#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\scripts\RepairOrderStateCommand.php(17): App\Core\Database::getConnection()
+#1 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\scripts\repair-order-state.php(12): RepairOrderStateCommand->run(Array)
+#2 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\order.php(17): require('D:\\GITHUB Proje...')
+#3 {main}
+[24-May-2026 05:27:41 UTC] [2026-05-24T05:27:41+00:00] Optional vendor autoload skipped: Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.2.0". You are running 8.1.34.
+[24-May-2026 10:57:41 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Call to undefined method App\Core\Database::connection() in Command line code:1
 Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\autoload_real.php(25): require()
-#1 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\autoload.php(22): ComposerAutoloaderInit99d99c36c66a5d5685da6cab9ce9918f::getLoader()
-#2 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\bootstrap.php(81): require_once('D:\\GITHUB Proje...')
-#3 Command line code(1): require('D:\\GITHUB Proje...')
-#4 {main}
-  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php on line 26
-[20-May-2026 11:57:45 UTC] [2026-05-20T11:57:45+00:00] Fatal error: Uncaught RuntimeException: Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.2.0". You are running 8.1.34. in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
+#0 {main}
+  thrown in Command line code on line 1
+[24-May-2026 10:57:41 Asia/Kolkata] [2026-05-24T10:57:41+05:30] Fatal error: Uncaught Error: Call to undefined method App\Core\Database::connection() in Command line code:1
 Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\autoload_real.php(25): require()
-#1 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\autoload.php(22): ComposerAutoloaderInit99d99c36c66a5d5685da6cab9ce9918f::getLoader()
-#2 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\bootstrap.php(81): require_once('D:\\GITHUB Proje...')
-#3 Command line code(1): require('D:\\GITHUB Proje...')
-#4 {main}
-  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
-[20-May-2026 11:58:01 UTC] PHP Fatal error:  Uncaught RuntimeException: Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.2.0". You are running 8.1.34. in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\autoload_real.php(25): require()
-#1 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\autoload.php(22): ComposerAutoloaderInit99d99c36c66a5d5685da6cab9ce9918f::getLoader()
-#2 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\bootstrap.php(81): require_once('D:\\GITHUB Proje...')
-#3 Command line code(1): require('D:\\GITHUB Proje...')
-#4 {main}
-  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php on line 26
-[20-May-2026 11:58:01 UTC] [2026-05-20T11:58:01+00:00] Fatal error: Uncaught RuntimeException: Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.2.0". You are running 8.1.34. in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\autoload_real.php(25): require()
-#1 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\autoload.php(22): ComposerAutoloaderInit99d99c36c66a5d5685da6cab9ce9918f::getLoader()
-#2 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\bootstrap.php(81): require_once('D:\\GITHUB Proje...')
-#3 Command line code(1): require('D:\\GITHUB Proje...')
-#4 {main}
-  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
-[20-May-2026 11:58:09 UTC] PHP Fatal error:  Uncaught RuntimeException: Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.2.0". You are running 8.1.34. in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\autoload_real.php(25): require()
-#1 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\autoload.php(22): ComposerAutoloaderInit99d99c36c66a5d5685da6cab9ce9918f::getLoader()
-#2 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\bootstrap.php(81): require_once('D:\\GITHUB Proje...')
-#3 Command line code(1): require('D:\\GITHUB Proje...')
-#4 {main}
-  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php on line 26
-[20-May-2026 11:58:09 UTC] [2026-05-20T11:58:09+00:00] Fatal error: Uncaught RuntimeException: Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.2.0". You are running 8.1.34. in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\autoload_real.php(25): require()
-#1 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\autoload.php(22): ComposerAutoloaderInit99d99c36c66a5d5685da6cab9ce9918f::getLoader()
-#2 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\bootstrap.php(81): require_once('D:\\GITHUB Proje...')
-#3 Command line code(1): require('D:\\GITHUB Proje...')
-#4 {main}
-  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
-[20-May-2026 11:58:12 UTC] PHP Fatal error:  Uncaught RuntimeException: Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.2.0". You are running 8.1.34. in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\autoload_real.php(25): require()
-#1 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\autoload.php(22): ComposerAutoloaderInit99d99c36c66a5d5685da6cab9ce9918f::getLoader()
-#2 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\bootstrap.php(81): require_once('D:\\GITHUB Proje...')
-#3 Command line code(1): require('D:\\GITHUB Proje...')
-#4 {main}
-  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php on line 26
-[20-May-2026 11:58:12 UTC] [2026-05-20T11:58:12+00:00] Fatal error: Uncaught RuntimeException: Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.2.0". You are running 8.1.34. in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\autoload_real.php(25): require()
-#1 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\autoload.php(22): ComposerAutoloaderInit99d99c36c66a5d5685da6cab9ce9918f::getLoader()
-#2 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\bootstrap.php(81): require_once('D:\\GITHUB Proje...')
-#3 Command line code(1): require('D:\\GITHUB Proje...')
-#4 {main}
-  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
-[20-May-2026 13:35:47 UTC] PHP Fatal error:  Uncaught RuntimeException: Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.2.0". You are running 8.1.34. in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\autoload_real.php(25): require()
-#1 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\autoload.php(22): ComposerAutoloaderInit99d99c36c66a5d5685da6cab9ce9918f::getLoader()
-#2 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\bootstrap.php(81): require_once('D:\\GITHUB Proje...')
-#3 Command line code(1): require('D:\\GITHUB Proje...')
-#4 {main}
-  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php on line 26
-[20-May-2026 13:35:47 UTC] [2026-05-20T13:35:47+00:00] Fatal error: Uncaught RuntimeException: Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.2.0". You are running 8.1.34. in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\autoload_real.php(25): require()
-#1 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\autoload.php(22): ComposerAutoloaderInit99d99c36c66a5d5685da6cab9ce9918f::getLoader()
-#2 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\bootstrap.php(81): require_once('D:\\GITHUB Proje...')
-#3 Command line code(1): require('D:\\GITHUB Proje...')
-#4 {main}
-  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
-[20-May-2026 13:36:05 UTC] PHP Fatal error:  Uncaught RuntimeException: Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.2.0". You are running 8.1.34. in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\autoload_real.php(25): require()
-#1 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\autoload.php(22): ComposerAutoloaderInit99d99c36c66a5d5685da6cab9ce9918f::getLoader()
-#2 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\bootstrap.php(81): require_once('D:\\GITHUB Proje...')
-#3 Command line code(1): require('D:\\GITHUB Proje...')
-#4 {main}
-  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php on line 26
-[20-May-2026 13:36:05 UTC] [2026-05-20T13:36:05+00:00] Fatal error: Uncaught RuntimeException: Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.2.0". You are running 8.1.34. in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\autoload_real.php(25): require()
-#1 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\autoload.php(22): ComposerAutoloaderInit99d99c36c66a5d5685da6cab9ce9918f::getLoader()
-#2 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\bootstrap.php(81): require_once('D:\\GITHUB Proje...')
-#3 Command line code(1): require('D:\\GITHUB Proje...')
-#4 {main}
-  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
-[20-May-2026 13:36:13 UTC] PHP Fatal error:  Uncaught RuntimeException: Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.2.0". You are running 8.1.34. in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\autoload_real.php(25): require()
-#1 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\autoload.php(22): ComposerAutoloaderInit99d99c36c66a5d5685da6cab9ce9918f::getLoader()
-#2 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\bootstrap.php(81): require_once('D:\\GITHUB Proje...')
-#3 Command line code(1): require('D:\\GITHUB Proje...')
-#4 {main}
-  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php on line 26
-[20-May-2026 13:36:13 UTC] [2026-05-20T13:36:13+00:00] Fatal error: Uncaught RuntimeException: Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.2.0". You are running 8.1.34. in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\autoload_real.php(25): require()
-#1 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\autoload.php(22): ComposerAutoloaderInit99d99c36c66a5d5685da6cab9ce9918f::getLoader()
-#2 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\bootstrap.php(81): require_once('D:\\GITHUB Proje...')
-#3 Command line code(1): require('D:\\GITHUB Proje...')
-#4 {main}
-  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
-[20-May-2026 13:36:26 UTC] PHP Fatal error:  Uncaught RuntimeException: Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.2.0". You are running 8.1.34. in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\autoload_real.php(25): require()
-#1 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\autoload.php(22): ComposerAutoloaderInit99d99c36c66a5d5685da6cab9ce9918f::getLoader()
-#2 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\bootstrap.php(81): require_once('D:\\GITHUB Proje...')
-#3 Command line code(1): require('D:\\GITHUB Proje...')
-#4 {main}
-  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php on line 26
-[20-May-2026 13:36:26 UTC] [2026-05-20T13:36:26+00:00] Fatal error: Uncaught RuntimeException: Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.2.0". You are running 8.1.34. in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\autoload_real.php(25): require()
-#1 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\autoload.php(22): ComposerAutoloaderInit99d99c36c66a5d5685da6cab9ce9918f::getLoader()
-#2 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\bootstrap.php(81): require_once('D:\\GITHUB Proje...')
-#3 Command line code(1): require('D:\\GITHUB Proje...')
-#4 {main}
-  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
-[20-May-2026 13:36:34 UTC] PHP Fatal error:  Uncaught RuntimeException: Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.2.0". You are running 8.1.34. in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\autoload_real.php(25): require()
-#1 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\autoload.php(22): ComposerAutoloaderInit99d99c36c66a5d5685da6cab9ce9918f::getLoader()
-#2 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\bootstrap.php(81): require_once('D:\\GITHUB Proje...')
-#3 Command line code(1): require('D:\\GITHUB Proje...')
-#4 {main}
-  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php on line 26
-[20-May-2026 13:36:34 UTC] [2026-05-20T13:36:34+00:00] Fatal error: Uncaught RuntimeException: Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.2.0". You are running 8.1.34. in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\autoload_real.php(25): require()
-#1 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\autoload.php(22): ComposerAutoloaderInit99d99c36c66a5d5685da6cab9ce9918f::getLoader()
-#2 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\bootstrap.php(81): require_once('D:\\GITHUB Proje...')
-#3 Command line code(1): require('D:\\GITHUB Proje...')
-#4 {main}
-  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
-[20-May-2026 13:37:07 UTC] PHP Fatal error:  Uncaught RuntimeException: Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.2.0". You are running 8.1.34. in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\autoload_real.php(25): require()
-#1 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\autoload.php(22): ComposerAutoloaderInit99d99c36c66a5d5685da6cab9ce9918f::getLoader()
-#2 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\bootstrap.php(81): require_once('D:\\GITHUB Proje...')
-#3 Command line code(1): require('D:\\GITHUB Proje...')
-#4 {main}
-  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php on line 26
-[20-May-2026 13:37:07 UTC] [2026-05-20T13:37:07+00:00] Fatal error: Uncaught RuntimeException: Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.2.0". You are running 8.1.34. in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\autoload_real.php(25): require()
-#1 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\autoload.php(22): ComposerAutoloaderInit99d99c36c66a5d5685da6cab9ce9918f::getLoader()
-#2 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\bootstrap.php(81): require_once('D:\\GITHUB Proje...')
-#3 Command line code(1): require('D:\\GITHUB Proje...')
-#4 {main}
-  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
-[20-May-2026 13:44:38 UTC] PHP Fatal error:  Uncaught RuntimeException: Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.2.0". You are running 8.1.34. in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\autoload_real.php(25): require()
-#1 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\autoload.php(22): ComposerAutoloaderInit99d99c36c66a5d5685da6cab9ce9918f::getLoader()
-#2 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\bootstrap.php(81): require_once('D:\\GITHUB Proje...')
-#3 Command line code(1): require('D:\\GITHUB Proje...')
-#4 {main}
-  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php on line 26
-[20-May-2026 13:44:38 UTC] [2026-05-20T13:44:38+00:00] Fatal error: Uncaught RuntimeException: Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.2.0". You are running 8.1.34. in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
-Stack trace:
-#0 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\autoload_real.php(25): require()
-#1 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\autoload.php(22): ComposerAutoloaderInit99d99c36c66a5d5685da6cab9ce9918f::getLoader()
-#2 D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\bootstrap.php(81): require_once('D:\\GITHUB Proje...')
-#3 Command line code(1): require('D:\\GITHUB Proje...')
-#4 {main}
-  thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\vendor\composer\platform_check.php:26
-[20-May-2026 14:46:38 UTC] [2026-05-20T14:46:38+00:00] Optional vendor autoload skipped: Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.2.0". You are running 8.1.34.
-[20-May-2026 14:46:38 UTC] PHP Warning:  session_set_cookie_params(): Session cookie parameters cannot be changed after headers have already been sent in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\bootstrap.php on line 120
-[20-May-2026 14:46:38 UTC] PHP Warning:  session_name(): Session name cannot be changed after headers have already been sent in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\bootstrap.php on line 126
-[20-May-2026 14:46:38 UTC] PHP Warning:  session_start(): Session cannot be started after headers have already been sent in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\app\bootstrap.php on line 130
-[20-May-2026 14:47:02 UTC] [2026-05-20T14:47:02+00:00] Optional vendor autoload skipped: Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.2.0". You are running 8.1.34.
-[20-May-2026 14:47:28 UTC] [2026-05-20T14:47:28+00:00] Optional vendor autoload skipped: Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.2.0". You are running 8.1.34.
-[20-May-2026 21:35:26 Asia/Kolkata] PHP Warning:  Trying to access array offset on value of type null in /var/www/html/app/Views/pages/product.php on line 51
-[20-May-2026 21:35:26 Asia/Kolkata] PHP Warning:  Trying to access array offset on value of type null in /var/www/html/app/Views/pages/product.php on line 54
-[20-May-2026 21:35:26 Asia/Kolkata] PHP Warning:  Trying to access array offset on value of type null in /var/www/html/app/Views/pages/product.php on line 67
-[20-May-2026 21:35:26 Asia/Kolkata] PHP Warning:  Trying to access array offset on value of type null in /var/www/html/app/Views/pages/product.php on line 76
-[20-May-2026 21:35:26 Asia/Kolkata] PHP Warning:  Trying to access array offset on value of type null in /var/www/html/app/Views/pages/product.php on line 136
-[20-May-2026 21:35:26 Asia/Kolkata] PHP Deprecated:  htmlspecialchars(): Passing null to parameter #1 ($string) of type string is deprecated in /var/www/html/app/Views/pages/product.php on line 136
-[20-May-2026 21:35:26 Asia/Kolkata] PHP Warning:  Trying to access array offset on value of type null in /var/www/html/app/Views/pages/product.php on line 160
-[20-May-2026 21:35:26 Asia/Kolkata] PHP Deprecated:  htmlspecialchars(): Passing null to parameter #1 ($string) of type string is deprecated in /var/www/html/app/Views/pages/product.php on line 160
-[20-May-2026 21:35:26 Asia/Kolkata] PHP Warning:  Trying to access array offset on value of type null in /var/www/html/app/Views/pages/product.php on line 163
-[20-May-2026 21:35:26 Asia/Kolkata] PHP Warning:  Trying to access array offset on value of type null in /var/www/html/app/Views/pages/product.php on line 196
-[20-May-2026 21:35:26 Asia/Kolkata] PHP Warning:  Trying to access array offset on value of type null in /var/www/html/app/Views/pages/product.php on line 198
-[20-May-2026 21:35:26 Asia/Kolkata] PHP Warning:  Trying to access array offset on value of type null in /var/www/html/app/Views/pages/product.php on line 266
-[20-May-2026 21:35:26 Asia/Kolkata] PHP Warning:  Trying to access array offset on value of type null in /var/www/html/app/Views/pages/product.php on line 268
-[20-May-2026 21:35:26 Asia/Kolkata] PHP Warning:  Trying to access array offset on value of type null in /var/www/html/app/Views/pages/product.php on line 392
-[20-May-2026 21:35:26 Asia/Kolkata] PHP Warning:  Trying to access array offset on value of type null in /var/www/html/app/Views/pages/product.php on line 491
-[20-May-2026 21:35:26 Asia/Kolkata] PHP Warning:  Trying to access array offset on value of type null in /var/www/html/app/Views/pages/product.php on line 517
-[20-May-2026 21:35:57 Asia/Kolkata] PHP Warning:  Trying to access array offset on value of type null in /var/www/html/app/Views/pages/product.php on line 51
-[20-May-2026 21:35:57 Asia/Kolkata] PHP Warning:  Trying to access array offset on value of type null in /var/www/html/app/Views/pages/product.php on line 54
-[20-May-2026 21:35:57 Asia/Kolkata] PHP Warning:  Trying to access array offset on value of type null in /var/www/html/app/Views/pages/product.php on line 67
-[20-May-2026 21:35:57 Asia/Kolkata] PHP Warning:  Trying to access array offset on value of type null in /var/www/html/app/Views/pages/product.php on line 76
-[20-May-2026 21:35:57 Asia/Kolkata] PHP Warning:  Trying to access array offset on value of type null in /var/www/html/app/Views/pages/product.php on line 136
-[20-May-2026 21:35:57 Asia/Kolkata] PHP Deprecated:  htmlspecialchars(): Passing null to parameter #1 ($string) of type string is deprecated in /var/www/html/app/Views/pages/product.php on line 136
-[20-May-2026 21:35:57 Asia/Kolkata] PHP Warning:  Trying to access array offset on value of type null in /var/www/html/app/Views/pages/product.php on line 160
-[20-May-2026 21:35:57 Asia/Kolkata] PHP Deprecated:  htmlspecialchars(): Passing null to parameter #1 ($string) of type string is deprecated in /var/www/html/app/Views/pages/product.php on line 160
-[20-May-2026 21:35:57 Asia/Kolkata] PHP Warning:  Trying to access array offset on value of type null in /var/www/html/app/Views/pages/product.php on line 163
-[20-May-2026 21:35:57 Asia/Kolkata] PHP Warning:  Trying to access array offset on value of type null in /var/www/html/app/Views/pages/product.php on line 196
-[20-May-2026 21:35:57 Asia/Kolkata] PHP Warning:  Trying to access array offset on value of type null in /var/www/html/app/Views/pages/product.php on line 198
-[20-May-2026 21:35:57 Asia/Kolkata] PHP Warning:  Trying to access array offset on value of type null in /var/www/html/app/Views/pages/product.php on line 266
-[20-May-2026 21:35:57 Asia/Kolkata] PHP Warning:  Trying to access array offset on value of type null in /var/www/html/app/Views/pages/product.php on line 268
-[20-May-2026 21:35:57 Asia/Kolkata] PHP Warning:  Trying to access array offset on value of type null in /var/www/html/app/Views/pages/product.php on line 392
-[20-May-2026 21:35:57 Asia/Kolkata] PHP Warning:  Trying to access array offset on value of type null in /var/www/html/app/Views/pages/product.php on line 491
-[20-May-2026 21:35:57 Asia/Kolkata] PHP Warning:  Trying to access array offset on value of type null in /var/www/html/app/Views/pages/product.php on line 517
-[20-May-2026 21:36:45 Asia/Kolkata] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000] [2002] No such file or directory in /var/www/html/app/Core/Database.php:69
-Stack trace:
-#0 /var/www/html/app/Core/Database.php(69): PDO->__construct('mysql:host=loca...', 'root', Object(SensitiveParameterValue), Array)
-#1 Command line code(1): App\Core\Database::getConnection()
+#0 {main}
+  thrown in Command line code:1
+[24-May-2026 05:27:46 UTC] [2026-05-24T05:27:46+00:00] Optional vendor autoload skipped: Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.2.0". You are running 8.1.34.
+[24-May-2026 05:28:36 UTC] [2026-05-24T05:28:36+00:00] Optional vendor autoload skipped: Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.2.0". You are running 8.1.34.
+[24-May-2026 05:30:15 UTC] [2026-05-24T05:30:15+00:00] Optional vendor autoload skipped: Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.2.0". You are running 8.1.34.
+[24-May-2026 05:30:28 UTC] [2026-05-24T05:30:28+00:00] Optional vendor autoload skipped: Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.2.0". You are running 8.1.34.
+[24-May-2026 11:06:01 Asia/Kolkata] [2026-05-24T11:06:01+05:30] SQLSTATE[23000]: Integrity constraint violation: 1452 Cannot add or update a child row: a foreign key constraint fails (`cakeouflage_local`.`orders`, CONSTRAINT `fk_orders_byoc_quote` FOREIGN KEY (`byoc_quote_id`) REFERENCES `byoc_quotes` (`id`) ON DELETE SET NULL) in /var/www/html/scripts/test_order_edit_scenarios.php:70\n#0 /var/www/html/scripts/test_order_edit_scenarios.php(70): PDOStatement->execute(Array)
+#1 /var/www/html/scripts/test_order_edit_scenarios.php(221): createOrderFixture(Object(PDO), Array)
 #2 {main}
-
-Next RuntimeException: SQLSTATE[HY000] [2002] No such file or directory in /var/www/html/app/Core/Database.php:80
+[24-May-2026 11:06:45 Asia/Kolkata] [OrderStateManager] order_audit_logs write skipped: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'cakeouflage_local.order_audit_logs' doesn't exist
+[24-May-2026 11:22:59 Asia/Kolkata] [OrderStateManager] order_audit_logs write skipped: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'cakeouflage_local.order_audit_logs' doesn't exist
+[24-May-2026 11:22:59 Asia/Kolkata] [OrderStateManager] order_audit_logs write skipped: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'cakeouflage_local.order_audit_logs' doesn't exist
+[24-May-2026 11:45:08 Asia/Kolkata] PHP Fatal error:  Uncaught PDOException: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'END' in 'field list' in /var/www/html/app/Core/Database.php:241
 Stack trace:
-#0 Command line code(1): App\Core\Database::getConnection()
-#1 {main}
-  thrown in /var/www/html/app/Core/Database.php on line 80
-[20-May-2026 21:36:45 Asia/Kolkata] [2026-05-20T21:36:45+05:30] Fatal error: Uncaught PDOException: SQLSTATE[HY000] [2002] No such file or directory in /var/www/html/app/Core/Database.php:69
-Stack trace:
-#0 /var/www/html/app/Core/Database.php(69): PDO->__construct('mysql:host=loca...', 'root', Object(SensitiveParameterValue), Array)
-#1 Command line code(1): App\Core\Database::getConnection()
-#2 {main}
-
-Next RuntimeException: SQLSTATE[HY000] [2002] No such file or directory in /var/www/html/app/Core/Database.php:80
-Stack trace:
-#0 Command line code(1): App\Core\Database::getConnection()
-#1 {main}
-  thrown in /var/www/html/app/Core/Database.php:80
-[20-May-2026 21:46:30 Asia/Kolkata] [2026-05-20T21:46:30+05:30] No active product found; cannot create dummy test orders. in /var/www/html/tools/dummy-test-3-order-types.php:37\n#0 {main}
-[20-May-2026 21:47:03 Asia/Kolkata] [2026-05-20T21:47:03+05:30] SQLSTATE[42S02]: Base table or view not found: 1146 Table 'cakeouflage_local.orders' doesn't exist in /var/www/html/tools/dummy-test-3-order-types.php:85\n#0 /var/www/html/tools/dummy-test-3-order-types.php(85): PDO->prepare('INSERT INTO ord...')
-#1 {main}
-[20-May-2026 21:47:34 Asia/Kolkata] [2026-05-20T21:47:34+05:30] SQLSTATE[42S02]: Base table or view not found: 1146 Table 'cakeouflage_local.crm_settings' doesn't exist in /var/www/html/app/Services/OrderAutomationService.php:954\n#0 /var/www/html/app/Services/OrderAutomationService.php(954): PDO->prepare('INSERT INTO crm...')
-#1 /var/www/html/app/Services/OrderAutomationService.php(922): App\Services\OrderAutomationService->ensureCrmSettingExists(Object(PDO), 'online_order_re...')
-#2 /var/www/html/app/Services/OrderAutomationService.php(189): App\Services\OrderAutomationService->maybeQueueCrmTriggerJob(Object(PDO), 'online_order_re...', Array)
-#3 /var/www/html/tools/dummy-test-3-order-types.php(126): App\Services\OrderAutomationService->handleOrderPlaced(Object(PDO), 1, 'online')
+#0 /var/www/html/app/Core/Database.php(241): PDO->prepare('SELECT COUNT(*)...')
+#1 /var/www/html/app/Core/Database.php(174): App\Core\Database->run('SELECT COUNT(*)...', Array)
+#2 /var/www/html/app/Services/FinanceReportService.php(131): App\Core\Database->fetchOne('SELECT COUNT(*)...', Array)
+#3 Command line code(1): App\Services\FinanceReportService->getRegister(Array, 5, 1)
 #4 {main}
-[20-May-2026 21:47:59 Asia/Kolkata] [2026-05-20T21:47:59+05:30] SQLSTATE[42S22]: Column not found: 1054 Unknown column 'advance_amount' in 'INSERT INTO' in /var/www/html/tools/dummy-test-3-order-types.php:209\n#0 /var/www/html/tools/dummy-test-3-order-types.php(209): PDO->prepare('INSERT INTO ord...')
-#1 {main}
-[20-May-2026 21:48:13 Asia/Kolkata] [2026-05-20T21:48:13+05:30] SQLSTATE[01000]: Warning: 1265 Data truncated for column 'payment_status' at row 1 in /var/www/html/tools/dummy-test-3-order-types.php:222\n#0 /var/www/html/tools/dummy-test-3-order-types.php(222): PDOStatement->execute(Array)
-#1 {main}
-[21-May-2026 08:23:41 Asia/Kolkata] [2026-05-21T08:23:41+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
-[21-May-2026 08:23:41 Asia/Kolkata] [2026-05-21T08:23:41+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
-[21-May-2026 08:24:24 Asia/Kolkata] [2026-05-21T08:24:24+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
-[21-May-2026 08:24:24 Asia/Kolkata] [2026-05-21T08:24:24+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
-[21-May-2026 08:27:27 Asia/Kolkata] [2026-05-21T08:27:27+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
-[21-May-2026 08:27:27 Asia/Kolkata] [2026-05-21T08:27:27+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
-[21-May-2026 08:27:28 Asia/Kolkata] [2026-05-21T08:27:28+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
-[21-May-2026 08:28:00 Asia/Kolkata] [2026-05-21T08:28:00+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
-[21-May-2026 08:28:00 Asia/Kolkata] [2026-05-21T08:28:00+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
-[21-May-2026 08:28:03 Asia/Kolkata] [2026-05-21T08:28:03+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
-[21-May-2026 08:28:03 Asia/Kolkata] [2026-05-21T08:28:03+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
-[21-May-2026 08:28:09 Asia/Kolkata] [2026-05-21T08:28:09+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
-[21-May-2026 08:28:09 Asia/Kolkata] [2026-05-21T08:28:09+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
-[21-May-2026 08:28:13 Asia/Kolkata] [2026-05-21T08:28:13+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
-[21-May-2026 08:28:13 Asia/Kolkata] [2026-05-21T08:28:13+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
-[21-May-2026 08:28:21 Asia/Kolkata] [2026-05-21T08:28:21+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
-[21-May-2026 08:28:21 Asia/Kolkata] [2026-05-21T08:28:21+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
-[21-May-2026 08:28:26 Asia/Kolkata] [2026-05-21T08:28:26+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
-[21-May-2026 08:28:26 Asia/Kolkata] [2026-05-21T08:28:26+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
-[21-May-2026 08:28:35 Asia/Kolkata] [2026-05-21T08:28:35+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
-[21-May-2026 08:28:36 Asia/Kolkata] [2026-05-21T08:28:36+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
-[21-May-2026 08:28:39 Asia/Kolkata] [2026-05-21T08:28:39+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
-[21-May-2026 08:28:39 Asia/Kolkata] [2026-05-21T08:28:39+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
-[21-May-2026 08:30:09 Asia/Kolkata] [2026-05-21T08:30:09+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
-[21-May-2026 08:30:09 Asia/Kolkata] [2026-05-21T08:30:09+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
-[21-May-2026 08:30:28 Asia/Kolkata] [2026-05-21T08:30:28+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
-[21-May-2026 08:30:28 Asia/Kolkata] [2026-05-21T08:30:28+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
-[21-May-2026 08:30:30 Asia/Kolkata] [2026-05-21T08:30:30+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
-[21-May-2026 08:30:30 Asia/Kolkata] [2026-05-21T08:30:30+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
-[21-May-2026 08:30:32 Asia/Kolkata] [2026-05-21T08:30:33+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
-[21-May-2026 08:30:33 Asia/Kolkata] [2026-05-21T08:30:33+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
-[21-May-2026 08:30:35 Asia/Kolkata] [2026-05-21T08:30:35+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
-[21-May-2026 08:30:35 Asia/Kolkata] [2026-05-21T08:30:35+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
-[21-May-2026 08:30:39 Asia/Kolkata] [2026-05-21T08:30:39+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
-[21-May-2026 08:30:39 Asia/Kolkata] [2026-05-21T08:30:39+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
-[21-May-2026 08:30:49 Asia/Kolkata] [2026-05-21T08:30:49+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
-[21-May-2026 08:30:49 Asia/Kolkata] [2026-05-21T08:30:49+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
-[21-May-2026 08:30:57 Asia/Kolkata] [2026-05-21T08:30:57+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
-[21-May-2026 08:30:57 Asia/Kolkata] [2026-05-21T08:30:57+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
-[21-May-2026 08:31:07 Asia/Kolkata] [2026-05-21T08:31:07+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
-[21-May-2026 08:31:07 Asia/Kolkata] [2026-05-21T08:31:07+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
-[21-May-2026 08:31:23 Asia/Kolkata] [2026-05-21T08:31:23+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
-[21-May-2026 08:31:23 Asia/Kolkata] [2026-05-21T08:31:23+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
-[21-May-2026 08:31:27 Asia/Kolkata] [2026-05-21T08:31:27+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
-[21-May-2026 08:31:27 Asia/Kolkata] [2026-05-21T08:31:27+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
-[21-May-2026 08:31:36 Asia/Kolkata] [2026-05-21T08:31:36+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
-[21-May-2026 08:31:36 Asia/Kolkata] [2026-05-21T08:31:36+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
-[21-May-2026 08:31:36 Asia/Kolkata] [2026-05-21T08:31:36+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
-[21-May-2026 08:31:42 Asia/Kolkata] [2026-05-21T08:31:42+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
-[21-May-2026 08:31:42 Asia/Kolkata] [2026-05-21T08:31:42+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
-[21-May-2026 08:42:38 Asia/Kolkata] [2026-05-21T08:42:38+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
-[21-May-2026 08:42:38 Asia/Kolkata] [2026-05-21T08:42:38+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
-[21-May-2026 08:42:49 Asia/Kolkata] [2026-05-21T08:42:49+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
-[21-May-2026 08:42:50 Asia/Kolkata] [2026-05-21T08:42:50+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1079\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
-[21-May-2026 09:54:20 Asia/Kolkata] [2026-05-21T09:54:20+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1081\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
-[21-May-2026 09:54:20 Asia/Kolkata] [2026-05-21T09:54:20+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1081\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
-[21-May-2026 09:55:56 Asia/Kolkata] [2026-05-21T09:55:56+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1081\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
-[21-May-2026 09:55:56 Asia/Kolkata] [2026-05-21T09:55:56+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1081\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
-[21-May-2026 09:55:58 Asia/Kolkata] [2026-05-21T09:55:58+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1081\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
-[21-May-2026 09:55:58 Asia/Kolkata] [2026-05-21T09:55:58+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1081\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
-[21-May-2026 09:55:58 Asia/Kolkata] [2026-05-21T09:55:58+05:30] syntax error, unexpected variable "$existingStmt" in /var/www/html/app/Controllers/ApiController.php:1081\n#0 /var/www/html/vendor/composer/ClassLoader.php(427): Composer\Autoload\{closure}('/var/www/html/v...')
-#1 /var/www/html/app/Core/App.php(312): Composer\Autoload\ClassLoader->loadClass('App\\Controllers...')
-#2 /var/www/html/index.php(50): App\Core\App->run()
-#3 {main}
+  thrown in /var/www/html/app/Core/Database.php on line 241
+[24-May-2026 11:45:08 Asia/Kolkata] [2026-05-24T11:45:08+05:30] Fatal error: Uncaught PDOException: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'END' in 'field list' in /var/www/html/app/Core/Database.php:241
+Stack trace:
+#0 /var/www/html/app/Core/Database.php(241): PDO->prepare('SELECT COUNT(*)...')
+#1 /var/www/html/app/Core/Database.php(174): App\Core\Database->run('SELECT COUNT(*)...', Array)
+#2 /var/www/html/app/Services/FinanceReportService.php(131): App\Core\Database->fetchOne('SELECT COUNT(*)...', Array)
+#3 Command line code(1): App\Services\FinanceReportService->getRegister(Array, 5, 1)
+#4 {main}
+  thrown in /var/www/html/app/Core/Database.php:241
+[24-May-2026 12:06:52 Asia/Kolkata] [admin_auth] {"event":"runtime_identity_mutation_skipped","time":"2026-05-24T06:36:52+00:00","reason":"non_dev_environment"}
+[24-May-2026 12:07:38 Asia/Kolkata] [admin_auth] {"event":"runtime_identity_mutation_skipped","time":"2026-05-24T06:37:38+00:00","reason":"non_dev_environment"}
+[24-May-2026 12:07:41 Asia/Kolkata] [admin_auth] {"event":"runtime_identity_mutation_skipped","time":"2026-05-24T06:37:41+00:00","reason":"non_dev_environment"}
+[24-May-2026 12:07:41 Asia/Kolkata] [admin_auth] {"event":"otp_generated","time":"2026-05-24T06:37:41+00:00","email_ref":"697e8521818b","otp_length":6}
+[24-May-2026 12:07:41 Asia/Kolkata] [admin_auth] {"event":"otp_send_attempt","time":"2026-05-24T06:37:41+00:00","email_ref":"697e8521818b"}
+[24-May-2026 12:07:46 Asia/Kolkata] SMTP OTP SEND SUCCESS: {"host":"smtp.dcoresystems.com","port":587,"encryption":"tls","auth_enabled":true,"username_set":true,"from_email_set":true}
+[24-May-2026 12:07:46 Asia/Kolkata] [admin_auth] {"event":"otp_send_success","time":"2026-05-24T06:37:46+00:00","email_ref":"697e8521818b"}
+[24-May-2026 12:07:59 Asia/Kolkata] [admin_auth] {"event":"runtime_identity_mutation_skipped","time":"2026-05-24T06:37:59+00:00","reason":"non_dev_environment"}
+[24-May-2026 12:07:59 Asia/Kolkata] [admin_auth] {"event":"session_regenerated","time":"2026-05-24T06:37:59+00:00","email_ref":"697e8521818b"}
+[24-May-2026 12:07:59 Asia/Kolkata] [admin_auth] {"event":"otp_verify_success","time":"2026-05-24T06:37:59+00:00","email_ref":"697e8521818b","admin_id":1}
+[24-May-2026 12:08:19 Asia/Kolkata] [OrderStateManager] order_audit_logs write skipped: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'cakeouflage_local.order_audit_logs' doesn't exist
+[24-May-2026 12:08:19 Asia/Kolkata] [OrderStateManager] order_audit_logs write skipped: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'cakeouflage_local.order_audit_logs' doesn't exist
+[24-May-2026 12:08:37 Asia/Kolkata] [OrderStateManager] order_audit_logs write skipped: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'cakeouflage_local.order_audit_logs' doesn't exist
+[24-May-2026 12:08:37 Asia/Kolkata] [OrderStateManager] order_audit_logs write skipped: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'cakeouflage_local.order_audit_logs' doesn't exist
+[24-May-2026 12:08:57 Asia/Kolkata] [OrderStateManager] order_audit_logs write skipped: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'cakeouflage_local.order_audit_logs' doesn't exist
+[24-May-2026 12:09:03 Asia/Kolkata] [OrderStateManager] order_audit_logs write skipped: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'cakeouflage_local.order_audit_logs' doesn't exist
+[24-May-2026 12:09:10 Asia/Kolkata] [OrderStateManager] order_audit_logs write skipped: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'cakeouflage_local.order_audit_logs' doesn't exist
+[24-May-2026 12:15:40 Asia/Kolkata] [admin_auth] {"event":"runtime_identity_mutation_skipped","time":"2026-05-24T06:45:40+00:00","reason":"non_dev_environment"}
+[24-May-2026 12:15:40 Asia/Kolkata] [admin_auth] {"event":"otp_generated","time":"2026-05-24T06:45:40+00:00","email_ref":"697e8521818b","otp_length":6}
+[24-May-2026 12:15:40 Asia/Kolkata] [admin_auth] {"event":"otp_send_attempt","time":"2026-05-24T06:45:40+00:00","email_ref":"697e8521818b"}
+[24-May-2026 12:15:46 Asia/Kolkata] SMTP OTP SEND SUCCESS: {"host":"smtp.dcoresystems.com","port":587,"encryption":"tls","auth_enabled":true,"username_set":true,"from_email_set":true}
+[24-May-2026 12:15:46 Asia/Kolkata] [admin_auth] {"event":"otp_send_success","time":"2026-05-24T06:45:46+00:00","email_ref":"697e8521818b"}
+[24-May-2026 12:15:57 Asia/Kolkata] [admin_auth] {"event":"runtime_identity_mutation_skipped","time":"2026-05-24T06:45:57+00:00","reason":"non_dev_environment"}
+[24-May-2026 12:15:57 Asia/Kolkata] [admin_auth] {"event":"session_regenerated","time":"2026-05-24T06:45:57+00:00","email_ref":"697e8521818b"}
+[24-May-2026 12:15:57 Asia/Kolkata] [admin_auth] {"event":"otp_verify_success","time":"2026-05-24T06:45:57+00:00","email_ref":"697e8521818b","admin_id":1}
+[24-May-2026 12:30:42 Asia/Kolkata] [OrderStateManager] order_audit_logs write skipped: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'cakeouflage_local.order_audit_logs' doesn't exist

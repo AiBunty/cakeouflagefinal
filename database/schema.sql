@@ -1,6 +1,7 @@
 SET FOREIGN_KEY_CHECKS = 0;
 
 DROP TABLE IF EXISTS crm_push_logs;
+DROP TABLE IF EXISTS media_assets;
 DROP TABLE IF EXISTS admin_permissions;
 DROP TABLE IF EXISTS admin_action_logs;
 DROP TABLE IF EXISTS queue_jobs;
@@ -72,6 +73,7 @@ CREATE TABLE users (
   full_name VARCHAR(120) NOT NULL,
   email VARCHAR(190) NOT NULL UNIQUE,
   phone VARCHAR(25) NOT NULL,
+  phone_e164 VARCHAR(20) NULL,
   password_hash VARCHAR(255) NOT NULL,
   role ENUM('customer','b2b_user') NOT NULL DEFAULT 'customer',
   is_active TINYINT(1) NOT NULL DEFAULT 1,
@@ -80,7 +82,8 @@ CREATE TABLE users (
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   deleted_at DATETIME NULL,
-  INDEX idx_users_email (email)
+  INDEX idx_users_email (email),
+  INDEX idx_users_phone_e164 (phone_e164)
 ) ENGINE=InnoDB;
 
 CREATE TABLE user_addresses (
@@ -167,6 +170,9 @@ CREATE TABLE products (
   child_category_id BIGINT UNSIGNED NULL,
   occasion_tag VARCHAR(100) NULL,
   dietary_tag ENUM('regular','eggless','vegan','sugar_free') NOT NULL DEFAULT 'regular',
+  is_veg TINYINT(1) NOT NULL DEFAULT 1,
+  is_eggless TINYINT(1) NOT NULL DEFAULT 0,
+  is_vegan TINYINT(1) NOT NULL DEFAULT 0,
   availability_status ENUM('in_stock','out_of_stock','preorder','draft') NOT NULL DEFAULT 'in_stock',
   lead_time_hours INT NOT NULL DEFAULT 24,
   customisation_note TEXT NULL,
@@ -198,6 +204,11 @@ CREATE TABLE products (
   INDEX idx_products_subcategory (subcategory_id),
   INDEX idx_products_child_category (child_category_id),
   INDEX idx_products_occasion (occasion_tag),
+  INDEX idx_products_dietary (dietary_tag),
+  INDEX idx_products_is_veg (is_veg),
+  INDEX idx_products_is_eggless (is_eggless),
+  INDEX idx_products_is_vegan (is_vegan),
+  INDEX idx_products_active_filter (availability_status, deleted_at, collection_category_id),
   INDEX idx_products_featured (is_featured),
   INDEX idx_products_bestseller (is_bestseller)
 ) ENGINE=InnoDB;
@@ -228,7 +239,8 @@ CREATE TABLE product_variants (
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
-  INDEX idx_product_variants_product (product_id)
+  INDEX idx_product_variants_product (product_id),
+  INDEX idx_product_variants_filter_price (product_id, is_active, price, discount_price)
 ) ENGINE=InnoDB;
 
 CREATE TABLE carts (
@@ -290,6 +302,8 @@ CREATE TABLE coupons (
   starts_at DATETIME NULL,
   ends_at DATETIME NOT NULL,
   target_mode ENUM('all_users','specific_users') NOT NULL DEFAULT 'all_users',
+  auto_apply TINYINT(1) NOT NULL DEFAULT 0 COMMENT '1=auto-apply at cart; 0=manual entry only',
+  applicable_to VARCHAR(64) NOT NULL DEFAULT 'online' COMMENT 'Comma-delimited modules: online, manual, byoc',
   is_active TINYINT(1) NOT NULL DEFAULT 1,
   is_deleted TINYINT(1) NOT NULL DEFAULT 0,
   deleted_at DATETIME NULL,
@@ -330,14 +344,19 @@ CREATE TABLE orders (
   customer_name VARCHAR(120) NOT NULL,
   customer_email VARCHAR(190) NOT NULL,
   customer_phone VARCHAR(25) NOT NULL,
+  customer_phone_e164 VARCHAR(20) NULL,
   fulfilment_mode ENUM('delivery','pickup','custom_delivery') NOT NULL,
   order_status ENUM('pending','confirmed','in_preparation','out_for_delivery','ready_for_pickup','completed','cancelled') NOT NULL DEFAULT 'pending',
-  payment_status ENUM('pending','paid','failed','refunded','credit','partial') NOT NULL DEFAULT 'pending',
+  payment_status ENUM('pending','paid','failed','refunded','credit','partial','under_review','confirmed','rejected') NOT NULL DEFAULT 'pending',
   payment_method ENUM('upi_manual','cod','gateway','credit') NOT NULL DEFAULT 'upi_manual',
   order_source ENUM('retail','byoc_quote') NOT NULL DEFAULT 'retail',
+  order_mode ENUM('ready_pos','scheduled_custom','online','byoc') NULL COMMENT 'POS mode tag',
   byoc_quote_id BIGINT UNSIGNED NULL,
   scheduled_slot DATETIME NULL,
   scheduled_slot_label VARCHAR(120) NULL,
+  slot_id BIGINT UNSIGNED NULL COMMENT 'FK to order_slots.id — denormalized',
+  requires_kitchen_production TINYINT(1) NOT NULL DEFAULT 1 COMMENT '0 for ready_pos',
+  production_status ENUM('not_required','pending','in_production','decoration_pending','ready','packed','out_for_delivery','delivered') NOT NULL DEFAULT 'pending' COMMENT 'Kitchen lifecycle',
   delivery_postal_code VARCHAR(15) NULL,
   delivery_distance_km DECIMAL(5,2) NULL,
   delivery_fee DECIMAL(10,2) NOT NULL DEFAULT 0,
@@ -353,6 +372,7 @@ CREATE TABLE orders (
   INDEX idx_orders_email (customer_email),
   INDEX idx_orders_status (order_status),
   INDEX idx_orders_source (order_source),
+  INDEX idx_orders_phone_e164 (customer_phone_e164),
   UNIQUE KEY uq_orders_byoc_quote (byoc_quote_id)
 ) ENGINE=InnoDB;
 
@@ -1065,11 +1085,22 @@ CREATE TABLE crm_push_logs (
   id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
   name VARCHAR(120) NOT NULL,
   mobile VARCHAR(25) NOT NULL,
+  trigger_key VARCHAR(80) NULL,
+  endpoint VARCHAR(512) NULL,
   status ENUM('success','fail') NOT NULL,
+  automation_id VARCHAR(80) NULL,
+  api_token_masked VARCHAR(50) NULL,
+  payload_json LONGTEXT NULL,
+  http_status SMALLINT NULL,
+  execution_status VARCHAR(40) NULL,
+  error_message TEXT NULL,
+  response_time_ms INT UNSIGNED NULL,
   response TEXT NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_crm_push_logs_created (created_at),
-  INDEX idx_crm_push_logs_status (status)
+  INDEX idx_crm_push_logs_status (status),
+  INDEX idx_crm_push_logs_trigger (trigger_key),
+  INDEX idx_crm_push_logs_exec_status (execution_status)
 ) ENGINE=InnoDB;
 
 CREATE TABLE communication_queue (
@@ -1132,6 +1163,26 @@ CREATE TABLE queue_jobs (
   INDEX idx_queue_status (status, available_at)
 ) ENGINE=InnoDB;
 
+CREATE TABLE media_assets (
+  id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+  original_path VARCHAR(255) NOT NULL,
+  canonical_path VARCHAR(255) NOT NULL,
+  original_filename VARCHAR(255) NOT NULL,
+  mime_type VARCHAR(120) NOT NULL,
+  media_type ENUM('image','video') NOT NULL,
+  file_size BIGINT UNSIGNED NOT NULL DEFAULT 0,
+  conversion_status ENUM('ready','queued','processing','failed') NOT NULL DEFAULT 'ready',
+  conversion_error VARCHAR(260) NULL,
+  version_token VARCHAR(40) NOT NULL,
+  uploaded_by_admin_id BIGINT UNSIGNED NULL,
+  uploaded_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_media_assets_canonical (canonical_path),
+  INDEX idx_media_assets_original (original_path),
+  INDEX idx_media_assets_status (conversion_status, updated_at),
+  FOREIGN KEY (uploaded_by_admin_id) REFERENCES admins(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
 CREATE TABLE auth_rate_limits (
   id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
   scope_key VARCHAR(80) NOT NULL,
@@ -1168,3 +1219,18 @@ CREATE TABLE admin_action_logs (
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (admin_id) REFERENCES admins(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
+
+-- OTP verification tokens for admin two-factor login flow.
+-- Also created at runtime by auth.php bootstrap, but defined here so fresh
+-- Docker setups work before the first successful login completes.
+CREATE TABLE IF NOT EXISTS otp_verifications (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  email VARCHAR(190) NOT NULL,
+  otp VARCHAR(12) NOT NULL,
+  expires_at DATETIME NOT NULL,
+  attempt_count INT UNSIGNED NOT NULL DEFAULT 0,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_otp_verifications_email (email),
+  KEY idx_otp_verifications_expires_at (expires_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

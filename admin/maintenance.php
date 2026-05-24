@@ -4,7 +4,7 @@ require_once __DIR__ . '/includes/auth.php';
 require_permission_for_current_admin_page();
 require_once __DIR__ . '/includes/db.php';
 require_once __DIR__ . '/includes/product-price-helper.php';
-include __DIR__ . '/layout.php';
+require_once __DIR__ . '/layout.php';
 
 $action = trim((string)($_POST['action'] ?? ''));
 $result = null;

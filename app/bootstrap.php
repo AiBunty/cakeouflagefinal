@@ -101,6 +101,9 @@ if (is_file(__DIR__ . '/../vendor/autoload.php')) {
             ob_end_clean();
         }
         error_log(sprintf('[%s] Optional vendor autoload skipped: %s', date('c'), $e->getMessage()));
+        if (!headers_sent()) {
+            http_response_code(200);
+        }
     } finally {
         ini_set('display_errors', (string)$displayErrorsPrev);
     }
@@ -163,5 +166,16 @@ if (!function_exists('product_image_placeholder')) {
     function product_image_placeholder($categorySlug = null)
     {
         return \App\Services\ProductImageService::placeholderForCategory($categorySlug !== null ? (string)$categorySlug : null);
+    }
+}
+
+if (!function_exists('media_url')) {
+    function media_url($path, $variant = 'optimized', $categorySlug = null)
+    {
+        return \App\Services\MediaUrlService::resolve(
+            (string)$path,
+            (string)$variant,
+            $categorySlug !== null ? (string)$categorySlug : null
+        );
     }
 }

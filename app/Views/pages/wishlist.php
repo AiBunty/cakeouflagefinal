@@ -6,7 +6,7 @@
         <h1 class="page-inner-title">My Wishlist</h1>
         <p class="page-inner-desc">Your saved favourites — move them to cart when you're ready.</p>
       </div>
-      <a href="/shop" class="btn btn--outline">Continue Shopping</a>
+      <a href="/category" class="btn btn--outline">Continue Shopping</a>
     </div>
 
     <!-- Auth gate -->
@@ -25,7 +25,7 @@
       <span class="empty-state__icon">❤️</span>
       <h3>Your wishlist is empty</h3>
       <p>Browse our cakes and tap the heart icon to save your favourites.</p>
-      <a href="/shop" class="btn btn--primary">Explore Cakes</a>
+      <a href="/category" class="btn btn--primary">Explore Cakes</a>
     </div>
 
     <!-- Wishlist grid -->

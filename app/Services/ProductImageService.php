@@ -5,7 +5,19 @@ namespace App\Services;
 
 final class ProductImageService
 {
-    private const GLOBAL_PLACEHOLDER = '/client/assets/images/placeholders/product-generic.svg';
+    /**
+     * Branded default images — shown for any product without an uploaded image.
+     * Physical files live at:  public/assets/defaults/
+     * Run __generate_default_webp.php once after placing the PNG to create the WebP.
+     */
+    public const DEFAULT_IMAGE_WEBP = '/assets/defaults/default-product-image.webp';
+    public const DEFAULT_IMAGE_PNG  = '/assets/defaults/default-product-image.png';
+
+    /**
+     * Ultimate fallback — the branded default WebP.
+     * Category-specific SVGs are returned first when they exist on disk.
+     */
+    private const GLOBAL_PLACEHOLDER = self::DEFAULT_IMAGE_WEBP;
 
     /** @var array<string, bool> */
     private static $existsCache = [];
@@ -52,20 +64,47 @@ public static function resolve(?string $path, ?string $categorySlug = null): str
     $candidate = trim((string)$path);
 
     if ($candidate !== '') {
-
-        // external URL
+        // External URL — return as-is
         if (self::isExternalUrl($candidate)) {
             return $candidate;
         }
-
-        // normalize legacy prefixed values from older deployments
-        $candidate = preg_replace('#^/?Cakeouflage-E-commerce/#i', '/', $candidate) ?? $candidate;
-
-        // normal case: return web-root relative path
-        return self::normalizeWebPath($candidate);
+        return self::normalizePath($candidate);
     }
 
     return self::placeholderForCategory($categorySlug);
+}
+
+/**
+ * Normalizes legacy and current path formats to a canonical web-root-relative path.
+ * Handles: legacy /Cakeouflage-E-commerce/ prefix, /assets/images/products/ paths,
+ * bare /assets/ paths, old /uploads/ paths, and relative filenames.
+ */
+private static function normalizePath(string $raw): string
+{
+    // Strip legacy /Cakeouflage-E-commerce/ prefix
+    $path = preg_replace('#^/?Cakeouflage-E-commerce/#i', '/', $raw) ?? $raw;
+
+    // Ensure leading slash; bare filenames → product image directory
+    if ($path === '' || $path[0] !== '/') {
+        return '/client/assets/images/product/' . ltrim($path, '/');
+    }
+
+    // Legacy: /assets/images/products/ or /assets/images/product/ → canonical product path
+    if (strpos($path, '/assets/images/products/') === 0 || strpos($path, '/assets/images/product/') === 0) {
+        return '/client/assets/images/product/' . basename($path);
+    }
+
+    // Legacy: /assets/ that is NOT the defaults dir → prefix with /client/
+    if (strpos($path, '/assets/') === 0 && strpos($path, '/assets/defaults/') !== 0) {
+        return '/client' . $path;
+    }
+
+    // Legacy: old /uploads/ paths → /public/uploads/
+    if (strpos($path, '/uploads/') === 0) {
+        return '/public' . $path;
+    }
+
+    return self::normalizeWebPath($path);
 }
 
     private static function isExternalUrl(string $path): bool

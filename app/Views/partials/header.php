@@ -41,7 +41,7 @@ $currentPath =  str_replace($baseUrl, '' , $currentPath);
 
 /** @var list<array<string,mixed>> $navTree */
 $navTree = $navTree ?? [];
-$shopActive = strpos($currentPath, '/shop') === 0 || $currentPath === '/category';
+$shopActive = strpos($currentPath, '/shop') === 0 || strpos($currentPath, '/category') === 0;
 foreach ($navTree as $root) {
     if (navNodeHasActivePath($root, $currentPath)) {
         $shopActive = true;
@@ -56,7 +56,7 @@ $customCakeActive = $currentPath === '/custom-cake-inquiry';
 <header class="site-header" id="siteHeader">
   <div class="site-header__inner container">
   <a href="<?= $baseUrl ?>/" class="site-logo" aria-label="Cakeouflage home">
-<img src="/client/assets/images/mainlogo.svg" alt="Cakeouflage Logo">
+<img src="<?= htmlspecialchars($siteConfig['navbar_logo_url'] ?? '/client/assets/images/mainlogo.svg', ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($brand['name'] ?? 'Cakeouflage', ENT_QUOTES, 'UTF-8') ?> Logo">
 </a>
 
     <nav class="site-nav" aria-label="Primary navigation">
@@ -120,7 +120,7 @@ $customCakeActive = $currentPath === '/custom-cake-inquiry';
                 </div>
 
                 <div class="nav-mega__footer">
-                  <a href="<?=$baseUrl?>/shop" class="nav-mega__view-all">Browse all products</a>
+                  <a href="<?=$baseUrl?>/category" class="nav-mega__view-all">Browse all products</a>
                   <a href="<?=$baseUrl?>/custom-cake-inquiry" class="btn btn--sm btn--primary">Build Your Own Cake</a>
                 </div>
               </div>
@@ -128,7 +128,7 @@ $customCakeActive = $currentPath === '/custom-cake-inquiry';
           </li>
         <?php else: ?>
           <li class="site-nav__item">
-            <a href="<?=$baseUrl?>/shop" class="site-nav__link<?= $shopActive ? ' is-active' : '' ?>">Shop</a>
+            <a href="<?=$baseUrl?>/category" class="site-nav__link<?= $shopActive ? ' is-active' : '' ?>">Shop</a>
           </li>
         <?php endif; ?>
 
@@ -155,7 +155,7 @@ $customCakeActive = $currentPath === '/custom-cake-inquiry';
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
         <span class="cart-bubble" id="cartCount">0</span>
       </a>
-      <a href="<?= $baseUrl ?>/shop" class="btn btn--sm btn--primary header-cta">Order Now</a>
+      <a href="<?= $baseUrl ?>/category" class="btn btn--sm btn--primary header-cta">Order Now</a>
       <button class="header-action-btn mobile-menu-toggle" id="mobileMenuToggle" type="button" aria-label="Open menu" aria-expanded="false">
         <span class="hamburger-icon" aria-hidden="true">
           <span></span>
@@ -168,7 +168,7 @@ $customCakeActive = $currentPath === '/custom-cake-inquiry';
 
   <div class="search-overlay" id="searchOverlay" role="dialog" aria-modal="true" aria-hidden="true" hidden>
     <div class="search-overlay__inner container">
-      <form class="search-overlay__form" action="<?=$baseUrl?>/shop" method="get" role="search">
+      <form class="search-overlay__form" action="<?=$baseUrl?>/category" method="get" role="search">
         <input
           type="search"
           name="q"

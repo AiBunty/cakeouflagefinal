@@ -95,7 +95,7 @@ if (in_array($export, array('excel', 'csv', 'pdf'), true)) {
   }
 }
 
-include __DIR__ . '/layout.php';
+require_once __DIR__ . '/layout.php';
 ?>
 <style>
   .crm-report-shell {

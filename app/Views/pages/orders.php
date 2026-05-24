@@ -24,7 +24,7 @@
     </div>
 
     <div class="success-actions">
-      <a href="<?= $baseUrl ?>/shop" class="btn btn--primary">Continue Shopping</a>
+      <a href="<?= $baseUrl ?>/category" class="btn btn--primary">Continue Shopping</a>
     </div>
 
   </div>
@@ -34,7 +34,7 @@
         <h1 class="page-inner-title">My Orders</h1>
         <p class="page-inner-desc">Your complete order history with tracking and invoice access.</p>
       </div>
-      <a href="<?= $baseUrl ?>/shop" class="btn btn--outline">Order Again</a>
+      <a href="<?= $baseUrl ?>/category" class="btn btn--outline">Order Again</a>
     </div>
 
     <!-- Auth gate -->

@@ -138,7 +138,8 @@ final class WebController
 
     public function shop(): void
     {
-        View::render('shop', ['title' => 'Shop Cakes', 'breadcrumbs' => [['label' => 'Shop']]]);
+        header('Location: /category', true, 301);
+        exit;
     }
 
     public function course(): void
@@ -346,177 +347,475 @@ final class WebController
         View::render('shipping', ['title' => 'Shipping & Delivery', 'breadcrumbs' => [['label' => 'Shipping']]]);
     }
 
-    public function category(string $slug): void
+    public function categories(): void
     {
-        // FIX: handle slug-id format
-// slug-id support
-$categoryId = null;
-
-if (preg_match('/^(.*)-(\d+)$/', $slug, $matches)) {
-    $slug = $matches[1];
-    $categoryId = (int)$matches[2];
-}
         try {
             $db = Database::getInstance();
         } catch (\Throwable $e) {
             View::render('category', [
-                'title'         => 'Category | Cakeouflage',
-                'category'      => ['name' => ucwords(str_replace('-', ' ', $slug)), 'description' => '', 'banner_image' => ''],
+                'title'         => 'All Products | Cakeouflage',
+                'category'      => ['id' => null, 'name' => 'All Products', 'slug' => '', 'description' => 'Browse our full handcrafted collection of cakes, desserts and gifting hampers.', 'banner_image' => ''],
                 'children'      => [],
                 'products'      => [],
                 'totalProducts' => 0,
-                'breadcrumbs'   => [['label' => 'Shop', 'href' => '/shop'], ['label' => ucwords(str_replace('-', ' ', $slug))]],
+                'breadcrumbs'   => [['label' => 'Home', 'url' => '/'], ['label' => 'All Products']],
                 'currentPage'   => 1,
                 'perPage'       => 24,
                 'dbOffline'     => true,
             ]);
             return;
         }
-        //$cat = CategoryService::getBySlug($slug);
-           // FIX: clean slug and fetch directly from DB
-$slug = trim(strtolower($slug));
 
-if ($categoryId) {
+        $columnRows = $db->fetchAll('SHOW COLUMNS FROM products');
+        $productsColumnMap = [];
+        foreach ($columnRows as $columnRow) {
+            $field = strtolower((string)($columnRow['Field'] ?? ''));
+            if ($field !== '') {
+                $productsColumnMap[$field] = true;
+            }
+        }
+        $hasIsVeg         = isset($productsColumnMap['is_veg']);
+        $hasChefSpecial   = isset($productsColumnMap['is_chef_special']);
+        $hasTopperEnabled = isset($productsColumnMap['topper_enabled']);
+        $hasNoteEnabled   = isset($productsColumnMap['note_enabled']);
 
-    $cat = $db->fetchOne("
-        SELECT * FROM categories
-        WHERE id = ?
-        LIMIT 1
-    ", [$categoryId]);
+        $effectivePriceSql = 'COALESCE(NULLIF(p.starting_price, 0), pv_min.min_price, p.base_price, 0)';
 
-} else {
+        $whereSql = [
+            'p.deleted_at IS NULL',
+            "p.availability_status <> 'draft'",
+        ];
+        $params = [];
 
-    $cat = $db->fetchOne("
-        SELECT * FROM categories
-        WHERE slug = ?
-        LIMIT 1
-    ", [$slug]);
-}
+        $search = trim((string)($_GET['q'] ?? ''));
+        if ($search !== '') {
+            $whereSql[] = '(p.name LIKE ? OR p.short_description LIKE ? OR COALESCE(p.flavour_notes, "") LIKE ? OR COALESCE(p.occasion_tag, "") LIKE ?)';
+            $searchLike = '%' . $search . '%';
+            $params[] = $searchLike;
+            $params[] = $searchLike;
+            $params[] = $searchLike;
+            $params[] = $searchLike;
+        }
 
-        if (!$cat) {
+        $dietaryRaw = $_GET['dietary'] ?? [];
+        $dietaryValues = is_array($dietaryRaw) ? $dietaryRaw : explode(',', (string)$dietaryRaw);
+        $allowedDietary = ['regular', 'eggless', 'vegan', 'sugar_free'];
+        $dietaryValues = array_values(array_unique(array_values(array_filter(array_map(static function ($value): string {
+            return trim((string)$value);
+        }, $dietaryValues), static function (string $value) use ($allowedDietary): bool {
+            return in_array($value, $allowedDietary, true);
+        }))));
+        if (!empty($dietaryValues)) {
+            $dietaryPlaceholders = implode(',', array_fill(0, count($dietaryValues), '?'));
+            $whereSql[] = "p.dietary_tag IN ($dietaryPlaceholders)";
+            $params     = array_merge($params, $dietaryValues);
+        }
+
+        $isVegParam = (string)($_GET['is_veg'] ?? '');
+        if ($hasIsVeg && in_array($isVegParam, ['0', '1'], true)) {
+            $whereSql[] = 'p.is_veg = ?';
+            $params[]   = (int)$isVegParam;
+        }
+
+        $isBestsellerParam = (string)($_GET['is_bestseller'] ?? '');
+        if (in_array($isBestsellerParam, ['0', '1'], true)) {
+            $whereSql[] = 'p.is_bestseller = ?';
+            $params[]   = (int)$isBestsellerParam;
+        }
+
+        $isChefSpecialParam = (string)($_GET['is_chef_special'] ?? '');
+        if ($hasChefSpecial && in_array($isChefSpecialParam, ['0', '1'], true)) {
+            $whereSql[] = 'p.is_chef_special = ?';
+            $params[]   = (int)$isChefSpecialParam;
+        }
+
+        if ((string)($_GET['customizable'] ?? '') === '1') {
+            $whereSql[] = 'COALESCE(TRIM(p.customisation_note), "") <> ""';
+        }
+
+        if ($hasTopperEnabled && (string)($_GET['topper_enabled'] ?? '') === '1') {
+            $whereSql[] = 'p.topper_enabled = 1';
+        }
+
+        if ($hasNoteEnabled && (string)($_GET['note_enabled'] ?? '') === '1') {
+            $whereSql[] = 'p.note_enabled = 1';
+        }
+
+        if ((string)($_GET['same_day'] ?? '') === '1') {
+            $whereSql[] = 'p.lead_time_hours <= 24';
+        }
+
+        if ((string)($_GET['express'] ?? '') === '1') {
+            $whereSql[] = 'p.lead_time_hours <= 8';
+        }
+
+        $maxPrice = filter_var($_GET['max_price'] ?? null, FILTER_VALIDATE_FLOAT);
+        if ($maxPrice !== false && $maxPrice !== null) {
+            $whereSql[] = $effectivePriceSql . ' <= ?';
+            $params[]   = (float)$maxPrice;
+        }
+
+        $priceBucketRaw = trim((string)($_GET['price_bucket'] ?? ''));
+        $priceBucketMap = [
+            'under-500'  => 'under_500',
+            'under-1000' => '500_1000',
+            '1000-2000'  => '1000_2000',
+            'above-2000' => 'above_2000',
+            'under_500'  => 'under_500',
+            '500_1000'   => '500_1000',
+            '1000_2000'  => '1000_2000',
+            'above_2000' => 'above_2000',
+        ];
+        $priceBucket = $priceBucketMap[$priceBucketRaw] ?? '';
+        if ($priceBucket === 'under_500') {
+            $whereSql[] = $effectivePriceSql . ' < ?';
+            $params[]   = 500;
+        } elseif ($priceBucket === '500_1000') {
+            $whereSql[] = $effectivePriceSql . ' <= ?';
+            $params[]   = 1000;
+        } elseif ($priceBucket === '1000_2000') {
+            $whereSql[] = $effectivePriceSql . ' > ? AND ' . $effectivePriceSql . ' <= ?';
+            $params[]   = 1000;
+            $params[]   = 2000;
+        } elseif ($priceBucket === 'above_2000') {
+            $whereSql[] = $effectivePriceSql . ' > ?';
+            $params[]   = 2000;
+        }
+
+        $sortParam = trim((string)($_GET['sort'] ?? 'latest'));
+        if ($sortParam === 'newest') {
+            $sortParam = 'latest';
+        }
+        $sortMap = [
+            'latest'     => 'p.created_at DESC',
+            'price_asc'  => $effectivePriceSql . ' ASC',
+            'price_desc' => $effectivePriceSql . ' DESC',
+            'popular'    => 'p.is_bestseller DESC, p.review_count DESC, p.created_at DESC',
+        ];
+        $sortSql = $sortMap[$sortParam] ?? $sortMap['latest'];
+
+        $whereClause = implode(' AND ', $whereSql);
+
+        $countSql = "
+            SELECT COUNT(*)
+            FROM products p
+            LEFT JOIN (
+                SELECT product_id, MIN(COALESCE(discount_price, price)) AS min_price
+                FROM product_variants
+                WHERE is_active = 1 AND price > 0
+                GROUP BY product_id
+            ) pv_min ON pv_min.product_id = p.id
+            WHERE $whereClause
+        ";
+        $totalProducts = (int)$db->fetchScalar($countSql, $params);
+
+        $perPage = 24;
+        $page    = max(1, (int)($_GET['page'] ?? 1));
+        $offset  = ($page - 1) * $perPage;
+
+        $isVegSelectSql = $hasIsVeg ? 'p.is_veg' : '1 AS is_veg';
+
+        $productSql = "
+            SELECT
+                p.id,
+                p.name,
+                p.slug,
+                p.short_description,
+                p.featured_image,
+                p.dietary_tag,
+                p.is_featured,
+                p.is_bestseller,
+                $isVegSelectSql,
+                $effectivePriceSql AS min_price,
+                (
+                    SELECT pi.image_url
+                    FROM product_images pi
+                    WHERE pi.product_id = p.id
+                    ORDER BY pi.sort_order ASC, pi.id ASC
+                    LIMIT 1
+                ) AS thumb
+            FROM products p
+            LEFT JOIN (
+                SELECT product_id, MIN(COALESCE(discount_price, price)) AS min_price
+                FROM product_variants
+                WHERE is_active = 1 AND price > 0
+                GROUP BY product_id
+            ) pv_min ON pv_min.product_id = p.id
+            WHERE $whereClause
+            ORDER BY $sortSql
+            LIMIT $perPage OFFSET $offset
+        ";
+        $products = $db->fetchAll($productSql, $params);
+
+        View::render('category', [
+            'title'         => 'All Products | Cakeouflage',
+            'metaDesc'      => 'Browse our full collection of handcrafted cakes, desserts, and gifting hampers.',
+            'category'      => ['id' => null, 'name' => 'All Products', 'slug' => '', 'description' => 'Browse our full handcrafted collection of cakes, desserts and gifting hampers.', 'banner_image' => ''],
+            'children'      => [],
+            'products'      => $products,
+            'totalProducts' => $totalProducts,
+            'breadcrumbs'   => [['label' => 'Home', 'url' => '/'], ['label' => 'All Products']],
+            'currentPage'   => $page,
+            'perPage'       => $perPage,
+        ]);
+    }
+
+    public function category(string $slug): void
+    {
+        $categoryId = null;
+        if (preg_match('/^(.*)-(\d+)$/', $slug, $matches)) {
+            $slug = (string)$matches[1];
+            $categoryId = (int)$matches[2];
+        }
+
+        $slug = strtolower(trim($slug));
+        if ($slug === '') {
             http_response_code(404);
             View::render('errors/404', ['title' => 'Not Found']);
             return;
         }
 
-        // Subcategory cards (direct children)
-        $children = CategoryService::getChildren((int)$cat['id']);
-
-        // Collect all descendant product IDs (self + children + grandchildren)
-      $descIds = [(int)$cat['id']];
-
-// include children also
-foreach ($children as $child) {
-    $descIds[] = (int)$child['id'];
-}
-        if (empty($descIds)) {
-            $products = [];
-            $totalProducts = 0;
-        } else {
-            $filterSql  = '';
-            $filterArgs = [];
-
-         // Dietary filter
-if (!empty($_GET['dietary'])) {
-
-    $allowed = ['vegan', 'eggless', 'sugar_free', 'gluten_free'];
-
-    $tags = is_array($_GET['dietary'])
-        ? $_GET['dietary']
-        : explode(',', $_GET['dietary']);
-
-    $tags = array_map('trim', $tags);
-    $tags = array_intersect($tags, $allowed);
-
-    if ($tags) {
-        $placeholders = implode(',', array_fill(0, count($tags), '?'));
-        $filterSql .= " AND p.dietary_tag IN ($placeholders)";
-        $filterArgs = array_merge($filterArgs, $tags);
-    }
-}
-
-            // Price filter  ?max_price=1500
-            if (!empty($_GET['max_price']) && is_numeric($_GET['max_price'])) {
-                $filterSql  .= ' AND pv_min.price <= ?';
-                $filterArgs[] = (float)$_GET['max_price'];
-            }
-
-            $idPlaceholders = implode(',', array_fill(0, count($descIds), '?'));
-
-            // Sort
-            $sortMap = [
-                'newest'    => 'p.created_at DESC',
-              'price_asc' => 'MIN(pv.price) ASC',
-              'price_desc'=> 'MIN(pv.price) DESC',
-                'popular'   => 'p.id DESC',
-            ];
-            $sort    = $sortMap[$_GET['sort'] ?? ''] ?? 'p.id DESC';
-
-            // Count
-            $countSql = "
-                SELECT COUNT(DISTINCT p.id)
-                FROM products p
-                LEFT JOIN (SELECT product_id, MIN(price) AS price
-                           FROM product_variants WHERE price > 0 GROUP BY product_id) pv_min ON pv_min.product_id = p.id
-                WHERE p.subcategory_id IN ($idPlaceholders)
-                                    AND p.deleted_at IS NULL
-                                    AND p.availability_status != 'draft'
-                $filterSql
-            ";
-$args = array_merge($descIds, $filterArgs);
-
-            $totalProducts = (int)$db->fetchScalar($countSql, $args);
-
-            // Paginate
-            $perPage = 24;
-            $page    = max(1, (int)($_GET['page'] ?? 1));
-            $offset  = ($page - 1) * $perPage;
-
-            $productSql = "
-                SELECT p.*,
-                       MIN(pv.price)  AS min_price,
-                       MAX(pv.price)  AS max_price,
-                       (SELECT 
-    CASE 
-        WHEN pi.image_url LIKE '/assets/%' 
-        THEN REPLACE(pi.image_url, '/assets/images/products/', '/uploads/products/')
-        ELSE pi.image_url
-    END
- FROM product_images pi 
- WHERE pi.product_id = p.id 
- ORDER BY pi.sort_order 
- LIMIT 1
-) AS thumb
-                FROM products p
-                LEFT JOIN product_variants pv ON pv.product_id = p.id
-                LEFT JOIN (SELECT product_id, MIN(price) AS price
-                           FROM product_variants WHERE price > 0 GROUP BY product_id) pv_min ON pv_min.product_id = p.id
-                WHERE p.subcategory_id IN ($idPlaceholders)
-                                    AND p.deleted_at IS NULL
-                                    AND p.availability_status != 'draft'
-                $filterSql
-                GROUP BY p.id
-                ORDER BY $sort
-                LIMIT $perPage OFFSET $offset
-            ";
-          $productArgs = array_merge($args);
-
-$products = $db->fetchAll($productSql, $productArgs);
-
+        try {
+            $db = Database::getInstance();
+        } catch (\Throwable $e) {
+            View::render('category', [
+                'title'         => 'Category | Cakeouflage',
+                'category'      => ['id' => 0, 'name' => ucwords(str_replace('-', ' ', $slug)), 'slug' => $slug, 'description' => '', 'banner_image' => ''],
+                'children'      => [],
+                'products'      => [],
+                'totalProducts' => 0,
+                'breadcrumbs'   => [['label' => 'Home', 'url' => '/'], ['label' => 'Categories', 'url' => '/category'], ['label' => ucwords(str_replace('-', ' ', $slug))]],
+                'currentPage'   => 1,
+                'perPage'       => 24,
+                'dbOffline'     => true,
+            ]);
+            return;
         }
 
-        $breadcrumbs = CategoryService::getBreadcrumb($slug);
+        if ($categoryId !== null && $categoryId > 0) {
+            $cat = $db->fetchOne('SELECT * FROM categories WHERE id = ? AND deleted_at IS NULL LIMIT 1', [$categoryId]);
+        } else {
+            $cat = $db->fetchOne('SELECT * FROM categories WHERE slug = ? AND deleted_at IS NULL LIMIT 1', [$slug]);
+        }
+
+        if (!$cat || (int)($cat['is_active'] ?? 1) !== 1) {
+            http_response_code(404);
+            View::render('errors/404', ['title' => 'Not Found']);
+            return;
+        }
+
+        $children = CategoryService::getChildren((int)$cat['id']);
+        $descIds = array_merge([(int)$cat['id']], CategoryService::getDescendantIds((int)$cat['id']));
+        $descIds = array_values(array_unique(array_filter(array_map('intval', $descIds), static function (int $id): bool {
+            return $id > 0;
+        })));
+
+        if (empty($descIds)) {
+            $descIds = [(int)$cat['id']];
+        }
+
+        $columnRows = $db->fetchAll('SHOW COLUMNS FROM products');
+        $productsColumnMap = [];
+        foreach ($columnRows as $columnRow) {
+            $field = strtolower((string)($columnRow['Field'] ?? ''));
+            if ($field !== '') {
+                $productsColumnMap[$field] = true;
+            }
+        }
+        $hasIsVeg = isset($productsColumnMap['is_veg']);
+        $hasChefSpecial = isset($productsColumnMap['is_chef_special']);
+        $hasTopperEnabled = isset($productsColumnMap['topper_enabled']);
+        $hasNoteEnabled = isset($productsColumnMap['note_enabled']);
+
+        $effectivePriceSql = 'COALESCE(NULLIF(p.starting_price, 0), pv_min.min_price, p.base_price, 0)';
+        $idPlaceholders = implode(',', array_fill(0, count($descIds), '?'));
+
+        $whereSql = [
+            'p.deleted_at IS NULL',
+            "p.availability_status <> 'draft'",
+            "(p.collection_category_id IN ($idPlaceholders) OR p.subcategory_id IN ($idPlaceholders) OR p.child_category_id IN ($idPlaceholders))",
+        ];
+        $params = array_merge($descIds, $descIds, $descIds);
+
+        $search = trim((string)($_GET['q'] ?? ''));
+        if ($search !== '') {
+            $whereSql[] = '(p.name LIKE ? OR p.short_description LIKE ? OR COALESCE(p.flavour_notes, "") LIKE ? OR COALESCE(p.occasion_tag, "") LIKE ?)';
+            $searchLike = '%' . $search . '%';
+            $params[] = $searchLike;
+            $params[] = $searchLike;
+            $params[] = $searchLike;
+            $params[] = $searchLike;
+        }
+
+        $dietaryRaw = $_GET['dietary'] ?? [];
+        $dietaryValues = is_array($dietaryRaw) ? $dietaryRaw : explode(',', (string)$dietaryRaw);
+        $allowedDietary = ['regular', 'eggless', 'vegan', 'sugar_free'];
+        $dietaryValues = array_values(array_unique(array_values(array_filter(array_map(static function ($value): string {
+            return trim((string)$value);
+        }, $dietaryValues), static function (string $value) use ($allowedDietary): bool {
+            return in_array($value, $allowedDietary, true);
+        }))));
+        if (!empty($dietaryValues)) {
+            $dietaryPlaceholders = implode(',', array_fill(0, count($dietaryValues), '?'));
+            $whereSql[] = "p.dietary_tag IN ($dietaryPlaceholders)";
+            $params = array_merge($params, $dietaryValues);
+        }
+
+        $isVegParam = (string)($_GET['is_veg'] ?? '');
+        if ($hasIsVeg && in_array($isVegParam, ['0', '1'], true)) {
+            $whereSql[] = 'p.is_veg = ?';
+            $params[] = (int)$isVegParam;
+        }
+
+        $isBestsellerParam = (string)($_GET['is_bestseller'] ?? '');
+        if (in_array($isBestsellerParam, ['0', '1'], true)) {
+            $whereSql[] = 'p.is_bestseller = ?';
+            $params[] = (int)$isBestsellerParam;
+        }
+
+        $isChefSpecialParam = (string)($_GET['is_chef_special'] ?? '');
+        if ($hasChefSpecial && in_array($isChefSpecialParam, ['0', '1'], true)) {
+            $whereSql[] = 'p.is_chef_special = ?';
+            $params[] = (int)$isChefSpecialParam;
+        }
+
+        if ((string)($_GET['customizable'] ?? '') === '1') {
+            $whereSql[] = 'COALESCE(TRIM(p.customisation_note), "") <> ""';
+        }
+
+        if ($hasTopperEnabled && (string)($_GET['topper_enabled'] ?? '') === '1') {
+            $whereSql[] = 'p.topper_enabled = 1';
+        }
+
+        if ($hasNoteEnabled && (string)($_GET['note_enabled'] ?? '') === '1') {
+            $whereSql[] = 'p.note_enabled = 1';
+        }
+
+        if ((string)($_GET['same_day'] ?? '') === '1') {
+            $whereSql[] = 'p.lead_time_hours <= 24';
+        }
+
+        if ((string)($_GET['express'] ?? '') === '1') {
+            $whereSql[] = 'p.lead_time_hours <= 8';
+        }
+
+        $maxPrice = filter_var($_GET['max_price'] ?? null, FILTER_VALIDATE_FLOAT);
+        if ($maxPrice !== false && $maxPrice !== null) {
+            $whereSql[] = $effectivePriceSql . ' <= ?';
+            $params[] = (float)$maxPrice;
+        }
+
+        $priceBucketRaw = trim((string)($_GET['price_bucket'] ?? ''));
+        $priceBucketMap = [
+            'under-500' => 'under_500',
+            'under-1000' => '500_1000',
+            '1000-2000' => '1000_2000',
+            'above-2000' => 'above_2000',
+            'under_500' => 'under_500',
+            '500_1000' => '500_1000',
+            '1000_2000' => '1000_2000',
+            'above_2000' => 'above_2000',
+        ];
+        $priceBucket = $priceBucketMap[$priceBucketRaw] ?? '';
+        if ($priceBucket === 'under_500') {
+            $whereSql[] = $effectivePriceSql . ' < ?';
+            $params[] = 500;
+        } elseif ($priceBucket === '500_1000') {
+            $whereSql[] = $effectivePriceSql . ' <= ?';
+            $params[] = 1000;
+        } elseif ($priceBucket === '1000_2000') {
+            $whereSql[] = $effectivePriceSql . ' > ? AND ' . $effectivePriceSql . ' <= ?';
+            $params[] = 1000;
+            $params[] = 2000;
+        } elseif ($priceBucket === 'above_2000') {
+            $whereSql[] = $effectivePriceSql . ' > ?';
+            $params[] = 2000;
+        }
+
+        $sortParam = trim((string)($_GET['sort'] ?? 'latest'));
+        if ($sortParam === 'newest') {
+            $sortParam = 'latest';
+        }
+        $sortMap = [
+            'latest' => 'p.created_at DESC',
+            'price_asc' => $effectivePriceSql . ' ASC',
+            'price_desc' => $effectivePriceSql . ' DESC',
+            'popular' => 'p.is_bestseller DESC, p.review_count DESC, p.created_at DESC',
+        ];
+        $sortSql = $sortMap[$sortParam] ?? $sortMap['latest'];
+
+        $whereClause = implode(' AND ', $whereSql);
+
+        $countSql = "
+            SELECT COUNT(*)
+            FROM products p
+            LEFT JOIN (
+                SELECT product_id, MIN(COALESCE(discount_price, price)) AS min_price
+                FROM product_variants
+                WHERE is_active = 1 AND price > 0
+                GROUP BY product_id
+            ) pv_min ON pv_min.product_id = p.id
+            WHERE $whereClause
+        ";
+        $totalProducts = (int)$db->fetchScalar($countSql, $params);
+
+        $perPage = 24;
+        $page = max(1, (int)($_GET['page'] ?? 1));
+        $offset = ($page - 1) * $perPage;
+
+        $isVegSelectSql = $hasIsVeg ? 'p.is_veg' : '1 AS is_veg';
+
+        $productSql = "
+            SELECT
+                p.id,
+                p.name,
+                p.slug,
+                p.short_description,
+                p.featured_image,
+                p.dietary_tag,
+                p.is_featured,
+                p.is_bestseller,
+                $isVegSelectSql,
+                $effectivePriceSql AS min_price,
+                (
+                    SELECT pi.image_url
+                    FROM product_images pi
+                    WHERE pi.product_id = p.id
+                    ORDER BY pi.sort_order ASC, pi.id ASC
+                    LIMIT 1
+                ) AS thumb
+            FROM products p
+            LEFT JOIN (
+                SELECT product_id, MIN(COALESCE(discount_price, price)) AS min_price
+                FROM product_variants
+                WHERE is_active = 1 AND price > 0
+                GROUP BY product_id
+            ) pv_min ON pv_min.product_id = p.id
+            WHERE $whereClause
+            ORDER BY $sortSql
+            LIMIT $perPage OFFSET $offset
+        ";
+        $products = $db->fetchAll($productSql, $params);
+
+        $breadcrumbs = CategoryService::getBreadcrumb((string)($cat['slug'] ?? $slug));
+        if (empty($breadcrumbs)) {
+            $breadcrumbs = [
+                ['label' => 'Home', 'url' => '/'],
+                ['label' => 'Categories', 'url' => '/category'],
+                ['label' => (string)($cat['name'] ?? ucwords(str_replace('-', ' ', $slug)))],
+            ];
+        }
 
         View::render('category', [
-            'title'        => ($cat['seo_title'] ?: $cat['name']) . ' | Cakeouflage',
-            'metaDesc'     => $cat['seo_description'] ?? '',
-            'category'     => $cat,
-            'children'     => $children,
-            'products'     => $products ?? [],
-            'totalProducts'=> $totalProducts ?? 0,
-            'breadcrumbs'  => $breadcrumbs,
-            'currentPage'  => $page ?? 1,
-            'perPage'      => $perPage ?? 24,
+            'title' => ((string)($cat['seo_title'] ?? '') !== '' ? (string)$cat['seo_title'] : (string)$cat['name']) . ' | Cakeouflage',
+            'metaDesc' => (string)($cat['seo_description'] ?? ''),
+            'category' => $cat,
+            'children' => $children,
+            'products' => $products,
+            'totalProducts' => $totalProducts,
+            'breadcrumbs' => $breadcrumbs,
+            'currentPage' => $page,
+            'perPage' => $perPage,
         ]);
     }
 
@@ -711,6 +1010,7 @@ $products = $db->fetchAll($productSql, $productArgs);
             }
         }
         $allowPartialPayment = true;
+        $screenshotRequired = true;
         try {
             $settingPdo = Database::getConnection();
             if ($settingPdo) {
@@ -719,6 +1019,11 @@ $products = $db->fetchAll($productSql, $productArgs);
                 $settingRow = $settingStmt->fetch(\PDO::FETCH_ASSOC);
                 if ($settingRow && isset($settingRow['setting_value'])) {
                     $allowPartialPayment = (string)$settingRow['setting_value'] !== '0';
+                }
+                $settingStmt->execute(['key' => 'payment_screenshot_required']);
+                $settingRow = $settingStmt->fetch(\PDO::FETCH_ASSOC);
+                if ($settingRow && isset($settingRow['setting_value'])) {
+                    $screenshotRequired = (string)$settingRow['setting_value'] !== '0';
                 }
             }
         } catch (\Throwable $e) {
@@ -730,6 +1035,7 @@ $products = $db->fetchAll($productSql, $productArgs);
             'currentUser' => $currentUser,
             'lastAddress' => $lastAddress,
             'allowPartialPayment' => $allowPartialPayment,
+            'screenshotRequired' => $screenshotRequired,
         ]);
     }
 

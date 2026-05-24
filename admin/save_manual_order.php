@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/includes/auth.php';
+require_once __DIR__ . '/../app/bootstrap.php';
 
 require_permission_for_current_admin_page();
 
@@ -50,7 +51,7 @@ function ensure_manual_order_crm_setting(mysqli $conn): array
 {
     $settingKey = 'manual_order_received';
 
-    $seedStmt = $conn->prepare('INSERT INTO crm_settings (setting_key, endpoint, api_token, is_enabled) VALUES (?, "", "", 0) ON DUPLICATE KEY UPDATE setting_key = VALUES(setting_key)');
+    $seedStmt = $conn->prepare('INSERT INTO crm_settings (setting_key, endpoint, api_token, is_enabled) VALUES (?, "", "", 0) AS new ON DUPLICATE KEY UPDATE setting_key = new.setting_key');
     $seedStmt->bind_param('s', $settingKey);
     $seedStmt->execute();
 
@@ -100,6 +101,11 @@ function normalize_phone_for_lookup(string $value): string
     return preg_replace('/\D+/', '', $value) ?? '';
 }
 
+function sanitize_cake_message(string $value): string
+{
+    return substr(trim($value), 0, 200);
+}
+
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     header('Location: manual_order.php');
     exit;
@@ -117,6 +123,18 @@ $_SESSION['manual_order_idempotency_key'] = bin2hex(random_bytes(16));
 $customerName = trim((string)($_POST['customer_name'] ?? ''));
 $customerEmail = strtolower(trim((string)($_POST['customer_email'] ?? '')));
 $customerPhone = trim((string)($_POST['customer_phone'] ?? ''));
+// Normalize to E.164 (+91XXXXXXXXXX) for storage
+$_cpDigits = preg_replace('/\D/', '', $customerPhone);
+if (strlen($_cpDigits) === 10) {
+    $customerPhoneE164 = '+91' . $_cpDigits;
+} elseif (strlen($_cpDigits) === 12 && strpos($_cpDigits, '91') === 0) {
+    $customerPhoneE164 = '+91' . substr($_cpDigits, 2);
+} elseif (strlen($_cpDigits) >= 7 && strlen($_cpDigits) <= 15) {
+    $customerPhoneE164 = ($customerPhone[0] ?? '') === '+' ? '+' . $_cpDigits : null;
+} else {
+    $customerPhoneE164 = null;
+}
+unset($_cpDigits);
 $matchedUserId = max((int)($_POST['matched_user_id'] ?? 0), 0);
 $itemName = trim((string)($_POST['item_name'] ?? ''));
 $amount = (float)($_POST['amount'] ?? 0);
@@ -125,16 +143,23 @@ $fulfilmentMode = trim((string)($_POST['fulfilment_mode'] ?? 'pickup'));
 $orderStatus = trim((string)($_POST['order_status'] ?? 'confirmed'));
 $paymentStatus = trim((string)($_POST['payment_status'] ?? 'paid'));
 $paymentMethod = trim((string)($_POST['payment_method'] ?? 'upi_manual'));
-$scheduledSlotRaw = trim((string)($_POST['scheduled_slot'] ?? ''));
-$scheduledSlotLabel = trim((string)($_POST['scheduled_slot_label'] ?? ''));
+$scheduledSlotLabel = '';
 $billingAddressLine1 = trim((string)($_POST['billing_address_line1'] ?? ''));
 $billingAddressLine2 = trim((string)($_POST['billing_address_line2'] ?? ''));
 $billingCity = trim((string)($_POST['billing_city'] ?? ''));
 $billingState = trim((string)($_POST['billing_state'] ?? ''));
 $billingPostalCode = trim((string)($_POST['billing_postal_code'] ?? ''));
 $deliveryMapsLink = trim((string)($_POST['delivery_maps_link'] ?? ''));
+$orderMode = trim((string)($_POST['order_mode'] ?? 'scheduled_custom'));
+if (!in_array($orderMode, ['ready_pos', 'scheduled_custom'], true)) {
+    $orderMode = 'scheduled_custom';
+}
+$slotId = max((int)($_POST['slot_id'] ?? 0), 0);
+$slotBookingDate = trim((string)($_POST['slot_booking_date'] ?? ''));
+$slotFormLabel = trim((string)($_POST['slot_label'] ?? ''));
 $advanceAmount = (float)($_POST['advance_amount'] ?? 0);
 if ($advanceAmount < 0) { $advanceAmount = 0; }
+$couponCode = strtoupper(trim((string)($_POST['coupon_code'] ?? '')));
 
 $customerPhone = normalize_phone_for_lookup($customerPhone);
 
@@ -163,12 +188,29 @@ if (count($orderItems) === 0 && ($itemName === '' || $amount <= 0)) {
     manual_order_redirect_error('Manual order requires at least one item with a valid price.');
 }
 
+// Build topper price map before order-items loop (used to recalculate amount)
+$activeTopperMap = [];
+$topperStmt = $conn->query('SELECT id, name, price FROM cake_toppers WHERE is_active = 1 ORDER BY sort_order ASC, id ASC');
+if ($topperStmt instanceof mysqli_result) {
+    while ($topperRow = $topperStmt->fetch_assoc()) {
+        $activeTopperMap[(int)$topperRow['id']] = [
+            'name'  => (string)$topperRow['name'],
+            'price' => (float)$topperRow['price'],
+        ];
+    }
+    $topperStmt->free();
+}
+
 if (count($orderItems) > 0) {
     $amount = 0;
     foreach ($orderItems as $item) {
         $itemQty = max((int)($item['quantity'] ?? 1), 1);
         $itemPrice = max((float)($item['unit_price'] ?? 0), 0);
-        $amount += $itemQty * $itemPrice;
+        $itemTopperId = isset($item['topper_id']) && (int)$item['topper_id'] > 0 ? (int)$item['topper_id'] : null;
+        $itemTopperPrice = ($itemTopperId !== null && array_key_exists($itemTopperId, $activeTopperMap))
+            ? (float)$activeTopperMap[$itemTopperId]['price']
+            : 0;
+        $amount += $itemQty * ($itemPrice + $itemTopperPrice);
     }
 }
 
@@ -185,20 +227,28 @@ if (!in_array($fulfilmentMode, $allowedFulfilment, true)) {
     $fulfilmentMode = 'pickup';
 }
 
-if (($fulfilmentMode === 'delivery' || $fulfilmentMode === 'custom_delivery') && $scheduledSlotRaw === '') {
-    manual_order_redirect_error('Delivery date and time are required for delivery/manual dispatch orders.');
-}
-
+// scheduled_slot is now derived from the slot booking system (slot_id + slot_booking_date).
+// Manual datetime-local entry has been removed. Pre-populate from slot data if available.
 $scheduledSlotForDb = null;
-if ($scheduledSlotRaw !== '') {
-    $slotTs = strtotime($scheduledSlotRaw);
-    if ($slotTs === false) {
-        manual_order_redirect_error('Invalid delivery date/time format.');
+if ($slotId > 0 && $slotBookingDate !== '') {
+    $slotDateTs = strtotime($slotBookingDate);
+    if ($slotDateTs !== false) {
+        $slotInfoStmt = $conn->prepare('SELECT slot_label, start_time FROM order_slots WHERE id = ? LIMIT 1');
+        if ($slotInfoStmt) {
+            $slotInfoStmt->bind_param('i', $slotId);
+            $slotInfoStmt->execute();
+            $slotInfoRow = $slotInfoStmt->get_result()->fetch_assoc();
+            $slotInfoStmt->close();
+            if ($slotInfoRow) {
+                $startTime = !empty($slotInfoRow['start_time']) ? $slotInfoRow['start_time'] : '00:00:00';
+                $scheduledSlotForDb  = date('Y-m-d', $slotDateTs) . ' ' . $startTime;
+                $scheduledSlotLabel  = $slotInfoRow['slot_label'] ?: $slotFormLabel;
+            }
+        }
     }
-    $scheduledSlotForDb = date('Y-m-d H:i:s', $slotTs);
-    if ($scheduledSlotLabel === '') {
-        $scheduledSlotLabel = date('d M Y h:i A', $slotTs);
-    }
+}
+if ($scheduledSlotLabel === '' && $slotFormLabel !== '') {
+    $scheduledSlotLabel = $slotFormLabel;
 }
 
 $allowedOrderStatus = ['pending', 'confirmed', 'in_preparation', 'completed', 'cancelled'];
@@ -215,6 +265,55 @@ $allowedPaymentMethods = ['upi_manual', 'cod', 'gateway', 'credit'];
 if (!in_array($paymentMethod, $allowedPaymentMethods, true)) {
     $paymentMethod = 'upi_manual';
 }
+
+// $activeTopperMap is now built earlier (before the orderItems recalculation loop).
+
+// ── Coupon validation for manual order ────────────────────────────────────
+$appliedCouponId = null;
+$discountTotal   = 0.0;
+if ($couponCode !== '') {
+    $couponRow = null;
+    $cs = $conn->prepare('SELECT id, discount_type, discount_value, max_discount, min_order_amount, usage_limit, usage_count, starts_at, ends_at, applicable_to FROM coupons WHERE UPPER(code) = ? AND is_active = 1 AND is_deleted = 0 LIMIT 1');
+    if ($cs) {
+        $cs->bind_param('s', $couponCode);
+        $cs->execute();
+        $couponRow = $cs->get_result()->fetch_assoc();
+        $cs->close();
+    }
+    if (!$couponRow) {
+        manual_order_redirect_error('Coupon code not found or inactive: ' . htmlspecialchars($couponCode, ENT_QUOTES, 'UTF-8'));
+    }
+    $couponModules = array_map('trim', explode(',', (string)($couponRow['applicable_to'] ?? '')));
+    if (!in_array('manual', $couponModules, true)) {
+        manual_order_redirect_error('Coupon "' . htmlspecialchars($couponCode, ENT_QUOTES, 'UTF-8') . '" cannot be used for manual orders.');
+    }
+    $now = time();
+    if (!empty($couponRow['starts_at']) && strtotime((string)$couponRow['starts_at']) > $now) {
+        manual_order_redirect_error('Coupon is not yet active.');
+    }
+    if (!empty($couponRow['ends_at']) && strtotime((string)$couponRow['ends_at']) < $now) {
+        manual_order_redirect_error('Coupon has expired.');
+    }
+    if ($couponRow['usage_limit'] !== null && (int)$couponRow['usage_count'] >= (int)$couponRow['usage_limit']) {
+        manual_order_redirect_error('Coupon usage limit has been reached.');
+    }
+    $minOrder = $couponRow['min_order_amount'] !== null ? (float)$couponRow['min_order_amount'] : 0.0;
+    if ($amount < $minOrder) {
+        manual_order_redirect_error('Order total must be at least ₹' . number_format($minOrder, 2) . ' to use this coupon.');
+    }
+    $appliedCouponId = (int)$couponRow['id'];
+    if ((string)$couponRow['discount_type'] === 'flat') {
+        $discountTotal = min((float)$couponRow['discount_value'], $amount);
+    } else {
+        $discountTotal = ($amount * (float)$couponRow['discount_value']) / 100.0;
+        if ($couponRow['max_discount'] !== null) {
+            $discountTotal = min($discountTotal, (float)$couponRow['max_discount']);
+        }
+    }
+    $discountTotal = round($discountTotal, 2);
+}
+$grandTotal = max(round($amount - $discountTotal, 2), 0.0);
+// ─────────────────────────────────────────────────────────────────────────
 
 try {
     $conn->begin_transaction();
@@ -294,13 +393,116 @@ try {
         $orderStatus = $orderStatus === 'cancelled' ? 'cancelled' : 'confirmed';
     }
 
-    $orderInsert = $conn->prepare('INSERT INTO orders (order_number, user_id, customer_name, customer_email, customer_phone, fulfilment_mode, order_status, payment_status, payment_method, payment_confirmed_at, payment_confirmed_by_admin_id, scheduled_slot, scheduled_slot_label, billing_address_line1, billing_address_line2, billing_city, billing_state, billing_postal_code, delivery_maps_link, advance_amount, subtotal, discount_total, tax_total, grand_total, admin_note) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?)');
-    $confirmedAt = $paymentStatus === 'paid' ? date('Y-m-d H:i:s') : null;
-    $confirmedBy = ($paymentStatus === 'paid' && !empty($_SESSION['admin'])) ? (int)$_SESSION['admin'] : null;
+    $requiresKitchenProduction = ($orderMode === 'ready_pos') ? 0 : 1;
+    $productionStatus = ($orderMode === 'ready_pos') ? 'not_required' : 'pending';
+    if ($orderMode === 'ready_pos') {
+        $fulfilmentMode = 'pickup';
+        if (!in_array($orderStatus, ['confirmed', 'completed'], true)) {
+            $orderStatus = 'confirmed';
+        }
+    }
+    if ($scheduledSlotLabel === '' && $slotFormLabel !== '') {
+        $scheduledSlotLabel = $slotFormLabel;
+    }
+
+    $orderInsert = $conn->prepare('INSERT INTO orders (order_number, user_id, customer_name, customer_email, customer_phone, customer_phone_e164, fulfilment_mode, order_status, payment_status, payment_method, payment_confirmed_at, payment_confirmed_by_admin_id, scheduled_slot, scheduled_slot_label, billing_address_line1, billing_address_line2, billing_city, billing_state, billing_postal_code, delivery_maps_link, advance_amount, subtotal, discount_total, tax_total, grand_total, admin_note, order_mode, requires_kitchen_production, production_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)');
+    $confirmedAt = in_array($paymentStatus, ['paid', 'confirmed'], true) ? date('Y-m-d H:i:s') : null;
+    $confirmedBy = (in_array($paymentStatus, ['paid', 'confirmed'], true) && !empty($_SESSION['admin'])) ? (int)$_SESSION['admin'] : null;
     $advanceForDb = $advanceAmount > 0 ? $advanceAmount : null;
-    $orderInsert->bind_param('sissssssssissssssssddds', $orderNumber, $userId, $customerName, $customerEmail, $customerPhone, $fulfilmentMode, $orderStatus, $paymentStatus, $paymentMethod, $confirmedAt, $confirmedBy, $scheduledSlotForDb, $scheduledSlotLabel, $billingAddressLine1, $billingAddressLine2, $billingCity, $billingState, $billingPostalCode, $deliveryMapsLink, $advanceForDb, $amount, $amount, $finalNote);
+    $orderInsert->bind_param('sisssssssssissssssssddddssis', $orderNumber, $userId, $customerName, $customerEmail, $customerPhone, $customerPhoneE164, $fulfilmentMode, $orderStatus, $paymentStatus, $paymentMethod, $confirmedAt, $confirmedBy, $scheduledSlotForDb, $scheduledSlotLabel, $billingAddressLine1, $billingAddressLine2, $billingCity, $billingState, $billingPostalCode, $deliveryMapsLink, $advanceForDb, $amount, $discountTotal, $grandTotal, $finalNote, $orderMode, $requiresKitchenProduction, $productionStatus);
     $orderInsert->execute();
     $orderId = (int)$conn->insert_id;
+
+    // Slot reservation for scheduled_custom orders
+    if ($orderId > 0 && $orderMode === 'scheduled_custom' && $slotId > 0 && $slotBookingDate !== '') {
+        $slotDateTs = strtotime($slotBookingDate);
+        if ($slotDateTs !== false) {
+            $slotDateForDb = date('Y-m-d', $slotDateTs);
+            $reserveStmt = $conn->prepare('INSERT IGNORE INTO slot_reservations (order_id, slot_id, booking_date, reservation_status, confirmed_at, created_at, updated_at) VALUES (?, ?, ?, "confirmed", NOW(), NOW(), NOW())');
+            $reserveStmt->bind_param('iis', $orderId, $slotId, $slotDateForDb);
+            $reserveStmt->execute();
+            $capStmt = $conn->prepare('INSERT INTO slot_capacities (slot_id, booking_date, booked_count) VALUES (?, ?, 1) ON DUPLICATE KEY UPDATE booked_count = booked_count + 1');
+            $capStmt->bind_param('is', $slotId, $slotDateForDb);
+            $capStmt->execute();
+            $slotUpdateStmt = $conn->prepare('UPDATE orders SET slot_id = ? WHERE id = ?');
+            $slotUpdateStmt->bind_param('ii', $slotId, $orderId);
+            $slotUpdateStmt->execute();
+        }
+    }
+
+    // Record coupon redemption if a coupon was applied
+    if ($orderId > 0 && $appliedCouponId !== null) {
+        $redemptionStmt = $conn->prepare('INSERT IGNORE INTO coupon_redemptions (coupon_id, order_id, user_id, code_snapshot, discount_total) VALUES (?, ?, ?, ?, ?)');
+        if ($redemptionStmt) {
+            $redemptionUserId = $userId > 0 ? $userId : null;
+            $redemptionStmt->bind_param('iiisd', $appliedCouponId, $orderId, $redemptionUserId, $couponCode, $discountTotal);
+            $redemptionStmt->execute();
+            $redemptionStmt->close();
+        }
+        $usageStmt = $conn->prepare('UPDATE coupons SET usage_count = usage_count + 1 WHERE id = ?');
+        if ($usageStmt) {
+            $usageStmt->bind_param('i', $appliedCouponId);
+            $usageStmt->execute();
+            $usageStmt->close();
+        }
+    }
+
+    $adminIdForFinancial = isset($_SESSION['admin']) ? (int)$_SESSION['admin'] : 0;
+    $adminNameForFinancial = isset($_SESSION['admin_name']) ? (string)$_SESSION['admin_name'] : 'Admin';
+    $financialEngine = new \App\Services\FinancialTransactionEngine();
+    $recognizedAmount = max(0.0, round($grandTotal, 2));
+    $advanceCollectedAmount = max(0.0, round(min($advanceAmount, $grandTotal), 2));
+
+    if ($recognizedAmount > 0 && $paymentStatus === 'credit') {
+        $postResult = $financialEngine->recordCreditSaleRecognized([
+            'order_id' => $orderId,
+            'order_number' => $orderNumber,
+            'amount' => $recognizedAmount,
+            'payment_status' => $paymentStatus,
+            'source_reference' => 'admin/save_manual_order.php',
+            'idempotency_key' => 'manual-order-credit:' . $orderId,
+            'admin_id' => $adminIdForFinancial,
+            'admin_name' => $adminNameForFinancial,
+            'narration' => 'Credit sale recognized on manual order creation',
+        ]);
+        if (!$postResult['success']) {
+            error_log('[save_manual_order][fte-credit] ' . $postResult['message']);
+        }
+    } elseif ($recognizedAmount > 0 && $paymentStatus === 'paid' && $paymentMethod !== 'credit') {
+        $postResult = $financialEngine->recordPaymentReceived([
+            'order_id' => $orderId,
+            'order_number' => $orderNumber,
+            'amount' => $recognizedAmount,
+            'payment_method' => $paymentMethod,
+            'payment_status' => $paymentStatus,
+            'source_reference' => 'admin/save_manual_order.php',
+            'idempotency_key' => 'manual-order-paid:' . $orderId,
+            'admin_id' => $adminIdForFinancial,
+            'admin_name' => $adminNameForFinancial,
+            'narration' => 'Payment received on manual order creation',
+        ]);
+        if (!$postResult['success']) {
+            error_log('[save_manual_order][fte-paid] ' . $postResult['message']);
+        }
+    }
+
+    if ($advanceCollectedAmount > 0 && in_array($paymentStatus, ['pending', 'partial'], true)) {
+        $postResult = $financialEngine->recordAdvanceCollected([
+            'order_id' => $orderId,
+            'order_number' => $orderNumber,
+            'amount' => $advanceCollectedAmount,
+            'payment_method' => $paymentMethod,
+            'payment_status' => $paymentStatus,
+            'source_reference' => 'admin/save_manual_order.php',
+            'idempotency_key' => 'manual-order-advance:' . $orderId,
+            'admin_id' => $adminIdForFinancial,
+            'admin_name' => $adminNameForFinancial,
+            'narration' => 'Advance collected on manual order creation',
+        ]);
+        if (!$postResult['success']) {
+            error_log('[save_manual_order][fte-advance] ' . $postResult['message']);
+        }
+    }
 
     // Fallback product ID used when a custom item has no linked product (product_id=0)
     $fallbackProductId = 0;
@@ -313,9 +515,10 @@ try {
     }
 
     if (count($orderItems) > 0) {
-        $itemInsert = $conn->prepare('INSERT INTO order_items (order_id, product_id, variant_id, product_name_snapshot, variant_snapshot, unit_price, quantity, line_total, customisation_note) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
+        $itemInsert = $conn->prepare('INSERT INTO order_items (order_id, product_id, variant_id, product_name_snapshot, variant_snapshot, unit_price, quantity, line_total, customisation_note, cake_message, topper_id, topper_name_snapshot, topper_price_snapshot) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
         foreach ($orderItems as $item) {
             $itemProductId = max((int)($item['product_id'] ?? 0), 0);
+            $isCustomItem = !empty($item['is_custom_item']);
             // Custom items submitted with product_id=0; use fallback to satisfy FK constraint
             if ($itemProductId <= 0) {
                 $itemProductId = $fallbackProductId;
@@ -325,8 +528,36 @@ try {
             $itemVariantLabel = trim((string)($item['variant_label'] ?? ''));
             $itemQty = max((int)($item['quantity'] ?? 1), 1);
             $itemPrice = max((float)($item['unit_price'] ?? 0), 0);
-            $itemLineTotal = $itemQty * $itemPrice;
-            $itemNote = trim((string)($item['note'] ?? ''));
+            $itemCakeMessage = sanitize_cake_message((string)($item['cake_message'] ?? ($item['note'] ?? '')));
+            $requestedTopperId = isset($item['topper_id']) && (int)$item['topper_id'] > 0 ? (int)$item['topper_id'] : null;
+            $topperId = null;
+            $topperNameSnapshot = null;
+            $topperPriceSnapshot = 0.00;
+
+            if (!$isCustomItem && $requestedTopperId !== null) {
+                $productFlagsStmt = $conn->prepare('SELECT topper_enabled FROM products WHERE id = ? LIMIT 1');
+                $productFlagsStmt->bind_param('i', $itemProductId);
+                $productFlagsStmt->execute();
+                $productFlagsResult = $productFlagsStmt->get_result();
+                $productFlags = $productFlagsResult ? ($productFlagsResult->fetch_assoc() ?: null) : null;
+                if ($productFlagsResult) {
+                    $productFlagsResult->free();
+                }
+                $productFlagsStmt->close();
+                $topperAllowed = !empty($productFlags) && (int)($productFlags['topper_enabled'] ?? 0) === 1;
+                if (!$topperAllowed) {
+                    throw new RuntimeException('Selected product does not allow toppers.');
+                }
+
+                if (!array_key_exists($requestedTopperId, $activeTopperMap)) {
+                    throw new RuntimeException('Invalid or inactive topper selected for manual order item.');
+                }
+                $topperId = $requestedTopperId;
+                $topperNameSnapshot = $activeTopperMap[$topperId]['name'];
+                $topperPriceSnapshot = (float)$activeTopperMap[$topperId]['price'];
+            }
+
+            $itemLineTotal = ($itemPrice + $topperPriceSnapshot) * $itemQty;
 
             if ($itemName === '') {
                 $itemName = 'Item';
@@ -335,12 +566,17 @@ try {
                 $itemVariantLabel = null;
             }
 
-            $itemInsert->bind_param('iiissiids', $orderId, $itemProductId, $itemVariantId, $itemName, $itemVariantLabel, $itemPrice, $itemQty, $itemLineTotal, $itemNote);
+            $itemCustomisationNote = null;
+            $itemInsert->bind_param('iiissdidssisd', $orderId, $itemProductId, $itemVariantId, $itemName, $itemVariantLabel, $itemPrice, $itemQty, $itemLineTotal, $itemCustomisationNote, $itemCakeMessage, $topperId, $topperNameSnapshot, $topperPriceSnapshot);
             $itemInsert->execute();
         }
     } else {
-        $itemInsert = $conn->prepare('INSERT INTO order_items (order_id, product_id, variant_id, product_name_snapshot, variant_snapshot, unit_price, quantity, line_total, customisation_note) VALUES (?, ?, NULL, ?, NULL, ?, 1, ?, "Manual order entry")');
-        $itemInsert->bind_param('iisdd', $orderId, $fallbackProductId, $itemName, $amount, $amount);
+        $itemCakeMessage = '';
+        $itemTopperId = null;
+        $itemTopperName = null;
+        $itemTopperPrice = 0.00;
+        $itemInsert = $conn->prepare('INSERT INTO order_items (order_id, product_id, variant_id, product_name_snapshot, variant_snapshot, unit_price, quantity, line_total, customisation_note, cake_message, topper_id, topper_name_snapshot, topper_price_snapshot) VALUES (?, ?, NULL, ?, NULL, ?, 1, ?, NULL, ?, ?, ?, ?, ?)');
+        $itemInsert->bind_param('iisddsisd', $orderId, $fallbackProductId, $itemName, $amount, $amount, $itemCakeMessage, $itemTopperId, $itemTopperName, $itemTopperPrice);
         $itemInsert->execute();
     }
 
@@ -415,9 +651,12 @@ try {
         }
 
         $adminId = (int)$_SESSION['admin'];
-        $logStmt = $conn->prepare('INSERT INTO admin_action_logs (admin_id, action_type, target_type, target_id, entity_type, entity_id, metadata_json) VALUES (?, "manual_order_punch", "order", ?, "manual_order", ?, ?)');
-        $logStmt->bind_param('iiss', $adminId, $orderId, $orderNumber, $meta);
-        $logStmt->execute();
+        $tableCheck = $conn->query("SELECT 1 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'admin_action_logs' LIMIT 1");
+        if ($tableCheck && $tableCheck->num_rows > 0) {
+            $logStmt = $conn->prepare('INSERT INTO admin_action_logs (admin_id, action_type, target_type, target_id, entity_type, entity_id, metadata_json) VALUES (?, "manual_order_punch", "order", ?, "manual_order", ?, ?)');
+            $logStmt->bind_param('iiss', $adminId, $orderId, $orderNumber, $meta);
+            $logStmt->execute();
+        }
     }
 
     $conn->commit();

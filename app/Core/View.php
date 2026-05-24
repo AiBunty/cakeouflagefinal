@@ -43,6 +43,8 @@ final class View
                 'gst_number' => '',
                 'pan_number' => '',
             ],
+            'navbar_logo_url' => '/client/assets/images/mainlogo.svg',
+            'footer_logo_url' => '/client/assets/images/whitelogo.png',
         ];
 
         // Merge DB-driven business settings when available.
@@ -59,6 +61,8 @@ final class View
                 'business_email',
                 'business_gst_number',
                 'business_pan_number',
+                'navbar_logo_url',
+                'footer_logo_url',
             ];
             $placeholders = implode(',', array_fill(0, count($keys), '?'));
             $stmt = $pdo->prepare("SELECT setting_key, setting_value FROM settings WHERE setting_key IN ($placeholders)");
@@ -91,6 +95,13 @@ final class View
             $siteConfig['business']['postal_code'] = $settings['business_postal_code'] ?? '';
             $siteConfig['business']['gst_number'] = $settings['business_gst_number'] ?? '';
             $siteConfig['business']['pan_number'] = $settings['business_pan_number'] ?? '';
+
+            if (($settings['navbar_logo_url'] ?? '') !== '') {
+                $siteConfig['navbar_logo_url'] = $settings['navbar_logo_url'];
+            }
+            if (($settings['footer_logo_url'] ?? '') !== '') {
+                $siteConfig['footer_logo_url'] = $settings['footer_logo_url'];
+            }
         } catch (\Throwable $e) {
             // Keep env defaults when DB settings are unavailable.
         }

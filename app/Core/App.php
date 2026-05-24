@@ -41,6 +41,7 @@ final class App
             ['method' => 'GET', 'path' => '/privacy-policy', 'handler' => [$web, 'privacy']],
             ['method' => 'GET', 'path' => '/terms', 'handler' => [$web, 'terms']],
             ['method' => 'GET', 'path' => '/shipping-info', 'handler' => [$web, 'shipping']],
+            ['method' => 'GET', 'path' => '/category', 'handler' => [$web, 'categories']],
             ['method' => 'GET', 'path' => '/category/:slug', 'handler' => [$web, 'category']],
             ['method' => 'GET', 'path' => '/product/:slug', 'handler' => [$web, 'product']],
             ['method' => 'GET', 'path' => '/cart', 'handler' => [$web, 'cart']],
@@ -171,14 +172,27 @@ final class App
             ['method' => 'GET', 'path' => '/api/admin/orders/export', 'handler' => [$adminApi, 'ordersExportCsv']],
             ['method' => 'GET', 'path' => '/api/admin/orders/:id', 'handler' => [$adminApi, 'ordersDetail']],
             ['method' => 'PATCH', 'path' => '/api/admin/orders/:id/status', 'handler' => [$adminApi, 'ordersUpdateStatus']],
+            ['method' => 'POST', 'path' => '/api/admin/orders/:id/confirm-payment', 'handler' => [$adminApi, 'ordersConfirmPayment']],
+            ['method' => 'POST', 'path' => '/api/admin/orders/:id/reject-payment', 'handler' => [$adminApi, 'ordersRejectPayment']],
+            ['method' => 'POST', 'path' => '/api/admin/orders/:id/refund/process', 'handler' => [$adminApi, 'refundProcess']],
+            ['method' => 'POST', 'path' => '/api/admin/refunds/upload-proof', 'handler' => [$adminApi, 'refundUploadProof']],
+            ['method' => 'POST', 'path' => '/api/admin/orders/:id/refund/request', 'handler' => [$adminApi, 'refundRequest']],
+            ['method' => 'GET', 'path' => '/api/admin/orders/:id/refund-history', 'handler' => [$adminApi, 'refundHistory']],
+            ['method' => 'GET', 'path' => '/api/admin/refunds', 'handler' => [$adminApi, 'refundsList']],
+            ['method' => 'POST', 'path' => '/api/admin/refunds/:id/approve', 'handler' => [$adminApi, 'refundApprove']],
+            ['method' => 'POST', 'path' => '/api/admin/refunds/:id/reject', 'handler' => [$adminApi, 'refundReject']],
+            ['method' => 'GET', 'path' => '/api/admin/refunds/report', 'handler' => [$adminApi, 'refundReport']],
             ['method' => 'GET', 'path' => '/api/admin/import/template', 'handler' => [$adminApi, 'bulkTemplate']],
             ['method' => 'GET', 'path' => '/api/admin/import/products/export', 'handler' => [$adminApi, 'productsExportCsv']],
             ['method' => 'POST', 'path' => '/api/admin/import/products', 'handler' => [$adminApi, 'bulkImportProducts']],
             ['method' => 'GET', 'path' => '/api/admin/import/logs', 'handler' => [$adminApi, 'bulkImportLogs']],
             ['method' => 'GET', 'path' => '/api/admin/import/logs/:file/failed-rows', 'handler' => [$adminApi, 'bulkImportFailedRowsCsv']],
             ['method' => 'GET', 'path' => '/api/admin/media', 'handler' => [$adminApi, 'mediaList']],
-            ['method' => 'POST', 'path' => '/api/admin/media/upload', 'handler' => [$api, 'mediaUpload']],
+            ['method' => 'POST', 'path' => '/api/admin/media/upload', 'handler' => [$adminApi, 'mediaUpload']],
             ['method' => 'POST', 'path' => '/api/admin/media/delete', 'handler' => [$adminApi, 'mediaDelete']],
+            ['method' => 'GET', 'path' => '/api/admin/media/processing/summary', 'handler' => [$adminApi, 'mediaProcessingSummary']],
+            ['method' => 'GET', 'path' => '/api/admin/media/processing/jobs', 'handler' => [$adminApi, 'mediaProcessingJobs']],
+            ['method' => 'POST', 'path' => '/api/admin/branding/upload', 'handler' => [$adminApi, 'brandingUpload']],
             ['method' => 'POST', 'path' => '/api/admin/products/:id/media/attach', 'handler' => [$adminApi, 'productMediaAttach']],
             ['method' => 'GET', 'path' => '/api/admin/products/:id/media', 'handler' => [$adminApi, 'productMediaList']],
             ['method' => 'PATCH', 'path' => '/api/admin/products/:id/media/reorder', 'handler' => [$adminApi, 'productMediaReorderAll']],
@@ -201,6 +215,7 @@ final class App
             ['method' => 'POST', 'path' => '/api/admin/settings/whatsapp/test', 'handler' => [$adminApi, 'whatsappSettingsTest']],
             ['method' => 'GET', 'path' => '/api/admin/communication/templates', 'handler' => [$adminApi, 'communicationTemplatesList']],
             ['method' => 'PATCH', 'path' => '/api/admin/communication/templates/:id', 'handler' => [$adminApi, 'communicationTemplateUpdate']],
+            ['method' => 'POST', 'path' => '/api/admin/communication/templates/:id/test', 'handler' => [$adminApi, 'communicationTemplateSendTest']],
             ['method' => 'GET', 'path' => '/api/admin/communication/logs', 'handler' => [$adminApi, 'communicationLogsList']],
             ['method' => 'POST', 'path' => '/api/admin/communication/logs/:id/retry', 'handler' => [$adminApi, 'communicationRetry']],
             ['method' => 'GET', 'path' => '/api/admin/whatsapp/templates', 'handler' => [$adminApi, 'whatsappTemplatesList']],
@@ -248,6 +263,17 @@ final class App
             ['method' => 'POST', 'path' => '/api/admin/queue/process', 'handler' => [$adminApi, 'queueProcessNow']],
             ['method' => 'GET', 'path' => '/cron/queue/process', 'handler' => [$cron, 'queueProcess']],
             ['method' => 'GET', 'path' => '/cron/whatsapp/templates/sync', 'handler' => [$cron, 'whatsappTemplateSync']],
+
+            // ── Slot Management ───────────────────────────────────────────────
+            ['method' => 'GET',    'path' => '/api/admin/slots',                    'handler' => [$adminApi, 'slotsList']],
+            ['method' => 'POST',   'path' => '/api/admin/slots',                    'handler' => [$adminApi, 'slotCreate']],
+            ['method' => 'GET',    'path' => '/api/admin/slots/usage',              'handler' => [$adminApi, 'slotUsage']],
+            ['method' => 'PATCH',  'path' => '/api/admin/slots/:id',                'handler' => [$adminApi, 'slotUpdate']],
+            ['method' => 'DELETE', 'path' => '/api/admin/slots/:id',                'handler' => [$adminApi, 'slotDelete']],
+            ['method' => 'POST',   'path' => '/api/admin/slots/:id/toggle',         'handler' => [$adminApi, 'slotToggle']],
+            ['method' => 'GET',    'path' => '/api/admin/slots/:id/exceptions',     'handler' => [$adminApi, 'slotExceptionsList']],
+            ['method' => 'POST',   'path' => '/api/admin/slots/:id/exceptions',     'handler' => [$adminApi, 'slotExceptionCreate']],
+            ['method' => 'DELETE', 'path' => '/api/admin/slot-exceptions',          'handler' => [$adminApi, 'slotExceptionDelete']],
         ];
     }
 
@@ -289,7 +315,7 @@ final class App
             Response::json([
                 'success' => false,
                 'message' => 'Invalid CSRF token',
-            ], 419);
+            ], 403);
             return;
         }
 

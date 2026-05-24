@@ -25,9 +25,10 @@ if ($id <= 0) {
 }
 
 $adminId = isset($_SESSION['admin']) ? (int)$_SESSION['admin'] : 0;
+$adminName = isset($_SESSION['admin_name']) ? (string)$_SESSION['admin_name'] : 'Admin';
 
 // Confirm this order is actually a credit order
-$check = $conn->prepare('SELECT id FROM orders WHERE id = ? AND payment_status = "credit" LIMIT 1');
+$check = $conn->prepare('SELECT id, order_number, grand_total, COALESCE(refund_amount, 0) AS refund_amount FROM orders WHERE id = ? AND payment_status = "credit" LIMIT 1');
 if (!$check) {
     http_response_code(500);
     die('DB error');
@@ -57,6 +58,25 @@ if (!$stmt->execute()) {
     die('Update failed');
 }
 $stmt->close();
+
+$settlementAmount = max(0.0, round((float)($found['grand_total'] ?? 0) - (float)($found['refund_amount'] ?? 0), 2));
+if ($settlementAmount > 0) {
+    $engine = new \App\Services\FinancialTransactionEngine();
+    $postResult = $engine->recordBalanceSettled([
+        'order_id' => $id,
+        'order_number' => (string)($found['order_number'] ?? ''),
+        'amount' => $settlementAmount,
+        'payment_method' => $collectedMethod,
+        'source_reference' => 'admin/collect_credit.php',
+        'idempotency_key' => 'credit-balance-settled:' . $id . ':' . $collectedMethod,
+        'admin_id' => $adminId,
+        'admin_name' => $adminName,
+        'narration' => 'Credit order balance collected from admin credit report',
+    ]);
+    if (!$postResult['success']) {
+        error_log('[collect_credit][fte] ' . $postResult['message']);
+    }
+}
 
 // Allow redirect to order_details or credit_report only (open-redirect guard)
 $safeRedirects = array('credit_report.php', 'order_details.php', 'orders.php', 'sales_register.php', 'collection_report.php');

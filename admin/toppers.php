@@ -1,7 +1,7 @@
 <?php
 $pageTitle = "Cake Toppers";
-include "layout.php";
-require __DIR__ . '/includes/db.php';
+require_once __DIR__ . '/layout.php';
+require_once __DIR__ . '/includes/db.php';
 
 function topper_h(string $v): string {
     return htmlspecialchars($v, ENT_QUOTES, 'UTF-8');

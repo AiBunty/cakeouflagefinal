@@ -1,8 +1,10 @@
 <?php
 $pageTitle = 'Dashboard';
-include 'layout.php';
+require_once __DIR__ . '/layout.php';
 
-require __DIR__ . '/includes/db.php';
+require_once __DIR__ . '/includes/db.php';
+
+use App\Services\FinanceReportService;
 
 if (!isset($_SESSION['admin'])) {
     header('Location: login.php');
@@ -29,18 +31,32 @@ $totalOrders = (int)metric_value($conn, 'SELECT COUNT(*) FROM orders');
 $totalUsers = (int)metric_value($conn, 'SELECT COUNT(*) FROM users');
 $totalProducts = (int)metric_value($conn, 'SELECT COUNT(*) FROM products');
 
-$pendingOrders = (int)metric_value($conn, 'SELECT COUNT(*) FROM orders WHERE order_status = "pending"');
-$completedOrders = (int)metric_value($conn, 'SELECT COUNT(*) FROM orders WHERE order_status = "completed"');
+$pendingOrders = (int)metric_value($conn, 'SELECT COUNT(*) FROM orders WHERE order_status = "pending_payment"');
+$completedOrders = (int)metric_value($conn, 'SELECT COUNT(*) FROM orders WHERE order_status IN ("delivered","completed")');
 $paymentPendingOrders = (int)metric_value($conn, 'SELECT COUNT(*) FROM orders WHERE payment_status = "pending"');
-$rejectedOrders = (int)metric_value($conn, 'SELECT COUNT(*) FROM orders WHERE order_status = "cancelled" OR payment_status = "failed"');
+$rejectedOrders = (int)metric_value($conn, 'SELECT COUNT(*) FROM orders WHERE order_status IN ("cancelled","rejected") OR payment_status IN ("failed","rejected")');
 
-$todayRevenue = (float)metric_value($conn, 'SELECT COALESCE(SUM(grand_total),0) FROM orders WHERE payment_status = "paid" AND order_status <> "cancelled" AND DATE(COALESCE(payment_confirmed_at, created_at)) = CURDATE()');
+$financeReports = new FinanceReportService();
+$financeSnapshot = $financeReports->getDashboardSnapshot();
 
-$thisMonthRevenue = (float)metric_value($conn, 'SELECT COALESCE(SUM(grand_total),0) FROM orders WHERE payment_status = "paid" AND order_status <> "cancelled" AND YEAR(COALESCE(payment_confirmed_at, created_at)) = YEAR(CURDATE()) AND MONTH(COALESCE(payment_confirmed_at, created_at)) = MONTH(CURDATE())');
-$lastMonthRevenue = (float)metric_value($conn, 'SELECT COALESCE(SUM(grand_total),0) FROM orders WHERE payment_status = "paid" AND order_status <> "cancelled" AND YEAR(COALESCE(payment_confirmed_at, created_at)) = YEAR(DATE_SUB(CURDATE(), INTERVAL 1 MONTH)) AND MONTH(COALESCE(payment_confirmed_at, created_at)) = MONTH(DATE_SUB(CURDATE(), INTERVAL 1 MONTH))');
+$refundedToday = (float)$financeSnapshot['refunded_today'];
+$pendingRefunds = (int)$financeSnapshot['pending_refunds'];
+$partialRefundCount = (int)$financeSnapshot['partial_refunds'];
+$fullRefundCount = (int)$financeSnapshot['full_refunds'];
+$totalRefundAmount = (float)$financeSnapshot['refunded_total'];
 
-$thisYearRevenue = (float)metric_value($conn, 'SELECT COALESCE(SUM(grand_total),0) FROM orders WHERE payment_status = "paid" AND order_status <> "cancelled" AND YEAR(COALESCE(payment_confirmed_at, created_at)) = YEAR(CURDATE())');
-$lastYearRevenue = (float)metric_value($conn, 'SELECT COALESCE(SUM(grand_total),0) FROM orders WHERE payment_status = "paid" AND order_status <> "cancelled" AND YEAR(COALESCE(payment_confirmed_at, created_at)) = YEAR(CURDATE()) - 1');
+$todayRevenue = (float)$financeSnapshot['today_revenue'];
+$thisMonthRevenue = (float)$financeSnapshot['this_month_revenue'];
+$lastMonthRevenue = (float)$financeSnapshot['last_month_revenue'];
+$pendingCollection = (float)($financeSnapshot['pending_collection'] ?? 0);
+$advanceOrders = (int)($financeSnapshot['advance_orders'] ?? 0);
+$overduePayments = (int)($financeSnapshot['overdue_payments'] ?? 0);
+$todayCollectionsDue = (int)($financeSnapshot['today_collections_due'] ?? 0);
+$totalReceivables = (float)($financeSnapshot['total_receivables'] ?? 0);
+$collectedToday = (float)($financeSnapshot['collected_today'] ?? 0);
+
+$thisYearRevenue = (float)$financeSnapshot['this_year_revenue'];
+$lastYearRevenue = (float)$financeSnapshot['last_year_revenue'];
 
 $monthDelta = $lastMonthRevenue > 0 ? (($thisMonthRevenue - $lastMonthRevenue) / $lastMonthRevenue) * 100 : 0;
 $yearDelta = $lastYearRevenue > 0 ? (($thisYearRevenue - $lastYearRevenue) / $lastYearRevenue) * 100 : 0;
@@ -205,16 +221,52 @@ $yearDelta = $lastYearRevenue > 0 ? (($thisYearRevenue - $lastYearRevenue) / $la
   </div>
 
   <div class="dash-grid">
-    <a class="dash-card" href="sales_register.php?order_status=pending">
+    <a class="dash-card" href="collections_queue.php?payment_status=pending_collection">
+      <strong>Pending Collection</strong>
+      <div class="value">Rs <?= number_format($pendingCollection, 2) ?></div>
+      <div class="meta">Outstanding balance pending collection</div>
+    </a>
+
+    <a class="dash-card" href="collections_queue.php?payment_status=pending_collection&followup_status=all">
+      <strong>Advance Orders</strong>
+      <div class="value"><?= $advanceOrders ?></div>
+      <div class="meta">Orders with advance paid and balance due</div>
+    </a>
+
+    <a class="dash-card" href="collections_queue.php?payment_status=overdue&action_due=overdue">
+      <strong>Overdue Payments</strong>
+      <div class="value" style="color:#b91c1c;"><?= $overduePayments ?></div>
+      <div class="meta">Receivables past due date</div>
+    </a>
+
+    <a class="dash-card" href="collections_queue.php?payment_status=due_today&action_due=today">
+      <strong>Today Collections Due</strong>
+      <div class="value"><?= $todayCollectionsDue ?></div>
+      <div class="meta">Receivables due today</div>
+    </a>
+
+    <a class="dash-card" href="collections_queue.php?payment_status=pending_collection">
+      <strong>Total Receivables</strong>
+      <div class="value">Rs <?= number_format($totalReceivables, 2) ?></div>
+      <div class="meta">Current open receivable book</div>
+    </a>
+
+    <a class="dash-card" href="sales_register.php?payment_status=realized_only&date_preset=today">
+      <strong>Collected Today</strong>
+      <div class="value">Rs <?= number_format($collectedToday, 2) ?></div>
+      <div class="meta">Net cash collected today</div>
+    </a>
+
+    <a class="dash-card" href="sales_register.php?order_status=pending_payment">
       <strong>Pending Orders</strong>
       <div class="value"><?= $pendingOrders ?></div>
       <div class="meta">Click for pending order detail report</div>
     </a>
 
     <a class="dash-card" href="sales_register.php?payment_status=paid&from_date=<?= date('Y-m-d') ?>&to_date=<?= date('Y-m-d') ?>">
-      <strong>Today's Revenue</strong>
+      <strong>Today's Net Revenue</strong>
       <div class="value">Rs <?= number_format($todayRevenue, 2) ?></div>
-      <div class="meta">Paid revenue for today</div>
+      <div class="meta">Paid revenue minus refunds for today</div>
     </a>
 
     <a class="dash-card" href="sales_register.php?payment_status=paid">
@@ -232,16 +284,39 @@ $yearDelta = $lastYearRevenue > 0 ? (($thisYearRevenue - $lastYearRevenue) / $la
         <span class="<?= $yearDelta >= 0 ? 'delta-up' : 'delta-down' ?>"><?= ($yearDelta >= 0 ? '+' : '') . number_format($yearDelta, 1) ?>%</span>
       </div>
     </a>
+
+    <a class="dash-card" <?= $pendingRefunds > 0 ? 'style="border-color:#f59e0b;"' : '' ?> href="refunds.php?tab=pending">
+      <strong>Legacy Pending Refunds</strong>
+      <div class="value" <?= $pendingRefunds > 0 ? 'style="color:#d97706;"' : '' ?>><?= $pendingRefunds ?></div>
+      <div class="meta"><?= $pendingRefunds > 0 ? '&#9888; Awaiting approval' : 'No refunds pending' ?></div>
+    </a>
+
+    <a class="dash-card" style="border-color:#7c3aed;" href="refunds.php?tab=processed">
+      <strong>Processed Refunds</strong>
+      <div class="value" style="color:#7c3aed;"><?= $partialRefundCount + $fullRefundCount ?></div>
+      <div class="meta"><?= $partialRefundCount ?> partial &bull; <?= $fullRefundCount ?> full</div>
+    </a>
+
+    <a class="dash-card" href="refund_report.php">
+      <strong>Total Refunded</strong>
+      <div class="value" style="color:#dc2626;">&#8377;<?= number_format($totalRefundAmount, 0) ?></div>
+      <div class="meta">Today: &#8377;<?= number_format($refundedToday, 0) ?></div>
+    </a>
   </div>
 
   <div class="dash-summary">
     <section class="dash-panel">
       <h3>Operational Reports</h3>
       <div class="dash-links">
-        <a class="dash-link" href="sales_register.php?order_status=pending">Pending Orders</a>
-        <a class="dash-link" href="sales_register.php?order_status=completed">Completed Orders</a>
+        <a class="dash-link" href="sales_register.php?order_status=pending_payment">Pending Orders</a>
+        <a class="dash-link" href="collections_queue.php?payment_status=pending_collection">Collections Queue</a>
+        <a class="dash-link" href="sales_register.php?order_status=delivered">Delivered Orders</a>
         <a class="dash-link" href="sales_register.php?payment_status=pending">Payment Pending</a>
         <a class="dash-link" href="collection_report.php?payment_status=credit&payment_method=credit">Credit Orders</a>
+        <?php if (admin_has_permission('can_approve_refund') || admin_has_permission('can_view_refund_reports')): ?>
+        <a class="dash-link" href="refunds.php">Refunds Queue</a>
+        <a class="dash-link" href="refund_report.php">Refund Report</a>
+        <?php endif; ?>
       </div>
       <div class="scope-exports">
         <div class="scope-row scope-row--head">
@@ -252,15 +327,15 @@ $yearDelta = $lastYearRevenue > 0 ? (($thisYearRevenue - $lastYearRevenue) / $la
         </div>
         <div class="scope-row">
           <div class="scope-name">Pending Orders</div>
-          <a class="scope-export-btn" href="sales_register.php?order_status=pending&export=csv">CSV</a>
-          <a class="scope-export-btn" href="sales_register.php?order_status=pending&export=excel">Excel</a>
-          <a class="scope-export-btn" href="sales_register.php?order_status=pending&export=pdf">PDF</a>
+          <a class="scope-export-btn" href="sales_register.php?order_status=pending_payment&export=csv">CSV</a>
+          <a class="scope-export-btn" href="sales_register.php?order_status=pending_payment&export=excel">Excel</a>
+          <a class="scope-export-btn" href="sales_register.php?order_status=pending_payment&export=pdf">PDF</a>
         </div>
         <div class="scope-row">
-          <div class="scope-name">Completed Orders</div>
-          <a class="scope-export-btn" href="sales_register.php?order_status=completed&export=csv">CSV</a>
-          <a class="scope-export-btn" href="sales_register.php?order_status=completed&export=excel">Excel</a>
-          <a class="scope-export-btn" href="sales_register.php?order_status=completed&export=pdf">PDF</a>
+          <div class="scope-name">Delivered Orders</div>
+          <a class="scope-export-btn" href="sales_register.php?order_status=delivered&export=csv">CSV</a>
+          <a class="scope-export-btn" href="sales_register.php?order_status=delivered&export=excel">Excel</a>
+          <a class="scope-export-btn" href="sales_register.php?order_status=delivered&export=pdf">PDF</a>
         </div>
         <div class="scope-row">
           <div class="scope-name">Payment Pending</div>
@@ -275,7 +350,7 @@ $yearDelta = $lastYearRevenue > 0 ? (($thisYearRevenue - $lastYearRevenue) / $la
           <a class="scope-export-btn" href="collection_report.php?payment_status=credit&payment_method=credit&export=pdf">PDF</a>
         </div>
       </div>
-      <p class="meta">Counts: Pending <?= $pendingOrders ?> | Completed <?= $completedOrders ?> | Payment Pending <?= $paymentPendingOrders ?> | Rejected <?= $rejectedOrders ?></p>
+      <p class="meta">Counts: Pending <?= $pendingOrders ?> | Delivered/Completed <?= $completedOrders ?> | Payment Pending <?= $paymentPendingOrders ?> | Rejected/Cancelled <?= $rejectedOrders ?> | Refunded Today: Rs <?= number_format($refundedToday, 2) ?></p>
     </section>
 
     <section class="dash-panel">

@@ -9,6 +9,7 @@ use App\Core\QueueWorker;
 use App\Core\Response;
 use App\Services\OrderAutomationService;
 use App\Services\ByocQuoteExpiryService;
+use App\Services\SlotService;
 use App\Services\WhatsAppMetaApiService;
 use App\Services\WhatsAppTemplateSyncService;
 
@@ -28,6 +29,16 @@ final class CronController
         $celebrations = $automation->generateDueCelebrationReminders($pdo, 400);
         $followUps = $automation->processDueFollowUps($pdo, $maxJobs);
         $crmSkipped = $this->failQueuedCrmTriggerJobs($pdo);
+
+        // Auto-expire stale slot holds
+        $expiredHolds = 0;
+        try {
+            $slotSvc = new SlotService($pdo);
+            $expiredHolds = $slotSvc->expireStaleHolds();
+        } catch (\Throwable $e) {
+            error_log('[CRON] expireStaleHolds error: ' . $e->getMessage());
+        }
+
         $result = QueueWorker::process($pdo, $maxJobs);
 
         Response::json([
@@ -38,6 +49,7 @@ final class CronController
                 'byoc_quote_expiry' => $byocExpiry,
                 'follow_ups' => $followUps,
                 'crm_jobs' => $crmSkipped,
+                'expired_slot_holds' => $expiredHolds,
                 'queue' => $result,
             ],
         ]);

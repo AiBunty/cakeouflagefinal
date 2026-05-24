@@ -6,7 +6,7 @@
         <h1 class="page-inner-title">Your Cart</h1>
         <p class="page-inner-desc">Review your selected cakes before checkout.</p>
       </div>
-      <a href="/shop" class="btn btn--outline">Continue Shopping</a>
+      <a href="/category" class="btn btn--outline">Continue Shopping</a>
     </div>
 
     <!-- Empty state -->
@@ -14,7 +14,7 @@
       <span class="empty-state__icon">🎂</span>
       <h3>Your cart is empty</h3>
       <p>Looks like you haven't added any cakes yet.</p>
-      <a href="/shop" class="btn btn--primary">Browse Cakes</a>
+      <a href="/category" class="btn btn--primary">Browse Cakes</a>
     </div>
 
     <div class="cart-layout" id="cartMain">

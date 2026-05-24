@@ -16,16 +16,22 @@ services:
       - db
 
   db:
-    image: mariadb:10.6.25
+    image: mysql:8.0
     container_name: cakeouflage-db
     restart: unless-stopped
     environment:
-      MARIADB_ROOT_PASSWORD: root
-      MARIADB_DATABASE: cakeouflage-3530373538ac
-      MARIADB_USER: cakeouflage-3530373538ac
-      MARIADB_PASSWORD: 3btoum4iwi
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: cakeouflage_local
+      MYSQL_USER: cakeouflage
+      MYSQL_PASSWORD: cakeouflage
       TZ: Asia/Kolkata
     command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
     volumes:
       - db_data:/var/lib/mysql
       - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro

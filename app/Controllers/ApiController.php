@@ -12,6 +12,9 @@ use App\Services\ByocQuoteExpiryService;
 use App\Services\OrderAutomationService;
 use App\Services\PasswordResetService;
 use App\Services\ProductImageService;
+use App\Services\UnifiedMediaService;
+use App\Services\SlotService;
+use App\Services\PhoneNormalizerService;
 use PDO;
 use Throwable;
 //session_start();
@@ -22,8 +25,34 @@ final class ApiController
     private static $topperSchemaEnsured = false;
     private static $bankAlertSchemaEnsured = false;
     private static $byocQuoteSchemaEnsured = false;
+    private static $orderLifecycleSchemaEnsured = false;
     private static $productsColumnMap = null;
 
+    private static function currentSchema(PDO $pdo): string
+    {
+        try {
+            $stmt = $pdo->query('SELECT DATABASE()');
+            return (string)($stmt ? $stmt->fetchColumn() : '');
+        } catch (Throwable $e) {
+            return '';
+        }
+    }
+
+    private static function columnExists(PDO $pdo, string $tableName, string $columnName): bool
+    {
+        $schema = self::currentSchema($pdo);
+        if ($schema === '') {
+            return false;
+        }
+
+        $check = $pdo->prepare('SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = :schema AND table_name = :table_name AND column_name = :column_name');
+        $check->bindValue(':schema', $schema);
+        $check->bindValue(':table_name', $tableName);
+        $check->bindValue(':column_name', $columnName);
+        $check->execute();
+
+        return (int)($check->fetchColumn() ?: 0) > 0;
+    }
     /** @return array<string, bool> */
     private static function productsColumnMap(PDO $pdo): array
     {
@@ -76,9 +105,13 @@ final class ApiController
     private static function developmentCategories(): array
     {
         return [
-            ['id' => 1, 'name' => 'Cakes', 'slug' => 'cakes', 'category_type' => null],
-            ['id' => 4, 'name' => 'Gifting', 'slug' => 'gifting', 'category_type' => null],
-            ['id' => 7, 'name' => 'Desserts', 'slug' => 'desserts', 'category_type' => null],
+            ['id' => 1, 'name' => 'Cakes', 'slug' => 'cakes', 'parent_id' => null, 'category_type' => null, 'product_count' => 16],
+            ['id' => 2, 'name' => 'Classic Cakes', 'slug' => 'classic-cakes', 'parent_id' => 1, 'category_type' => null, 'product_count' => 8],
+            ['id' => 3, 'name' => 'Cheesecakes', 'slug' => 'cheesecakes', 'parent_id' => 1, 'category_type' => null, 'product_count' => 5],
+            ['id' => 4, 'name' => 'Gifting', 'slug' => 'gifting', 'parent_id' => null, 'category_type' => null, 'product_count' => 10],
+            ['id' => 5, 'name' => 'Hampers', 'slug' => 'hampers', 'parent_id' => 4, 'category_type' => null, 'product_count' => 6],
+            ['id' => 6, 'name' => 'Corporate Gifting', 'slug' => 'corporate-gifting', 'parent_id' => 4, 'category_type' => null, 'product_count' => 4],
+            ['id' => 7, 'name' => 'Desserts', 'slug' => 'desserts', 'parent_id' => null, 'category_type' => null, 'product_count' => 9],
         ];
     }
 
@@ -187,7 +220,7 @@ final class ApiController
 
         $search = trim((string)($_GET['q'] ?? ''));
         if ($search !== '') {
-            $where[] = '(p.name LIKE :search OR p.short_description LIKE :search)';
+            $where[] = '(p.name LIKE :search OR p.short_description LIKE :search OR c.name LIKE :search OR COALESCE(p.flavour_notes, "") LIKE :search OR COALESCE(p.occasion_tag, "") LIKE :search)';
             $params['search'] = '%' . $search . '%';
         }
 
@@ -199,8 +232,29 @@ final class ApiController
 
         $dietary = trim((string)($_GET['dietary'] ?? ''));
         if ($dietary !== '') {
-            $where[] = 'p.dietary_tag = :dietary';
-            $params['dietary'] = $dietary;
+            $allowedDietary = ['regular', 'eggless', 'vegan', 'sugar_free'];
+            $dietaryValues = array_values(array_filter(array_map(static function (string $value): string {
+                return trim($value);
+            }, explode(',', $dietary)), static function (string $value): bool {
+                return $value !== '';
+            }));
+
+            $dietaryValues = array_values(array_unique(array_values(array_filter($dietaryValues, static function (string $value) use ($allowedDietary): bool {
+                return in_array($value, $allowedDietary, true);
+            }))));
+
+            if (count($dietaryValues) === 1) {
+                $where[] = 'p.dietary_tag = :dietary';
+                $params['dietary'] = $dietaryValues[0];
+            } elseif (count($dietaryValues) > 1) {
+                $dietaryPlaceholders = [];
+                foreach ($dietaryValues as $index => $value) {
+                    $key = 'dietary_' . $index;
+                    $dietaryPlaceholders[] = ':' . $key;
+                    $params[$key] = $value;
+                }
+                $where[] = 'p.dietary_tag IN (' . implode(', ', $dietaryPlaceholders) . ')';
+            }
         }
 
         $isVegParam = $_GET['is_veg'] ?? '';
@@ -225,6 +279,25 @@ final class ApiController
         if ($maxPrice !== false && $maxPrice !== null) {
             $where[] = $effectivePriceSql . ' <= :max_price';
             $params['max_price'] = $maxPrice;
+        }
+
+        $priceBucket = trim((string)($_GET['price_bucket'] ?? ''));
+        if ($priceBucket !== '') {
+            if ($priceBucket === 'under_500') {
+                $where[] = $effectivePriceSql . ' < :bucket_max_500';
+                $params['bucket_max_500'] = 500;
+            } elseif ($priceBucket === '500_1000') {
+                $where[] = $effectivePriceSql . ' >= :bucket_min_500 AND ' . $effectivePriceSql . ' <= :bucket_max_1000';
+                $params['bucket_min_500'] = 500;
+                $params['bucket_max_1000'] = 1000;
+            } elseif ($priceBucket === '1000_2000') {
+                $where[] = $effectivePriceSql . ' > :bucket_min_1000 AND ' . $effectivePriceSql . ' <= :bucket_max_2000';
+                $params['bucket_min_1000'] = 1000;
+                $params['bucket_max_2000'] = 2000;
+            } elseif ($priceBucket === 'above_2000') {
+                $where[] = $effectivePriceSql . ' > :bucket_min_2000';
+                $params['bucket_min_2000'] = 2000;
+            }
         }
 
         $sort = (string)($_GET['sort'] ?? 'latest');
@@ -450,12 +523,32 @@ final class ApiController
             }
             return;
         }
-        $stmt = $pdo->query(
-            "SELECT id, name, slug, NULL AS category_type
-             FROM categories
-             WHERE parent_id IS NULL AND is_active = 1 AND deleted_at IS NULL
-             ORDER BY sort_order ASC, name ASC"
-        );
+                $stmt = $pdo->query(
+                        "SELECT
+                                c.id,
+                                c.name,
+                                c.slug,
+                                c.parent_id,
+                                NULL AS category_type,
+                                (
+                                        SELECT COUNT(DISTINCT p.id)
+                                        FROM products p
+                                        WHERE p.deleted_at IS NULL
+                                            AND p.availability_status <> 'draft'
+                                            AND (
+                                                p.collection_category_id = c.id
+                                                OR p.subcategory_id = c.id
+                                                OR p.child_category_id = c.id
+                                            )
+                                ) AS product_count
+                         FROM categories c
+                         WHERE c.is_active = 1 AND c.deleted_at IS NULL
+                         ORDER BY
+                                CASE WHEN c.parent_id IS NULL THEN 0 ELSE 1 END,
+                                COALESCE(c.parent_id, c.id),
+                                c.sort_order ASC,
+                                c.name ASC"
+                );
 
         Response::json([
             'success' => true,
@@ -1071,6 +1164,11 @@ final class ApiController
         $code = strtoupper(trim((string)($input['code'] ?? '')));
         $userId = (int)($_SESSION['user_id'] ?? 0);
 
+        if ($userId <= 0) {
+            Response::json(['success' => false, 'message' => 'Please login before applying a coupon'], 401);
+            return;
+        }
+
         if ($code === '') {
             unset($_SESSION['applied_coupon']);
             $_SESSION['coupon_auto_opt_out'] = 1;
@@ -1092,6 +1190,13 @@ final class ApiController
 
         if (!$coupon) {
             Response::json(['success' => false, 'message' => 'Invalid or expired coupon'], 422);
+            return;
+        }
+
+        // Verify this coupon is usable for online orders
+        $applicableTo = array_map('trim', explode(',', (string)($coupon['applicable_to'] ?? 'online')));
+        if (!in_array('online', $applicableTo, true)) {
+            Response::json(['success' => false, 'message' => 'This coupon cannot be used for online orders'], 422);
             return;
         }
 
@@ -1172,25 +1277,88 @@ $deliveryFee = ($slab && (int)$slab['is_available'] === 1)
 
     public function fulfilmentSlots(): void
     {
-        $mode = (string)($_GET['mode'] ?? 'delivery');
-        $sameDay = (int)($_GET['same_day'] ?? 0);
+        // ── New slot management system ────────────────────────────────────────
+        // Supports both new order_slots tables and graceful fallback.
+        // Legacy delivery_time_slots table is preserved and untouched.
+        // ─────────────────────────────────────────────────────────────────────
 
-        $pdo = self::db(); if (!$pdo) return;
-        $stmt = $pdo->prepare(
-            'SELECT id, slot_label, start_time, end_time, fulfilment_mode, is_same_day_allowed
-             FROM delivery_time_slots
-             WHERE is_active = 1
-               AND (fulfilment_mode = :mode OR fulfilment_mode = "both")
-               AND (:same_day = 0 OR is_same_day_allowed = 1)
-             ORDER BY sort_order ASC'
-        );
-        $stmt->execute(['mode' => $mode, 'same_day' => $sameDay]);
+        $mode = (string)($_GET['mode'] ?? $_GET['type'] ?? 'delivery');
+        $date = trim((string)($_GET['date'] ?? ''));
+
+        // Normalise mode
+        if (!in_array($mode, ['delivery', 'pickup'], true)) {
+            $mode = 'delivery';
+        }
+
+        // Default date to today if omitted
+        if ($date === '') {
+            $date = (new \DateTimeImmutable('now'))->format('Y-m-d');
+        }
+
+        // Basic date validation
+        $d = \DateTimeImmutable::createFromFormat('Y-m-d', $date);
+        if ($d === false || $d->format('Y-m-d') !== $date) {
+            Response::json(['success' => false, 'message' => 'Invalid date format. Use YYYY-MM-DD.'], 422);
+            return;
+        }
+
+        // Reject dates more than 60 days out
+        $maxDate = (new \DateTimeImmutable('+60 days'))->format('Y-m-d');
+        if ($date > $maxDate) {
+            Response::json(['success' => false, 'message' => 'Cannot book more than 60 days in advance.'], 422);
+            return;
+        }
+
+        $pdo = self::db();
+        if (!$pdo) {
+            return;
+        }
+
+        // Check if new slot management tables exist; fall back to legacy if not
+        if (!self::tableExists($pdo, 'order_slots')) {
+            // ── Legacy fallback path ──────────────────────────────────────────
+            $stmt = $pdo->prepare(
+                'SELECT id, slot_label, start_time, end_time, fulfilment_mode, is_same_day_allowed
+                 FROM delivery_time_slots
+                 WHERE is_active = 1
+                   AND (fulfilment_mode = :mode OR fulfilment_mode = "both")
+                 ORDER BY sort_order ASC'
+            );
+            $stmt->execute(['mode' => $mode]);
+            Response::json([
+                'success' => true,
+                'data'    => [
+                    'mode'  => 'slots',
+                    'items' => $stmt->fetchAll(PDO::FETCH_ASSOC),
+                ],
+            ]);
+            return;
+        }
+
+        // ── New slot management path ──────────────────────────────────────────
+        $svc    = new SlotService($pdo);
+        $result = $svc->getAvailableSlots($mode, $date);
 
         Response::json([
             'success' => true,
-            'message' => 'ok',
-            'data' => ['items' => $stmt->fetchAll(PDO::FETCH_ASSOC)],
+            'data'    => $result,
         ]);
+    }
+
+    /** Check if a table exists in the current database (used for progressive migration) */
+    private static function tableExists(PDO $pdo, string $tableName): bool
+    {
+        try {
+            $schema = $pdo->query('SELECT DATABASE()')->fetchColumn();
+            $stmt   = $pdo->prepare(
+                "SELECT COUNT(*) FROM information_schema.TABLES
+                 WHERE TABLE_SCHEMA = :schema AND TABLE_NAME = :table LIMIT 1"
+            );
+            $stmt->execute(['schema' => $schema, 'table' => $tableName]);
+            return (int)$stmt->fetchColumn() > 0;
+        } catch (\Throwable $e) {
+            return false;
+        }
     }
 
     public function checkoutPreview(): void
@@ -1293,13 +1461,18 @@ if (!isset($_SESSION['user_id']) || empty($_SESSION['otp_verified'])) {
         $customerName = trim((string)($input['customer_name'] ?? ''));
         $customerEmail = trim((string)($input['customer_email'] ?? ''));
         $customerPhone = trim((string)($input['customer_phone'] ?? ''));
-        $customerPhone = preg_replace('/\D/', '', $customerPhone);
-
-if (strpos($customerPhone, '91') !== 0) {
-    $customerPhone = '91' . $customerPhone;
-}
-
-$customerPhone = $customerPhone;
+        $customerPhoneE164 = PhoneNormalizerService::normalize($customerPhone);
+        // Keep a clean digit-prefixed fallback for backward compat (e.g. CRM lookups)
+        if ($customerPhoneE164 !== '') {
+            $customerPhone = $customerPhoneE164;
+        } else {
+            // Legacy strip-and-prefix fallback
+            $customerPhone = preg_replace('/\D/', '', $customerPhone);
+            if ($customerPhone !== '' && strpos($customerPhone, '91') !== 0) {
+                $customerPhone = '91' . $customerPhone;
+            }
+            $customerPhoneE164 = null;
+        }
         $fulfilmentMode = (string)($input['fulfilment_mode'] ?? 'delivery');
         $paymentMethod = (string)($input['payment_method'] ?? 'upi_manual');
         if ($paymentMethod !== 'upi_manual') {
@@ -1308,6 +1481,35 @@ $customerPhone = $customerPhone;
                 'message' => 'Online checkout requires UPI payment only',
             ], 422);
             return;
+        }
+
+        // ── Screenshot validation (backend enforcement) ──
+        $screenshotRequiredSetting = $this->getSettingValue($pdo, 'payment_screenshot_required');
+        $screenshotRequired = $screenshotRequiredSetting !== '0';
+        $proofFile = $_FILES['payment_proof'] ?? null;
+        $proofFileOk = !empty($proofFile) && (int)($proofFile['error'] ?? 99) === UPLOAD_ERR_OK
+                       && is_uploaded_file($proofFile['tmp_name']);
+        if ($screenshotRequired && $paymentMethod === 'upi_manual' && !$proofFileOk) {
+            Response::json([
+                'success' => false,
+                'message' => 'Payment screenshot required before placing order.',
+                'field'   => 'paymentProof',
+            ], 422);
+            return;
+        }
+        if ($proofFileOk) {
+            // Validate MIME and size before proceeding
+            $finfo = new \finfo(FILEINFO_MIME_TYPE);
+            $proofMime = $finfo->file($proofFile['tmp_name']);
+            $allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+            if (!in_array($proofMime, $allowedMimes, true)) {
+                Response::json(['success' => false, 'message' => 'Payment screenshot must be a JPG, PNG, GIF, or WebP image.', 'field' => 'paymentProof'], 422);
+                return;
+            }
+            if ((int)$proofFile['size'] > 5 * 1024 * 1024) {
+                Response::json(['success' => false, 'message' => 'Payment screenshot must be under 5 MB.', 'field' => 'paymentProof'], 422);
+                return;
+            }
         }
         $postalCode      = trim((string)($input['delivery_pincode'] ?? $input['postal_code'] ?? ''));
         $deliveryStreet  = trim((string)($input['delivery_street'] ?? ''));
@@ -1361,24 +1563,71 @@ $customerPhone = $customerPhone;
                 return;
             }
 
-            $slotStmt = $pdo->prepare('SELECT slot_label, start_time FROM delivery_time_slots WHERE id = :id AND is_active = 1 LIMIT 1');
-            $slotStmt->execute(['id' => $slotId]);
-            $slotRow = $slotStmt->fetch(PDO::FETCH_ASSOC);
-            if (!$slotRow) {
-                Response::json([
-                    'success' => false,
-                    'message' => 'Selected delivery slot is not available',
-                ], 422);
-                return;
-            }
+            // ── Slot validation: prefer new order_slots, fallback to legacy ──
+            if (self::tableExists($pdo, 'order_slots')) {
+                // New slot system: validate slot exists and is active
+                $slotStmt = $pdo->prepare(
+                    'SELECT id, slot_label, slot_name, start_time FROM order_slots
+                     WHERE id = :id AND is_active = 1 LIMIT 1'
+                );
+                $slotStmt->execute(['id' => $slotId]);
+                $slotRow = $slotStmt->fetch(PDO::FETCH_ASSOC);
+                if (!$slotRow) {
+                    Response::json([
+                        'success' => false,
+                        'message' => 'Selected delivery slot is not available',
+                    ], 422);
+                    return;
+                }
 
-            $startTime = trim((string)($slotRow['start_time'] ?? '00:00:00'));
-            if ($startTime === '') {
-                $startTime = '00:00:00';
-            }
+                $startTime = trim((string)($slotRow['start_time'] ?? '00:00:00'));
+                if ($startTime === '') {
+                    $startTime = '00:00:00';
+                }
+                $scheduledSlot      = $deliveryDate . ' ' . $startTime;
+                $scheduledSlotLabel = trim((string)($slotRow['slot_label'] ?? ''));
 
-            $scheduledSlot = $deliveryDate . ' ' . $startTime;
-            $scheduledSlotLabel = trim((string)($slotRow['slot_label'] ?? ''));
+                // Create a temporary HOLD (no capacity consumed; admin confirms after payment)
+                $slotSvc = new SlotService($pdo);
+                try {
+                    // Validate slot still available before proceeding
+                    $preHold = $slotSvc->holdSlot($slotId, $deliveryDate, 0); // orderId placeholder
+                    if (!$preHold['success']) {
+                        Response::json([
+                            'success' => false,
+                            'message' => $preHold['message'],
+                        ], 409);
+                        return;
+                    }
+                    // Use the label returned from the hold check (authoritative)
+                    $scheduledSlotLabel = $preHold['slot_label'] ?: $scheduledSlotLabel;
+                } catch (\RuntimeException $e) {
+                    Response::json([
+                        'success' => false,
+                        'message' => $e->getMessage(),
+                    ], 409);
+                    return;
+                }
+            } else {
+                // Legacy path: delivery_time_slots
+                $slotStmt = $pdo->prepare('SELECT slot_label, start_time FROM delivery_time_slots WHERE id = :id AND is_active = 1 LIMIT 1');
+                $slotStmt->execute(['id' => $slotId]);
+                $slotRow = $slotStmt->fetch(PDO::FETCH_ASSOC);
+                if (!$slotRow) {
+                    Response::json([
+                        'success' => false,
+                        'message' => 'Selected delivery slot is not available',
+                    ], 422);
+                    return;
+                }
+
+                $startTime = trim((string)($slotRow['start_time'] ?? '00:00:00'));
+                if ($startTime === '') {
+                    $startTime = '00:00:00';
+                }
+                $scheduledSlot      = $deliveryDate . ' ' . $startTime;
+                $scheduledSlotLabel = trim((string)($slotRow['slot_label'] ?? ''));
+            }
         }
 
        if ($customerName === '' || $customerPhone === '') {
@@ -1415,17 +1664,19 @@ $grandTotal = max(0, (float)($cart['subtotal'] ?? 0) - (float)($cart['discount_t
 
 $orderStmt = $pdo->prepare('
 INSERT INTO orders (
-    order_number, user_id, customer_name, customer_email, customer_phone,
+    order_number, user_id, customer_name, customer_email, customer_phone, customer_phone_e164,
     fulfilment_mode, order_status, payment_status, payment_method,
     scheduled_slot, scheduled_slot_label,
     delivery_postal_code, delivery_street, delivery_maps_link, delivery_distance_km, delivery_fee,
-    subtotal, discount_total, tax_total, grand_total, advance_amount
+    subtotal, discount_total, tax_total, grand_total, advance_amount,
+    order_mode, requires_kitchen_production, production_status
 ) VALUES (
-    :order_number, :user_id, :customer_name, :customer_email, :customer_phone,
+    :order_number, :user_id, :customer_name, :customer_email, :customer_phone, :customer_phone_e164,
     :fulfilment_mode, "pending", :payment_status, :payment_method,
     :scheduled_slot, :scheduled_slot_label,
     :postal_code, :delivery_street, :delivery_maps_link, :distance_km, :delivery_fee,
-    :subtotal, :discount_total, 0, :grand_total, :advance_amount
+    :subtotal, :discount_total, 0, :grand_total, :advance_amount,
+    "online", 1, "pending"
 )');
 
 $orderStmt->execute([
@@ -1434,6 +1685,7 @@ $orderStmt->execute([
     'customer_name' => $customerName,
     'customer_email' => $customerEmail,
     'customer_phone' => $customerPhone,
+    'customer_phone_e164' => $customerPhoneE164,
     'fulfilment_mode' => $fulfilmentMode,
     'payment_method' => $paymentMethod,
     'payment_status' => $paymentStatus,
@@ -1454,6 +1706,20 @@ $orderStmt->execute([
 ]);
 
             $orderId = (int)$pdo->lastInsertId();
+
+            // Register official slot HOLD now that we have the real orderId
+            if (!empty($slotSvc)) {
+                try {
+                    $holdExpiryMins = (int)(getSettingValue($pdo, 'hold_expiry_minutes') ?: 60);
+                    $slotSvc->holdSlot($slotId, $deliveryDate, $orderId, $holdExpiryMins);
+                    // Denormalize slot_id onto order for fast fulfillment queries
+                    $pdo->prepare('UPDATE orders SET slot_id = :slot_id WHERE id = :id')
+                        ->execute(['slot_id' => $slotId, 'id' => $orderId]);
+                } catch (\Throwable $holdErr) {
+                    // Non-fatal — order is placed; hold will show as missing in admin
+                    error_log('[placeOrder] slot hold creation failed: ' . $holdErr->getMessage());
+                }
+            }
 
             $customisationNote = substr(trim((string)($input['customisation_note'] ?? '')), 0, 500) ?: null;
 
@@ -1523,6 +1789,17 @@ $orderStmt->execute([
 
             $pdo->commit();
 
+            // ── Save payment proof file (post-commit, non-fatal) ──
+            if ($proofFileOk) {
+                try {
+                    $proofUrl = $this->persistPaymentProof($proofFile, (string)$orderNumber);
+                    $proofStmt = $pdo->prepare('UPDATE orders SET payment_proof_url = :url, payment_proof_uploaded_at = NOW() WHERE id = :id');
+                    $proofStmt->execute(['url' => $proofUrl, 'id' => $orderId]);
+                } catch (\Throwable $proofErr) {
+                    error_log('[ORDER_PROOF_FAIL] order_id=' . $orderId . ' error=' . $proofErr->getMessage());
+                }
+            }
+
             // Save address to user_addresses for pre-fill on next order
             if ($userId > 0 && $deliveryStreet !== '') {
                 try {
@@ -1544,16 +1821,25 @@ $orderStmt->execute([
             } catch (\Throwable $automationError) {
                 error_log('Order placed trigger dispatch failed: ' . $automationError->getMessage());
             }
-        } catch (Throwable $e) {
+        } catch (\Throwable $e) {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
             }
-           
- Response::json([
-    'success' => false,
-    'message' => 'Order failed. Try again.'
-], 500);
-return;
+            error_log('[ORDER_FAIL] ' . json_encode([
+                'module'      => 'placeOrder',
+                'error'       => $e->getMessage(),
+                'file'        => $e->getFile(),
+                'line'        => $e->getLine(),
+                'user_id'     => $_SESSION['user_id'] ?? null,
+                'cart_id'     => $cartId ?? null,
+                'order_number'=> $orderNumber ?? null,
+                'in_tx'       => false,
+            ]));
+            Response::json([
+                'success' => false,
+                'message' => 'Order failed. Try again.'
+            ], 500);
+            return;
         }
 
         Response::json([
@@ -1787,14 +2073,14 @@ AND user_id = :user_id
                 :raw_payload_json,
                 NOW(),
                 NOW()
-             )
+                 ) AS new
              ON DUPLICATE KEY UPDATE
-                customer_user_id = VALUES(customer_user_id),
-                order_id = VALUES(order_id),
-                status = VALUES(status),
-                match_confidence = VALUES(match_confidence),
-                alert_message = VALUES(alert_message),
-                raw_payload_json = VALUES(raw_payload_json),
+                     customer_user_id = new.customer_user_id,
+                     order_id = new.order_id,
+                     status = new.status,
+                     match_confidence = new.match_confidence,
+                     alert_message = new.alert_message,
+                     raw_payload_json = new.raw_payload_json,
                 updated_at = NOW()'
         );
 
@@ -1973,24 +2259,24 @@ AND user_id = :user_id
                     :raw_payload_json,
                     NOW(),
                     NOW()
-                 )
+                 ) AS new
                  ON DUPLICATE KEY UPDATE
-                    parsed_amount = COALESCE(VALUES(parsed_amount), parsed_amount),
-                    bank_sender = COALESCE(VALUES(bank_sender), bank_sender),
-                    email_subject = COALESCE(VALUES(email_subject), email_subject),
-                    alert_message = COALESCE(VALUES(alert_message), alert_message),
-                    event_time = COALESCE(VALUES(event_time), event_time),
+                    parsed_amount = COALESCE(new.parsed_amount, parsed_amount),
+                    bank_sender = COALESCE(new.bank_sender, bank_sender),
+                    email_subject = COALESCE(new.email_subject, email_subject),
+                    alert_message = COALESCE(new.alert_message, alert_message),
+                    event_time = COALESCE(new.event_time, event_time),
                     status = CASE
                         WHEN status = "confirmed" THEN status
-                        ELSE VALUES(status)
+                        ELSE new.status
                     END,
                     match_confidence = CASE
                         WHEN match_confidence = "strong" THEN match_confidence
-                        ELSE VALUES(match_confidence)
+                        ELSE new.match_confidence
                     END,
-                    customer_user_id = COALESCE(VALUES(customer_user_id), customer_user_id),
-                    order_id = COALESCE(VALUES(order_id), order_id),
-                    raw_payload_json = VALUES(raw_payload_json),
+                    customer_user_id = COALESCE(new.customer_user_id, customer_user_id),
+                    order_id = COALESCE(new.order_id, order_id),
+                    raw_payload_json = new.raw_payload_json,
                     updated_at = NOW()'
             );
 
@@ -2189,7 +2475,8 @@ AND user_id = :user_id
         $profileStmt = $pdo->prepare(
             'INSERT INTO customer_profiles (user_id, date_of_birth, anniversary_date)
              VALUES (:user_id, :date_of_birth, :anniversary_date)
-             ON DUPLICATE KEY UPDATE date_of_birth = VALUES(date_of_birth), anniversary_date = VALUES(anniversary_date), updated_at = NOW()'
+               AS new
+               ON DUPLICATE KEY UPDATE date_of_birth = new.date_of_birth, anniversary_date = new.anniversary_date, updated_at = NOW()'
         );
         $profileStmt->execute([
             'user_id' => (int)$user['id'],
@@ -2452,20 +2739,18 @@ AND user_id = :user_id
     $referenceImagePath = null;
 
     if (isset($_FILES['reference_file']) && $_FILES['reference_file']['error'] === 0) {
-
-        $uploadDir = __DIR__ . '/../../public/uploads/';
-
-        if (!is_dir($uploadDir)) {
-            mkdir($uploadDir, 0777, true);
-        }
-
-        $fileTmp = $_FILES['reference_file']['tmp_name'];
-        $fileName = time() . '_' . basename($_FILES['reference_file']['name']);
-
-        $targetPath = $uploadDir . $fileName;
-
-        if (move_uploaded_file($fileTmp, $targetPath)) {
-            $referenceImagePath = '/uploads/' . $fileName;
+        $upload = UnifiedMediaService::upload($_FILES['reference_file'], [
+            'module' => 'byoc',
+            'entity_type' => 'inquiry',
+            'entity_id' => 0,
+            'admin_id' => 0,
+            'allow_svg' => false,
+            'max_bytes' => 10 * 1024 * 1024,
+        ]);
+        if ($upload['ok']) {
+            $referenceImagePath = (string)$upload['relative_url'];
+        } else {
+            error_log('[BYOC_REFERENCE_UPLOAD_FAIL] ' . $upload['error']);
         }
     }
     // ✅ IMAGE UPLOAD LOGIC END
@@ -2703,15 +2988,77 @@ AND user_id = :user_id
             $deliveryStreet   = trim((string)($input['delivery_street'] ?? ''));
             $deliveryPincode  = trim((string)($input['delivery_pincode'] ?? ''));
             $deliveryMapsLink = trim((string)($input['delivery_maps_link'] ?? ''));
+            $fulfillmentType  = in_array($input['fulfillment_type'] ?? '', ['delivery', 'pickup'], true)
+                ? $input['fulfillment_type'] : 'delivery';
+            $slotId           = max((int)($input['slot_id'] ?? 0), 0);
             $paymentType = trim((string)($input['payment_type'] ?? 'advance_50'));
             if (!in_array($paymentType, ['full', 'advance_50'], true)) {
                 $paymentType = 'advance_50';
             }
-            if ($deliveryStreet === '') {
+            if ($fulfillmentType === 'delivery' && $deliveryStreet === '') {
                 $pdo->rollBack();
                 Response::json(['success' => false, 'message' => 'Delivery street address is required.'], 422);
                 return;
             }
+
+            // Coupon validation for BYOC order
+            $couponCode = strtoupper(trim((string)($input['coupon_code'] ?? '')));
+            $appliedCouponId = null;
+            $discountTotal = 0.0;
+            if ($couponCode !== '') {
+                $this->ensureCouponSchema($pdo);
+                $cs = $pdo->prepare(
+                    'SELECT id, discount_type, discount_value, max_discount, min_order_amount,
+                            usage_limit, usage_count, starts_at, ends_at, applicable_to
+                     FROM coupons WHERE UPPER(code) = :code AND is_active = 1 AND is_deleted = 0 LIMIT 1'
+                );
+                $cs->execute(['code' => $couponCode]);
+                $couponRow = $cs->fetch(PDO::FETCH_ASSOC);
+                if (!$couponRow) {
+                    $pdo->rollBack();
+                    Response::json(['success' => false, 'message' => 'Coupon code not found or inactive.'], 422);
+                    return;
+                }
+                $couponModules = array_map('trim', explode(',', (string)($couponRow['applicable_to'] ?? '')));
+                if (!in_array('byoc', $couponModules, true)) {
+                    $pdo->rollBack();
+                    Response::json(['success' => false, 'message' => 'This coupon cannot be used for BYOC orders.'], 422);
+                    return;
+                }
+                $nowTs = time();
+                if (!empty($couponRow['starts_at']) && strtotime((string)$couponRow['starts_at']) > $nowTs) {
+                    $pdo->rollBack();
+                    Response::json(['success' => false, 'message' => 'Coupon is not yet active.'], 422);
+                    return;
+                }
+                if (!empty($couponRow['ends_at']) && strtotime((string)$couponRow['ends_at']) < $nowTs) {
+                    $pdo->rollBack();
+                    Response::json(['success' => false, 'message' => 'Coupon has expired.'], 422);
+                    return;
+                }
+                if ($couponRow['usage_limit'] !== null && (int)$couponRow['usage_count'] >= (int)$couponRow['usage_limit']) {
+                    $pdo->rollBack();
+                    Response::json(['success' => false, 'message' => 'Coupon usage limit has been reached.'], 422);
+                    return;
+                }
+                $couponMinOrder = $couponRow['min_order_amount'] !== null ? (float)$couponRow['min_order_amount'] : 0.0;
+                if ($quoteAmount < $couponMinOrder) {
+                    $pdo->rollBack();
+                    Response::json(['success' => false, 'message' => 'Minimum order amount for this coupon is ₹' . number_format($couponMinOrder, 2) . '.'], 422);
+                    return;
+                }
+                $appliedCouponId = (int)$couponRow['id'];
+                if ((string)$couponRow['discount_type'] === 'flat') {
+                    $discountTotal = min((float)$couponRow['discount_value'], $quoteAmount);
+                } else {
+                    $discountTotal = ($quoteAmount * (float)$couponRow['discount_value']) / 100.0;
+                    if ($couponRow['max_discount'] !== null) {
+                        $discountTotal = min($discountTotal, (float)$couponRow['max_discount']);
+                    }
+                }
+                $discountTotal = round($discountTotal, 2);
+            }
+            $grandTotal = max(round($quoteAmount - $discountTotal, 2), 0.0);
 
             $orderNumber = $this->generateOrderNumber('BYOC');
             $customerName = trim((string)($quote['name'] ?? 'Guest Customer'));
@@ -2747,14 +3094,17 @@ AND user_id = :user_id
                     advance_amount,
                     admin_note,
                     order_source,
-                    byoc_quote_id
+                    byoc_quote_id,
+                    order_mode,
+                    requires_kitchen_production,
+                    production_status
                 ) VALUES (
                     :order_number,
                     NULL,
                     :customer_name,
                     :customer_email,
                     :customer_phone,
-                    "custom_delivery",
+                    :fulfilment_mode,
                     "pending",
                     :payment_status,
                     "upi_manual",
@@ -2766,29 +3116,35 @@ AND user_id = :user_id
                     NULL,
                     0,
                     :subtotal,
-                    0,
+                    :discount_total,
                     0,
                     :grand_total,
                     :advance_amount,
                     :admin_note,
                     "byoc_quote",
-                    :byoc_quote_id
+                    :byoc_quote_id,
+                    "byoc",
+                    1,
+                    "pending"
                 )'
             );
-            $advanceAmount = $paymentType === 'full' ? $quoteAmount : round($quoteAmount * 0.5, 2);
-            $paymentStatus = $paymentType === 'full' ? 'pending' : 'partial';
+            $fulfilmentMode = $fulfillmentType === 'pickup' ? 'pickup' : 'custom_delivery';
+            $advanceAmount = $paymentType === 'full' ? $grandTotal : round($grandTotal * 0.5, 2);
+            $paymentStatus = 'pending'; // always pending until payment is confirmed
             $insertOrder->execute([
                 'order_number' => $orderNumber,
                 'customer_name' => $customerName,
                 'customer_email' => $customerEmail,
                 'customer_phone' => $customerPhone,
+                'fulfilment_mode' => $fulfilmentMode,
                 'scheduled_slot' => !empty($meta['event_date']) ? $meta['event_date'] . ' 10:00:00' : null,
                 'scheduled_slot_label' => !empty($meta['event_date']) ? 'Event Date: ' . $meta['event_date'] : null,
                 'delivery_postal_code' => $deliveryPincode ?: null,
-                'delivery_street' => $deliveryStreet,
+                'delivery_street' => $fulfillmentType === 'delivery' ? $deliveryStreet : null,
                 'delivery_maps_link' => $deliveryMapsLink ?: null,
                 'subtotal' => $quoteAmount,
-                'grand_total' => $quoteAmount,
+                'discount_total' => $discountTotal,
+                'grand_total' => $grandTotal,
                 'advance_amount' => $advanceAmount,
                 'payment_status' => $paymentStatus,
                 'admin_note' => 'BYOC quote accepted via secure link. Quote #' . (string)($quote['quote_number'] ?? ''),
@@ -2796,6 +3152,33 @@ AND user_id = :user_id
             ]);
 
             $orderId = (int)$pdo->lastInsertId();
+
+            // Record coupon redemption if a coupon was applied
+            if ($orderId > 0 && $appliedCouponId !== null) {
+                $pdo->prepare(
+                    'INSERT IGNORE INTO coupon_redemptions (coupon_id, order_id, user_id, code_snapshot, discount_total) VALUES (:coupon_id, :order_id, NULL, :code_snapshot, :discount_total)'
+                )->execute([
+                    'coupon_id' => $appliedCouponId,
+                    'order_id' => $orderId,
+                    'code_snapshot' => $couponCode,
+                    'discount_total' => $discountTotal,
+                ]);
+                $pdo->prepare('UPDATE coupons SET usage_count = usage_count + 1 WHERE id = :id')
+                    ->execute(['id' => $appliedCouponId]);
+            }
+
+            // Slot booking (non-fatal)
+            if ($slotId > 0 && !empty($meta['event_date'])) {
+                try {
+                    $slotSvc = new SlotService($pdo);
+                    $slotSvc->holdSlot($slotId, $meta['event_date'], $orderId, 0);
+                    $slotSvc->confirmSlotReservation($orderId);
+                    $pdo->prepare('UPDATE orders SET slot_id = :slot_id WHERE id = :id')
+                        ->execute(['slot_id' => $slotId, 'id' => $orderId]);
+                } catch (\Throwable $slotErr) {
+                    error_log('[customCakeQuoteAccept] Slot booking error: ' . $slotErr->getMessage());
+                }
+            }
 
             $insertItem = $pdo->prepare(
                 'INSERT INTO order_items (
@@ -2883,6 +3266,14 @@ AND user_id = :user_id
                 }
             } catch (\Throwable $emailErr) {
                 error_log('BYOC order confirmation email queue failed: ' . $emailErr->getMessage());
+            }
+
+            // Queue CRM trigger for BYOC order (same as online orders)
+            try {
+                $automation = new OrderAutomationService();
+                $automation->handleOrderPlaced($pdo, $orderId, 'byoc');
+            } catch (\Throwable $crmErr) {
+                error_log('BYOC order CRM trigger failed: ' . $crmErr->getMessage());
             }
 
             Response::json([
@@ -3924,20 +4315,60 @@ AND user_id = :user_id
             ('Custom Message', 0.00, 6)");
 
         // products flags
-        try { $pdo->exec('ALTER TABLE products ADD COLUMN IF NOT EXISTS topper_enabled TINYINT(1) NOT NULL DEFAULT 1'); } catch (\Throwable $e) {}
-        try { $pdo->exec('ALTER TABLE products ADD COLUMN IF NOT EXISTS note_enabled TINYINT(1) NOT NULL DEFAULT 1'); } catch (\Throwable $e) {}
+        try {
+            if (!self::columnExists($pdo, 'products', 'topper_enabled')) {
+                $pdo->exec('ALTER TABLE products ADD COLUMN topper_enabled TINYINT(1) NOT NULL DEFAULT 1');
+            }
+        } catch (\Throwable $e) {}
+        try {
+            if (!self::columnExists($pdo, 'products', 'note_enabled')) {
+                $pdo->exec('ALTER TABLE products ADD COLUMN note_enabled TINYINT(1) NOT NULL DEFAULT 1');
+            }
+        } catch (\Throwable $e) {}
 
         // cart_items topper fields
-        try { $pdo->exec('ALTER TABLE cart_items ADD COLUMN IF NOT EXISTS cake_message VARCHAR(200) NULL'); } catch (\Throwable $e) {}
-        try { $pdo->exec('ALTER TABLE cart_items ADD COLUMN IF NOT EXISTS topper_id INT UNSIGNED NULL'); } catch (\Throwable $e) {}
-        try { $pdo->exec('ALTER TABLE cart_items ADD COLUMN IF NOT EXISTS topper_name_snapshot VARCHAR(100) NULL'); } catch (\Throwable $e) {}
-        try { $pdo->exec('ALTER TABLE cart_items ADD COLUMN IF NOT EXISTS topper_price DECIMAL(8,2) NOT NULL DEFAULT 0.00'); } catch (\Throwable $e) {}
+        try {
+            if (!self::columnExists($pdo, 'cart_items', 'cake_message')) {
+                $pdo->exec('ALTER TABLE cart_items ADD COLUMN cake_message VARCHAR(200) NULL');
+            }
+        } catch (\Throwable $e) {}
+        try {
+            if (!self::columnExists($pdo, 'cart_items', 'topper_id')) {
+                $pdo->exec('ALTER TABLE cart_items ADD COLUMN topper_id INT UNSIGNED NULL');
+            }
+        } catch (\Throwable $e) {}
+        try {
+            if (!self::columnExists($pdo, 'cart_items', 'topper_name_snapshot')) {
+                $pdo->exec('ALTER TABLE cart_items ADD COLUMN topper_name_snapshot VARCHAR(100) NULL');
+            }
+        } catch (\Throwable $e) {}
+        try {
+            if (!self::columnExists($pdo, 'cart_items', 'topper_price')) {
+                $pdo->exec('ALTER TABLE cart_items ADD COLUMN topper_price DECIMAL(8,2) NOT NULL DEFAULT 0.00');
+            }
+        } catch (\Throwable $e) {}
 
         // order_items topper fields
-        try { $pdo->exec('ALTER TABLE order_items ADD COLUMN IF NOT EXISTS cake_message VARCHAR(200) NULL'); } catch (\Throwable $e) {}
-        try { $pdo->exec('ALTER TABLE order_items ADD COLUMN IF NOT EXISTS topper_id INT UNSIGNED NULL'); } catch (\Throwable $e) {}
-        try { $pdo->exec('ALTER TABLE order_items ADD COLUMN IF NOT EXISTS topper_name_snapshot VARCHAR(100) NULL'); } catch (\Throwable $e) {}
-        try { $pdo->exec('ALTER TABLE order_items ADD COLUMN IF NOT EXISTS topper_price_snapshot DECIMAL(8,2) NOT NULL DEFAULT 0.00'); } catch (\Throwable $e) {}
+        try {
+            if (!self::columnExists($pdo, 'order_items', 'cake_message')) {
+                $pdo->exec('ALTER TABLE order_items ADD COLUMN cake_message VARCHAR(200) NULL');
+            }
+        } catch (\Throwable $e) {}
+        try {
+            if (!self::columnExists($pdo, 'order_items', 'topper_id')) {
+                $pdo->exec('ALTER TABLE order_items ADD COLUMN topper_id INT UNSIGNED NULL');
+            }
+        } catch (\Throwable $e) {}
+        try {
+            if (!self::columnExists($pdo, 'order_items', 'topper_name_snapshot')) {
+                $pdo->exec('ALTER TABLE order_items ADD COLUMN topper_name_snapshot VARCHAR(100) NULL');
+            }
+        } catch (\Throwable $e) {}
+        try {
+            if (!self::columnExists($pdo, 'order_items', 'topper_price_snapshot')) {
+                $pdo->exec('ALTER TABLE order_items ADD COLUMN topper_price_snapshot DECIMAL(8,2) NOT NULL DEFAULT 0.00');
+            }
+        } catch (\Throwable $e) {}
 
         self::$topperSchemaEnsured = true;
     }
@@ -4016,6 +4447,294 @@ AND user_id = :user_id
         return $trimmed;
     }
 
+    private function ensureOrderLifecycleSchema(PDO $pdo): void
+    {
+        if (self::$orderLifecycleSchemaEnsured) {
+            return;
+        }
+
+        $pdo->exec('CREATE TABLE IF NOT EXISTS order_lifecycle_events (
+            id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+            order_id BIGINT UNSIGNED NOT NULL,
+            stage_key VARCHAR(80) NOT NULL,
+            previous_stage VARCHAR(80) NULL,
+            payment_status VARCHAR(40) NULL,
+            actor_type ENUM("system","customer","admin") NOT NULL DEFAULT "system",
+            actor_id BIGINT UNSIGNED NULL,
+            note VARCHAR(255) NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_order_lifecycle_order (order_id, created_at),
+            INDEX idx_order_lifecycle_stage (stage_key),
+            CONSTRAINT fk_order_lifecycle_order FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+
+        self::$orderLifecycleSchemaEnsured = true;
+    }
+
+    private function logOrderLifecycle(PDO $pdo, int $orderId, string $stageKey, ?string $previousStage, ?string $paymentStatus, string $actorType, ?int $actorId, ?string $note = null): void
+    {
+        $this->ensureOrderLifecycleSchema($pdo);
+        $stmt = $pdo->prepare('INSERT INTO order_lifecycle_events (order_id, stage_key, previous_stage, payment_status, actor_type, actor_id, note) VALUES (:order_id, :stage_key, :previous_stage, :payment_status, :actor_type, :actor_id, :note)');
+        $stmt->execute([
+            'order_id' => $orderId,
+            'stage_key' => $stageKey,
+            'previous_stage' => $this->nullableString($previousStage),
+            'payment_status' => $this->nullableString($paymentStatus),
+            'actor_type' => $actorType,
+            'actor_id' => $actorId,
+            'note' => $this->nullableString($note),
+        ]);
+    }
+
+    /**
+     * @return array{ok:bool,message?:string,items?:array<int,array<string,mixed>>,subtotal?:float,item_count?:int,discount_total?:float,coupon?:array<string,mixed>|null}
+     */
+    private function validateCheckoutCart(PDO $pdo, int $cartId, int $userId, bool $forUpdate = false): array
+    {
+        $this->ensureTopperSchema($pdo);
+
+        $sql = 'SELECT
+            ci.id,
+            ci.product_id,
+            ci.variant_id,
+            ci.quantity,
+            ci.unit_price,
+            ci.line_total,
+            ci.cake_message,
+            ci.topper_id,
+            ci.topper_name_snapshot,
+            ci.topper_price,
+            p.id AS p_id,
+            p.name AS product_name,
+            p.availability_status,
+            p.deleted_at,
+            p.stock_quantity AS product_stock_quantity,
+            p.topper_enabled,
+            p.note_enabled,
+            pv.id AS pv_id,
+            pv.product_id AS variant_product_id,
+            pv.variant_label,
+            pv.price AS variant_price,
+            pv.discount_price AS variant_discount_price,
+            pv.stock_quantity AS variant_stock_quantity,
+            pv.is_active AS variant_is_active,
+            ct.id AS topper_exists,
+            ct.name AS topper_name,
+            ct.price AS topper_current_price,
+            ct.is_active AS topper_is_active
+        FROM cart_items ci
+        LEFT JOIN products p ON p.id = ci.product_id
+        LEFT JOIN product_variants pv ON pv.id = ci.variant_id
+        LEFT JOIN cake_toppers ct ON ct.id = ci.topper_id
+        WHERE ci.cart_id = :cart_id
+        ORDER BY ci.id ASC';
+
+        if ($forUpdate) {
+            $sql .= ' FOR UPDATE';
+        }
+
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute(['cart_id' => $cartId]);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        if (!$rows) {
+            return ['ok' => false, 'message' => 'Cart is empty'];
+        }
+
+        $sanitizedItems = [];
+        $subtotal = 0.0;
+        $itemCount = 0;
+        $errors = [];
+
+        foreach ($rows as $row) {
+            $cartItemId = (int)($row['id'] ?? 0);
+            $quantity = (int)($row['quantity'] ?? 0);
+            $availability = (string)($row['availability_status'] ?? '');
+            $variantActive = (int)($row['variant_is_active'] ?? 0) === 1;
+            $variantProductId = (int)($row['variant_product_id'] ?? 0);
+            $productId = (int)($row['product_id'] ?? 0);
+            $isPreorder = $availability === 'preorder';
+
+            if ((int)($row['p_id'] ?? 0) <= 0 || (string)($row['deleted_at'] ?? '') !== '') {
+                $errors[] = 'Cart item #' . $cartItemId . ' has an invalid or deleted product';
+                continue;
+            }
+
+            if (!in_array($availability, ['in_stock', 'preorder'], true)) {
+                $errors[] = 'Cart item #' . $cartItemId . ' product is inactive for checkout';
+                continue;
+            }
+
+            if ((int)($row['pv_id'] ?? 0) <= 0 || !$variantActive || $variantProductId !== $productId) {
+                $errors[] = 'Cart item #' . $cartItemId . ' has an invalid variant';
+                continue;
+            }
+
+            if ($quantity <= 0) {
+                $errors[] = 'Cart item #' . $cartItemId . ' has invalid quantity';
+                continue;
+            }
+
+            $variantStock = (int)($row['variant_stock_quantity'] ?? 0);
+            if (!$isPreorder && ($variantStock <= 0 || $quantity > $variantStock)) {
+                $errors[] = 'Cart item #' . $cartItemId . ' exceeds available variant inventory';
+                continue;
+            }
+
+            $productStock = (int)($row['product_stock_quantity'] ?? 0);
+            if (!$isPreorder && $productStock > 0 && $quantity > $productStock) {
+                $errors[] = 'Cart item #' . $cartItemId . ' exceeds available product inventory';
+                continue;
+            }
+
+            $topperId = isset($row['topper_id']) ? (int)$row['topper_id'] : 0;
+            $topperEnabled = (int)($row['topper_enabled'] ?? 1) === 1;
+            $noteEnabled = (int)($row['note_enabled'] ?? 1) === 1;
+            $cakeMessage = trim((string)($row['cake_message'] ?? ''));
+
+            if ($cakeMessage !== '' && !$noteEnabled) {
+                $errors[] = 'Cart item #' . $cartItemId . ' has a disabled cake note option';
+                continue;
+            }
+
+            $canonicalTopperPrice = 0.0;
+            $topperNameSnapshot = null;
+            if ($topperId > 0) {
+                if (!$topperEnabled) {
+                    $errors[] = 'Cart item #' . $cartItemId . ' topper is not allowed for this product';
+                    continue;
+                }
+                if ((int)($row['topper_exists'] ?? 0) <= 0 || (int)($row['topper_is_active'] ?? 0) !== 1) {
+                    $errors[] = 'Cart item #' . $cartItemId . ' has an invalid topper';
+                    continue;
+                }
+                $canonicalTopperPrice = round((float)($row['topper_current_price'] ?? 0), 2);
+                $topperNameSnapshot = (string)($row['topper_name'] ?? '');
+            }
+
+            $canonicalUnitPrice = round(((float)($row['variant_discount_price'] ?? 0) > 0)
+                ? (float)$row['variant_discount_price']
+                : (float)($row['variant_price'] ?? 0), 2);
+
+            $storedUnitPrice = round((float)($row['unit_price'] ?? 0), 2);
+            $storedTopperPrice = round((float)($row['topper_price'] ?? 0), 2);
+            $storedLineTotal = round((float)($row['line_total'] ?? 0), 2);
+            $expectedLineTotal = round(($canonicalUnitPrice + $canonicalTopperPrice) * $quantity, 2);
+
+            if (abs($storedUnitPrice - $canonicalUnitPrice) > 0.01
+                || abs($storedTopperPrice - $canonicalTopperPrice) > 0.01
+                || abs($storedLineTotal - $expectedLineTotal) > 0.01) {
+                $errors[] = 'Cart item #' . $cartItemId . ' failed price integrity checks';
+                continue;
+            }
+
+            $sanitized = [
+                'cart_item_id' => $cartItemId,
+                'product_id' => $productId,
+                'variant_id' => (int)$row['variant_id'],
+                'product_name' => (string)($row['product_name'] ?? ''),
+                'variant_label' => (string)($row['variant_label'] ?? ''),
+                'quantity' => $quantity,
+                'unit_price' => $canonicalUnitPrice,
+                'line_total' => $expectedLineTotal,
+                'cake_message' => $cakeMessage !== '' ? $cakeMessage : null,
+                'topper_id' => $topperId > 0 ? $topperId : null,
+                'topper_name_snapshot' => $topperId > 0 ? $topperNameSnapshot : null,
+                'topper_price' => $canonicalTopperPrice,
+            ];
+
+            $sanitizedItems[] = $sanitized;
+            $subtotal += $expectedLineTotal;
+            $itemCount += $quantity;
+        }
+
+        if ($errors) {
+            return [
+                'ok' => false,
+                'message' => 'Checkout blocked due to invalid cart state: ' . implode('; ', array_slice($errors, 0, 3)),
+            ];
+        }
+
+        $discountTotal = 0.0;
+        $couponData = null;
+        $couponSession = $_SESSION['applied_coupon'] ?? null;
+        if (is_array($couponSession) && isset($couponSession['id'])) {
+            $this->ensureCouponSchema($pdo);
+            $couponStmt = $pdo->prepare('SELECT * FROM coupons WHERE id = :id LIMIT 1');
+            $couponStmt->execute(['id' => (int)$couponSession['id']]);
+            $coupon = $couponStmt->fetch(PDO::FETCH_ASSOC);
+
+            if ($coupon) {
+                $validationError = $this->couponValidationError($pdo, $coupon, $userId);
+                if ($validationError === null) {
+                    $discountTotal = $this->calculateDiscountForCoupon($coupon, $subtotal);
+                    if ($discountTotal > 0.0) {
+                        $couponData = [
+                            'id' => (int)$coupon['id'],
+                            'code' => (string)$coupon['code'],
+                            'discount_type' => (string)$coupon['discount_type'],
+                            'discount_value' => (float)$coupon['discount_value'],
+                            'auto_applied' => (bool)($couponSession['auto_applied'] ?? false),
+                        ];
+                    }
+                }
+            }
+        }
+
+        return [
+            'ok' => true,
+            'items' => $sanitizedItems,
+            'subtotal' => round($subtotal, 2),
+            'item_count' => $itemCount,
+            'discount_total' => round($discountTotal, 2),
+            'coupon' => $couponData,
+        ];
+    }
+
+    private function persistPaymentProof(array $file, string $orderNumber): string
+    {
+        $fileError = (int)($file['error'] ?? UPLOAD_ERR_NO_FILE);
+        if ($fileError !== UPLOAD_ERR_OK) {
+            throw new \RuntimeException('Payment proof upload failed');
+        }
+
+        $maxBytes = 5 * 1024 * 1024;
+        $size = (int)($file['size'] ?? 0);
+        if ($size <= 0 || $size > $maxBytes) {
+            throw new \RuntimeException('Payment proof must be an image up to 5 MB');
+        }
+
+        $tmp = (string)($file['tmp_name'] ?? '');
+        if ($tmp === '' || !is_uploaded_file($tmp)) {
+            throw new \RuntimeException('Payment proof payload is invalid');
+        }
+
+        $finfo = new \finfo(FILEINFO_MIME_TYPE);
+        $mime = (string)$finfo->file($tmp);
+        $allowed = [
+            'image/jpeg' => 'jpg',
+            'image/png' => 'png',
+            'image/webp' => 'webp',
+        ];
+        if (!isset($allowed[$mime])) {
+            throw new \RuntimeException('Payment proof must be JPG, PNG, or WEBP');
+        }
+
+        $upload = UnifiedMediaService::upload($file, [
+            'module' => 'byoc',
+            'entity_type' => 'payment_proof',
+            'entity_id' => 0,
+            'admin_id' => 0,
+            'allow_svg' => false,
+            'max_bytes' => $maxBytes,
+        ]);
+        if (!$upload['ok']) {
+            throw new \RuntimeException('Unable to store payment proof: ' . $upload['error']);
+        }
+
+        return (string)$upload['relative_url'];
+    }
+
     private function couponValidationError(PDO $pdo, array $coupon, int $userId): ?string
     {
         if ((int)($coupon['is_active'] ?? 0) !== 1 || (int)($coupon['is_deleted'] ?? 0) === 1) {
@@ -4066,6 +4785,9 @@ AND user_id = :user_id
 
     private function maybeAutoApplyBestPublicCoupon(PDO $pdo, int $cartId): void
     {
+        if ((int)($_SESSION['user_id'] ?? 0) <= 0) {
+            return;
+        }
         if (is_array($_SESSION['applied_coupon'] ?? null)) {
             return;
         }
@@ -4087,6 +4809,8 @@ AND user_id = :user_id
              WHERE is_active = 1
                AND is_deleted = 0
                AND target_mode = 'all_users'
+               AND auto_apply = 1
+               AND FIND_IN_SET('online', applicable_to)
                AND (starts_at IS NULL OR starts_at <= NOW())
              AND (ends_at IS NULL OR ends_at >= NOW())"
         );
@@ -4261,8 +4985,7 @@ LIMIT 1
 ');
 
 $slabStmt->execute([
-    'distance1' => $distanceKm,
-    'distance2' => $distanceKm
+    'distance' => $distanceKm
 ]);
 
 $slab = $slabStmt->fetch(PDO::FETCH_ASSOC);
@@ -4400,6 +5123,19 @@ $deliveryFee = (float)$slab['delivery_fee'];
 
     $otp = (string)random_int(100000, 999999);
 
+    try {
+        MailService::sendOtp($email, $otp, $customerName);
+    } catch (\Throwable $e) {
+        error_log('SMTP ERROR: ' . $e->getMessage());
+        error_log('SMTP OTP META: ' . json_encode(MailService::getOtpSmtpRuntimeMeta()));
+        error_log('OTP send failed for ' . $email . ': ' . $e->getMessage());
+        Response::json([
+            'success' => false,
+            'message' => 'Unable to send OTP email right now. Please try again shortly.',
+        ], 500);
+        return;
+    }
+
     $pdo->prepare('DELETE FROM otp_verifications WHERE email = :email')
         ->execute(['email' => $email]);
 
@@ -4407,18 +5143,18 @@ $deliveryFee = (float)$slab['delivery_fee'];
         'INSERT INTO otp_verifications (email, otp, expires_at)
          VALUES (:email, :otp, NOW() + INTERVAL 5 MINUTE)'
     );
-    $stmt->execute([
+    $insertOk = $stmt->execute([
         'email' => $email,
         'otp' => $otp,
     ]);
 
-    try {
-        MailService::sendOtp($email, $otp, $customerName);
-    } catch (\Throwable $e) {
-        error_log('OTP send failed for ' . $email . ': ' . $e->getMessage());
+    if (!$insertOk) {
+        $pdo->prepare('DELETE FROM otp_verifications WHERE email = :email')
+            ->execute(['email' => $email]);
+        error_log('OTP persist failed after successful send for ' . $email);
         Response::json([
             'success' => false,
-            'message' => 'Unable to send OTP email right now. Please try again shortly.',
+            'message' => 'Unable to finalize OTP right now. Please request a new OTP.',
         ], 500);
         return;
     }
@@ -4443,11 +5179,35 @@ public function verifyOtp(): void
     $name = trim((string)($input['name'] ?? ''));
     $phone = trim((string)($input['phone'] ?? ''));
 
+    if (!isset($_SESSION['otp_verify_attempts']) || !is_array($_SESSION['otp_verify_attempts'])) {
+        $_SESSION['otp_verify_attempts'] = [];
+    }
+
     if ($email === '' || $otp === '' || strlen($otp) !== 6 || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
         Response::json([
             "success" => false,
             "message" => "Valid email and 6-digit OTP required"
         ], 422);
+        return;
+    }
+
+    $attemptWindowSeconds = 600;
+    $maxAttempts = 5;
+    $attemptInfo = $_SESSION['otp_verify_attempts'][$email] ?? ['count' => 0, 'window_started' => time()];
+    $attemptCount = (int)($attemptInfo['count'] ?? 0);
+    $windowStarted = (int)($attemptInfo['window_started'] ?? time());
+    $now = time();
+
+    if (($now - $windowStarted) > $attemptWindowSeconds) {
+        $attemptCount = 0;
+        $windowStarted = $now;
+    }
+
+    if ($attemptCount >= $maxAttempts) {
+        Response::json([
+            "success" => false,
+            "message" => "Too many OTP verification attempts. Please wait 10 minutes and try again."
+        ], 429);
         return;
     }
 
@@ -4470,6 +5230,10 @@ public function verifyOtp(): void
     $otpRow = $stmt->fetch();
 
     if (!$otpRow) {
+        $_SESSION['otp_verify_attempts'][$email] = [
+            'count' => $attemptCount + 1,
+            'window_started' => $windowStarted,
+        ];
         Response::json([
             "success" => false,
             "message" => "Invalid or expired OTP"
@@ -4586,6 +5350,8 @@ if ($guestCartId > 0) {
     $pdo->prepare("DELETE FROM otp_verifications WHERE email = :email")
         ->execute(['email' => $email]);
 
+    unset($_SESSION['otp_verify_attempts'][$email]);
+
     Response::json([
         "success" => true,
         "message" => "Email OTP verified"
@@ -4614,6 +5380,8 @@ public function mediaUpload(): void
         'image/jpeg',
         'image/png',
         'image/webp',
+        'image/gif',
+        'image/svg+xml',
         'video/mp4'
     ];
 
@@ -4624,6 +5392,34 @@ public function mediaUpload(): void
             'success' => false,
             'message' => 'Invalid file type: ' . $mimeType
         ], 400);
+        return;
+    }
+
+    if (str_starts_with($mimeType, 'image/')) {
+        $upload = UnifiedMediaService::upload($file, [
+            'module' => 'template_editor',
+            'entity_type' => 'public_media_upload',
+            'entity_id' => 0,
+            'admin_id' => 0,
+            'allow_svg' => true,
+            'max_bytes' => 10 * 1024 * 1024,
+        ]);
+        if (!$upload['ok']) {
+            Response::json([
+                'success' => false,
+                'message' => $upload['error']
+            ], 500);
+            return;
+        }
+
+        Response::json([
+            'success' => true,
+            'data' => [
+                'url' => (string)$upload['relative_url'],
+                'optimized_url' => (string)$upload['optimized_url'],
+                'queue_id' => (int)$upload['queue_id']
+            ]
+        ]);
         return;
     }
 

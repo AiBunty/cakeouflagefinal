@@ -324,6 +324,67 @@ if (!function_exists('home_normalize_media_url')) {
   }
 }
 
+if (!function_exists('home_append_media_version')) {
+  function home_append_media_version(string $mediaUrl): string
+  {
+    if ($mediaUrl === '' || preg_match('#^https?://#i', $mediaUrl)) {
+      return $mediaUrl;
+    }
+
+    $path = (string)parse_url($mediaUrl, PHP_URL_PATH);
+    if ($path === '') {
+      return $mediaUrl;
+    }
+
+    $docRoot = rtrim((string)($_SERVER['DOCUMENT_ROOT'] ?? ''), '/\\');
+    if ($docRoot === '') {
+      return $mediaUrl;
+    }
+
+    $absolutePath = $docRoot . $path;
+    if (!is_file($absolutePath)) {
+      return $mediaUrl;
+    }
+
+    $version = (string)((int)filemtime($absolutePath));
+    if ($version === '' || $version === '0') {
+      return $mediaUrl;
+    }
+
+    $delimiter = strpos($mediaUrl, '?') !== false ? '&' : '?';
+    return $mediaUrl . $delimiter . 'v=' . rawurlencode($version);
+  }
+}
+
+if (!function_exists('home_video_mime_from_extension')) {
+  function home_video_mime_from_extension(string $ext): string
+  {
+    $ext = strtolower(trim($ext));
+    if ($ext === 'mp4' || $ext === 'm4v') {
+      return 'video/mp4';
+    }
+    if ($ext === 'webm') {
+      return 'video/webm';
+    }
+    if ($ext === 'ogg') {
+      return 'video/ogg';
+    }
+    if ($ext === 'mov') {
+      return 'video/quicktime';
+    }
+    if ($ext === 'avi') {
+      return 'video/x-msvideo';
+    }
+    if ($ext === 'mkv') {
+      return 'video/x-matroska';
+    }
+    if ($ext === 'mpeg' || $ext === 'mpg') {
+      return 'video/mpeg';
+    }
+    return 'video/mp4';
+  }
+}
+
 try {
   $db = \App\Core\Database::getInstance();
   $row = $db->fetchOne("SELECT image_url, title, subtitle FROM banners WHERE placement = 'home_mid' ORDER BY id DESC LIMIT 1");
@@ -355,16 +416,13 @@ try {
 
 $chefMediaUrl = home_normalize_media_url($chefMediaUrl, '/client/assets/video/heroabout.MP4');
 $healthyMediaUrl = home_normalize_media_url($healthyMediaUrl, '/client/assets/video/Healthcake.MP4');
+$chefMediaUrl = home_append_media_version($chefMediaUrl);
+$healthyMediaUrl = home_append_media_version($healthyMediaUrl);
 
 $chefPath = (string)parse_url($chefMediaUrl, PHP_URL_PATH);
 $chefExt = strtolower((string)pathinfo($chefPath, PATHINFO_EXTENSION));
 $chefIsVideo = in_array($chefExt, array('mp4', 'webm', 'ogg', 'mov', 'm4v'), true);
-$chefMime = 'video/mp4';
-if ($chefExt === 'webm') {
-  $chefMime = 'video/webm';
-} elseif ($chefExt === 'ogg') {
-  $chefMime = 'video/ogg';
-}
+$chefMime = home_video_mime_from_extension($chefExt);
 
 $heroMediaUrl = (string)($banner['image_url'] ?? '');
 $heroMediaUrl = trim($heroMediaUrl);
@@ -393,11 +451,17 @@ if (!preg_match('#^https?://#i', $heroMediaUrl)) {
 
 $heroExt = strtolower((string)pathinfo((string)parse_url($heroMediaUrl, PHP_URL_PATH), PATHINFO_EXTENSION));
 $isHeroVideo = in_array($heroExt, ['mp4', 'webm', 'ogg', 'mov', 'm4v'], true);
+$heroMime = home_video_mime_from_extension($heroExt);
+$heroMediaUrl = home_append_media_version($heroMediaUrl);
+
+$healthyPath = (string)parse_url($healthyMediaUrl, PHP_URL_PATH);
+$healthyExt = strtolower((string)pathinfo($healthyPath, PATHINFO_EXTENSION));
+$healthyMime = home_video_mime_from_extension($healthyExt);
 ?>
 <section class="home-hero-editorial" aria-label="Homepage hero">
   <?php if ($isHeroVideo): ?>
-    <video class="home-hero-editorial__video" autoplay muted loop playsinline preload="auto" webkit-playsinline>
-      <source src="<?= htmlspecialchars($heroMediaUrl, ENT_QUOTES, 'UTF-8'); ?>" type="video/<?= $heroExt === 'm4v' ? 'mp4' : htmlspecialchars($heroExt, ENT_QUOTES, 'UTF-8'); ?>">
+    <video class="home-hero-editorial__video" autoplay muted loop playsinline preload="metadata" webkit-playsinline>
+      <source src="<?= htmlspecialchars($heroMediaUrl, ENT_QUOTES, 'UTF-8'); ?>" type="<?= htmlspecialchars($heroMime, ENT_QUOTES, 'UTF-8'); ?>">
     </video>
   <?php else: ?>
     <img class="home-hero-editorial__video" src="<?= htmlspecialchars($heroMediaUrl, ENT_QUOTES, 'UTF-8'); ?>" alt="<?= htmlspecialchars((string)$banner['title'], ENT_QUOTES, 'UTF-8'); ?>" loading="eager">
@@ -449,8 +513,8 @@ $isHeroVideo = in_array($heroExt, ['mp4', 'webm', 'ogg', 'mov', 'm4v'], true);
           loop
           playsinline
           webkit-playsinline
-          preload="auto"
-          poster="/client/assets/images/video/thumbnail.png"
+          preload="metadata"
+          poster="/client/assets/video/thumbnail.png"
         >
           <source src="<?= htmlspecialchars($chefMediaUrl, ENT_QUOTES, 'UTF-8') ?>" type="<?= htmlspecialchars($chefMime, ENT_QUOTES, 'UTF-8') ?>">
         </video>
@@ -614,7 +678,7 @@ $isHeroVideo = in_array($heroExt, ['mp4', 'webm', 'ogg', 'mov', 'm4v'], true);
 <!-- ── Healthy by Cakeouflage ── -->
 <section class="healthy-section" aria-label="Health by Cakeouflage">
   <video class="healthy-section__video" autoplay muted loop playsinline preload="auto">
-    <source src="<?= htmlspecialchars($healthyMediaUrl, ENT_QUOTES, 'UTF-8') ?>" type="video/mp4">
+    <source src="<?= htmlspecialchars($healthyMediaUrl, ENT_QUOTES, 'UTF-8') ?>" type="<?= htmlspecialchars($healthyMime, ENT_QUOTES, 'UTF-8') ?>">
   </video>
 
   <div class="healthy-section__inner container">

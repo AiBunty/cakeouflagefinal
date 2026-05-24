@@ -8,7 +8,7 @@ $targetParams = [
   'view' => 'collection',
   'from_date' => $_GET['from_date'] ?? '',
   'to_date' => $_GET['to_date'] ?? '',
-  'payment_status' => $_GET['status'] ?? 'all',
+  'payment_status' => $_GET['status'] ?? 'confirmed_only',
 ];
 $targetParams = array_filter($targetParams, static fn($v) => $v !== '' && $v !== null);
 header('Location: sales_register.php?' . http_build_query($targetParams));

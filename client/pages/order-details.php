@@ -56,9 +56,18 @@ $items = $itemsResult ? $itemsResult->fetch_all(MYSQLI_ASSOC) : array();
         .order-header h1 { color: #80001F; margin-bottom: 12px; font-size: 1.8rem; }
         .status-badge { display: inline-block; padding: 6px 12px; border-radius: 20px; font-size: 0.85rem; font-weight: 600; }
         .status-badge.confirmed { background: #dcfce7; color: #166534; }
-        .status-badge.pending { background: #fef3c7; color: #92400e; }
-        .status-badge.completed { background: #e0e7ff; color: #3730a3; }
+        .status-badge.pending_payment { background: #fef3c7; color: #92400e; }
+        .status-badge.payment_under_review { background: #fff2cf; color: #9a5b00; }
+        .status-badge.preparing { background: #fef3c7; color: #92400e; }
+        .status-badge.out_for_delivery { background: #e0f2fe; color: #0c4a6e; }
+        .status-badge.ready_for_pickup { background: #ede9fe; color: #5b21b6; }
+        .status-badge.delivered { background: #e0e7ff; color: #3730a3; }
+        .status-badge.completed { background: #d1fae5; color: #065f46; }
         .status-badge.cancelled { background: #fecdd3; color: #9f1239; }
+        .status-badge.rejected { background: #fecaca; color: #7f1d1d; }
+        .status-badge.refund_requested { background: #ffedd5; color: #9a3412; }
+        .status-badge.refunded { background: #f3e8ff; color: #6b21a8; }
+        .status-badge.partially_refunded { background: #fae8ff; color: #86198f; }
         .meta-info { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-top: 16px; }
         .meta-field { border-top: 1px solid #f0f0f0; padding-top: 12px; }
         .meta-field strong { color: #80001F; display: block; margin-bottom: 4px; font-size: 0.85rem; }
@@ -178,20 +187,37 @@ $items = $itemsResult ? $itemsResult->fetch_all(MYSQLI_ASSOC) : array();
             <h2>Order Status Timeline</h2>
             <ul class="timeline">
                 <li>Order Placed</li>
-                <?php if ($order['order_status'] !== 'pending' && $order['payment_status'] === 'paid'): ?>
+                <?php if ($order['order_status'] === 'payment_under_review'): ?>
+                    <li>Payment Under Review</li>
+                <?php elseif ($order['order_status'] !== 'pending_payment' && $order['payment_status'] === 'paid'): ?>
                     <li>Payment Confirmed</li>
                 <?php endif; ?>
-                <?php if (in_array($order['order_status'], ['in_preparation', 'out_for_delivery', 'ready_for_pickup', 'completed'])): ?>
+                <?php if (in_array($order['order_status'], ['preparing', 'out_for_delivery', 'ready_for_pickup', 'delivered', 'completed', 'refund_requested', 'refunded', 'partially_refunded'])): ?>
                     <li>Preparing Your Order</li>
                 <?php endif; ?>
-                <?php if (in_array($order['order_status'], ['out_for_delivery', 'completed'])): ?>
+                <?php if (in_array($order['order_status'], ['out_for_delivery', 'delivered', 'completed', 'refund_requested', 'refunded', 'partially_refunded'])): ?>
                     <li>Out for Delivery</li>
                 <?php endif; ?>
-                <?php if ($order['order_status'] === 'completed'): ?>
+                <?php if (in_array($order['order_status'], ['delivered', 'completed', 'refund_requested', 'refunded', 'partially_refunded'])): ?>
                     <li>Delivered</li>
+                <?php endif; ?>
+                <?php if ($order['order_status'] === 'completed'): ?>
+                    <li style="color: #166534; font-weight: 600;">Order Completed &#10003;</li>
+                <?php endif; ?>
+                <?php if ($order['order_status'] === 'refund_requested'): ?>
+                    <li style="color: #9a3412;">Refund Requested</li>
+                <?php endif; ?>
+                <?php if ($order['order_status'] === 'refunded'): ?>
+                    <li style="color: #6b21a8;">Refund Processed</li>
+                <?php endif; ?>
+                <?php if ($order['order_status'] === 'partially_refunded'): ?>
+                    <li style="color: #86198f;">Partial Refund Processed</li>
                 <?php endif; ?>
                 <?php if ($order['order_status'] === 'cancelled'): ?>
                     <li style="color: #e11d48;">Order Cancelled</li>
+                <?php endif; ?>
+                <?php if ($order['order_status'] === 'rejected'): ?>
+                    <li style="color: #e11d48;">Order Rejected</li>
                 <?php endif; ?>
             </ul>
         </div>

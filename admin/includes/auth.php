@@ -5,6 +5,12 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+require_once __DIR__ . '/AdminErrorHandler.php';
+
+// Load the App\ PSR-4 autoloader + vendor packages so that App\Core\Csrf,
+// App\Core\Database, App\Services\* etc. are all available in admin pages.
+require_once __DIR__ . '/../../app/bootstrap.php';
+
 require_once __DIR__ . '/db.php';
 
 function admin_bootstrap_support_tables($conn)
@@ -38,16 +44,30 @@ function admin_bootstrap_support_tables($conn)
         'billing_postal_code'           => "VARCHAR(15) NULL AFTER billing_state",
         'credit_collected_at'           => "DATETIME NULL AFTER payment_confirmed_by_admin_id",
         'credit_collected_by_admin_id'  => "BIGINT UNSIGNED NULL AFTER credit_collected_at",
+        'customer_phone_e164'           => "VARCHAR(20) NULL AFTER customer_phone",
     ];
     foreach ($add_cols as $col => $def) {
         if (!in_array($col, $orders_cols)) {
             $conn->query("ALTER TABLE orders ADD COLUMN $col $def");
         }
     }
+    if (!in_array('customer_phone_e164', $orders_cols)) {
+        $conn->query("ALTER TABLE orders ADD INDEX idx_orders_phone_e164 (customer_phone_e164)");
+    }
 
-    // Credit sales support — expand ENUMs (safe to run repeatedly in MySQL 8)
+    // Credit + payment state expansion — expand ENUMs (safe to run repeatedly in MySQL 8)
     $conn->query("ALTER TABLE orders MODIFY COLUMN payment_method ENUM('upi_manual','cod','gateway','credit') NOT NULL DEFAULT 'upi_manual'");
-    $conn->query("ALTER TABLE orders MODIFY COLUMN payment_status ENUM('pending','paid','failed','refunded','credit') NOT NULL DEFAULT 'pending'");
+    // Updated ENUM matches 2026-05-27-order-state-machine.sql migration
+    $conn->query("ALTER TABLE orders MODIFY COLUMN payment_status ENUM('pending','under_review','paid','credit','refund_pending','partially_refunded','refunded','failed','rejected') NOT NULL DEFAULT 'pending'");
+
+    // Add phone_e164 to users if missing
+    $users_cols = [];
+    $res = $conn->query("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA='$db_name' AND TABLE_NAME='users'");
+    while ($r = $res->fetch_row()) { $users_cols[] = $r[0]; }
+    if (!in_array('phone_e164', $users_cols)) {
+        $conn->query("ALTER TABLE users ADD COLUMN phone_e164 VARCHAR(20) NULL AFTER phone");
+        $conn->query("ALTER TABLE users ADD INDEX idx_users_phone_e164 (phone_e164)");
+    }
 
     mysqli_report($prevReport);
 
@@ -63,13 +83,45 @@ function admin_bootstrap_support_tables($conn)
         crm_setting_id BIGINT UNSIGNED NULL,
         name VARCHAR(120) NOT NULL,
         mobile VARCHAR(25) NOT NULL,
+        trigger_key VARCHAR(80) NULL,
+        endpoint VARCHAR(512) NULL,
         status ENUM('success','fail') NOT NULL,
+        automation_id VARCHAR(80) NULL,
+        api_token_masked VARCHAR(50) NULL,
+        payload_json LONGTEXT NULL,
+        http_status SMALLINT NULL,
+        execution_status VARCHAR(40) NULL,
+        error_message TEXT NULL,
+        response_time_ms INT UNSIGNED NULL,
         response TEXT NULL,
         created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (id),
         KEY idx_crm_push_logs_created_at (created_at),
-        KEY idx_crm_push_logs_status (status)
+        KEY idx_crm_push_logs_status (status),
+        KEY idx_crm_push_logs_trigger (trigger_key),
+        KEY idx_crm_push_logs_exec_status (execution_status)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    // Migrate pre-existing crm_push_logs tables that are missing new columns
+    $crm_log_cols = [];
+    $res = $conn->query("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA='$db_name' AND TABLE_NAME='crm_push_logs'");
+    while ($res && ($r = $res->fetch_row())) { $crm_log_cols[] = $r[0]; }
+    $crm_log_new = [
+        'trigger_key'      => 'VARCHAR(80) NULL',
+        'endpoint'         => 'VARCHAR(512) NULL',
+        'automation_id'    => 'VARCHAR(80) NULL',
+        'api_token_masked' => 'VARCHAR(50) NULL',
+        'payload_json'     => 'LONGTEXT NULL',
+        'http_status'      => 'SMALLINT NULL',
+        'execution_status' => 'VARCHAR(40) NULL',
+        'error_message'    => 'TEXT NULL',
+        'response_time_ms' => 'INT UNSIGNED NULL',
+    ];
+    foreach ($crm_log_new as $col => $def) {
+        if (!in_array($col, $crm_log_cols, true)) {
+            $conn->query("ALTER TABLE crm_push_logs ADD COLUMN $col $def");
+        }
+    }
 
     $conn->query("CREATE TABLE IF NOT EXISTS otp_verifications (
         id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -83,7 +135,12 @@ function admin_bootstrap_support_tables($conn)
         KEY idx_otp_verifications_expires_at (expires_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     // Ensure attempt_count exists on pre-existing installations
-    $conn->query("ALTER TABLE otp_verifications ADD COLUMN IF NOT EXISTS attempt_count INT UNSIGNED NOT NULL DEFAULT 0");
+    $otp_cols = [];
+    $res = $conn->query("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA='$db_name' AND TABLE_NAME='otp_verifications'");
+    while ($res && ($r = $res->fetch_row())) { $otp_cols[] = $r[0]; }
+    if (!in_array('attempt_count', $otp_cols, true)) {
+        $conn->query("ALTER TABLE otp_verifications ADD COLUMN attempt_count INT UNSIGNED NOT NULL DEFAULT 0");
+    }
 
     $bootstrapped = true;
 }
@@ -102,6 +159,11 @@ function admin_permission_definitions()
         'order_edit' => 'Order Edit',
         'order_reject' => 'Order Reject/Cancel',
         'order_refund' => 'Order Refund',
+        'can_cancel_unpaid_orders' => 'Cancel Unpaid Orders',
+        'can_approve_refund' => 'Approve Refunds',
+        'can_force_refund' => 'Force Refund (High-Value Override)',
+        'can_view_refund_reports' => 'View Refund Reports',
+        'can_edit_completed_orders' => 'Edit Completed Orders',
         'order_credit' => 'Credit Sales',
         'payment_verification' => 'Payment Verification Queue',
         'order_delete' => 'Order Delete',
@@ -148,7 +210,7 @@ function admin_permission_groups()
         'operations' => array(
             'title' => 'Operations',
             'description' => 'Live order flow and business visibility.',
-            'permissions' => array('dashboard', 'orders', 'order_edit', 'order_reject', 'order_refund', 'order_credit', 'payment_verification', 'order_delete', 'manual_orders', 'production_plan', 'revenue_report', 'banners')
+            'permissions' => array('dashboard', 'orders', 'order_edit', 'order_reject', 'order_refund', 'can_cancel_unpaid_orders', 'can_approve_refund', 'can_force_refund', 'can_view_refund_reports', 'can_edit_completed_orders', 'order_credit', 'payment_verification', 'order_delete', 'manual_orders', 'production_plan', 'revenue_report', 'banners')
         ),
         'catalog' => array(
             'title' => 'Catalog',
@@ -171,10 +233,10 @@ function admin_permission_groups()
 function admin_label_presets()
 {
     return array(
-        'sales' => array('dashboard', 'orders', 'order_edit', 'order_reject', 'order_refund', 'order_credit', 'payment_verification', 'manual_orders', 'production_plan', 'follow_ups', 'build_your_cake', 'crm_report', 'revenue_report', 'crm_logs', 'change_password'),
+        'sales' => array('dashboard', 'orders', 'order_edit', 'order_reject', 'order_refund', 'can_cancel_unpaid_orders', 'can_approve_refund', 'can_view_refund_reports', 'order_credit', 'payment_verification', 'manual_orders', 'production_plan', 'follow_ups', 'build_your_cake', 'crm_report', 'revenue_report', 'crm_logs', 'change_password'),
         'crm' => array('dashboard', 'follow_ups', 'build_your_cake', 'crm_settings', 'crm_logs', 'crm_report', 'change_password'),
         'catalog' => array('dashboard', 'products', 'coupons', 'import_products', 'categories', 'banners', 'change_password'),
-        'operations' => array('dashboard', 'orders', 'order_edit', 'order_reject', 'order_refund', 'manual_orders', 'production_plan', 'revenue_report', 'banners', 'crm_logs', 'change_password')
+        'operations' => array('dashboard', 'orders', 'order_edit', 'order_reject', 'order_refund', 'can_cancel_unpaid_orders', 'can_approve_refund', 'can_view_refund_reports', 'manual_orders', 'production_plan', 'revenue_report', 'banners', 'crm_logs', 'change_password')
     );
 }
 
@@ -214,11 +276,13 @@ function admin_page_permissions()
         'import-products.php' => 'import_products',
         'download_products.php' => 'import_products',
         'toppers.php' => 'products',
-        'orders.php' => 'orders',
+        'orders.php'  => 'orders',
+        'refunds.php' => 'can_approve_refund',
         'bank-alerts.php' => 'payment_verification',
         'manual_order.php' => 'manual_orders',
         'save_manual_order.php' => 'manual_orders',
         'production_plan.php' => 'production_plan',
+        'slots.php' => 'orders',
         'build-your-own-cake.php' => 'build_your_cake',
         'business-settings.php' => 'business_settings',
         'save-business-settings.php' => 'business_settings',
@@ -242,6 +306,8 @@ function admin_page_permissions()
         'crm_user_history.php' => 'crm_report',
         'revenue_report.php' => 'revenue_report',
         'sales_register.php' => 'revenue_report',
+        'collections_queue.php' => 'revenue_report',
+        'collections_export.php' => 'revenue_report',
         'collection_report.php' => 'revenue_report',
         'sales_report.php' => 'revenue_report',
         'cash_report.php' => 'revenue_report',
@@ -362,9 +428,11 @@ function admin_navigation_items()
         array('title' => 'Import Products', 'href' => 'import-products.php', 'page' => 'Import Products', 'permission' => 'import_products'),
         array('title' => 'Cake Toppers', 'href' => 'toppers.php', 'page' => 'Cake Toppers', 'permission' => 'products'),
         array('title' => 'Orders', 'href' => 'orders.php', 'page' => 'Orders', 'permission' => 'orders'),
+        array('title' => 'Refunds', 'href' => 'refunds.php', 'page' => 'Refunds', 'permission' => 'can_approve_refund'),
         array('title' => 'Payment Verification', 'href' => 'bank-alerts.php', 'page' => 'Payment Verification', 'permission' => 'payment_verification'),
         array('title' => 'Manual Order Punch', 'href' => 'manual_order.php', 'page' => 'Manual Order Punch', 'permission' => 'manual_orders'),
         array('title' => 'Production Plan', 'href' => 'production_plan.php', 'page' => 'Production Plan', 'permission' => 'production_plan'),
+        array('title' => 'Slot Management', 'href' => 'slots.php', 'page' => 'Slot Management', 'permission' => 'orders'),
         array('title' => 'Follow Ups', 'href' => 'follow_ups.php', 'page' => 'Follow Ups', 'permission' => 'follow_ups'),
         array('title' => 'Build Your Own Cake', 'href' => 'build-your-own-cake.php', 'page' => 'Build Your Own Cake', 'permission' => 'build_your_cake'),
         array('title' => 'CRM Settings', 'href' => 'crm_settings.php', 'page' => 'CRM Settings', 'permission' => 'crm_settings'),
@@ -377,6 +445,7 @@ function admin_navigation_items()
         array('title' => 'Coupon Report', 'href' => 'coupon_report.php', 'page' => 'Coupon Report', 'permission' => 'revenue_report'),
         array('title' => 'Celebration Report', 'href' => 'celebration_report.php', 'page' => 'Celebration Report', 'permission' => 'revenue_report'),
         array('title' => 'Sales Register', 'href' => 'sales_register.php', 'page' => 'Sales Register', 'permission' => 'revenue_report'),
+        array('title' => 'Collections Queue', 'href' => 'collections_queue.php', 'page' => 'Collections Queue', 'permission' => 'revenue_report'),
         array('title' => 'Collection Report', 'href' => 'collection_report.php', 'page' => 'Collection Report', 'permission' => 'revenue_report'),
         array('title' => 'Business Settings', 'href' => 'business-settings.php', 'page' => 'Business Settings', 'permission' => 'business_settings'),
         array('title' => 'Maintenance', 'href' => 'maintenance.php', 'page' => 'System Maintenance', 'permission' => 'maintenance'),
@@ -397,7 +466,7 @@ $currentPage = basename($_SERVER['PHP_SELF'] ?? '');
 if (!defined('SKIP_AUTH_ORDER_AUTO_HANDLER') && $_SERVER['REQUEST_METHOD'] === 'POST' && in_array($currentPage, array('update_order.php', 'update_order_status.php'), true)) {
     $orderId = isset($_POST['order_id']) ? (int) $_POST['order_id'] : 0;
     $status = isset($_POST['status']) ? trim((string) $_POST['status']) : '';
-    $allowedStatuses = array('pending', 'confirmed', 'in_preparation', 'completed', 'cancelled');
+    $allowedStatuses = array('pending_payment', 'payment_under_review', 'confirmed', 'preparing', 'ready_for_pickup', 'out_for_delivery', 'delivered', 'completed', 'cancelled', 'rejected', 'refund_requested', 'refunded', 'partially_refunded');
 
     if ($orderId <= 0 || !in_array($status, $allowedStatuses, true)) {
         die('Invalid order update request');

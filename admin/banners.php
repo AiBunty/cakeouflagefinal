@@ -1,8 +1,9 @@
 <?php
 $pageTitle = 'Media Center';
-include 'layout.php';
+require_once __DIR__ . '/layout.php';
 
-require __DIR__ . '/includes/db.php';
+require_once __DIR__ . '/includes/db.php';
+require_once __DIR__ . '/../app/Services/UnifiedMediaService.php';
 
 @ini_set('max_execution_time', '0');
 @set_time_limit(0);
@@ -45,12 +46,23 @@ function media_format_bytes(int $bytes): string
   return number_format($size, $index === 0 ? 0 : 1) . ' ' . $units[$index];
 }
 
+function media_app_max_upload_bytes(): int
+{
+  return 100 * 1024 * 1024;
+}
+
+function media_effective_upload_limit_bytes(): int
+{
+  $uploadMax = media_ini_size_to_bytes((string)ini_get('upload_max_filesize'));
+  $postMax = media_ini_size_to_bytes((string)ini_get('post_max_size'));
+  $serverMax = min($uploadMax > 0 ? $uploadMax : PHP_INT_MAX, $postMax > 0 ? $postMax : PHP_INT_MAX);
+  return min($serverMax, media_app_max_upload_bytes());
+}
+
 function media_upload_error_message(int $errorCode): string
 {
   if ($errorCode === UPLOAD_ERR_INI_SIZE || $errorCode === UPLOAD_ERR_FORM_SIZE) {
-    $uploadMax = media_ini_size_to_bytes((string)ini_get('upload_max_filesize'));
-    $postMax = media_ini_size_to_bytes((string)ini_get('post_max_size'));
-    $limit = min($uploadMax > 0 ? $uploadMax : PHP_INT_MAX, $postMax > 0 ? $postMax : PHP_INT_MAX);
+    $limit = media_effective_upload_limit_bytes();
     $limitText = $limit === PHP_INT_MAX ? 'server limit' : media_format_bytes((int)$limit);
     return 'File is larger than server upload limit (' . $limitText . ').';
   }
@@ -137,7 +149,7 @@ function media_ensure_offer_banner_schema(mysqli $conn): void
 
 function media_is_video_extension(string $ext): bool
 {
-  return in_array($ext, array('mp4', 'webm', 'ogg', 'm4v', 'mov'), true);
+  return in_array($ext, array('mp4', 'webm', 'ogg', 'm4v', 'mov', 'avi', 'mkv', 'mpeg', 'mpg'), true);
 }
 
 function media_can_run_exec(): bool
@@ -229,6 +241,65 @@ function media_try_optimize_video(string $absoluteFilePath, string &$infoMessage
   $infoMessage = 'Video saved as uploaded (already web-optimized).';
 }
 
+function media_convert_video_to_mp4(string $absoluteFilePath, string &$errorMessage = ''): ?string
+{
+  $ffmpeg = media_find_ffmpeg_binary();
+  if ($ffmpeg === null) {
+    $errorMessage = 'FFmpeg is required to convert this video to MP4, but it is not available on server.';
+    return null;
+  }
+
+  $convertedPath = preg_replace('/\.[a-zA-Z0-9]+$/', '', $absoluteFilePath) . '.mp4';
+  if (!is_string($convertedPath) || $convertedPath === '') {
+    $errorMessage = 'Unable to prepare MP4 conversion path for uploaded video.';
+    return null;
+  }
+
+  $command = escapeshellcmd($ffmpeg)
+    . ' -y -i ' . escapeshellarg($absoluteFilePath)
+    . ' -c:v libx264 -preset veryfast -crf 22 -c:a aac -b:a 128k -movflags +faststart '
+    . escapeshellarg($convertedPath)
+    . ' 2>&1';
+
+  $output = array();
+  $exitCode = 1;
+  @exec($command, $output, $exitCode);
+  if ($exitCode !== 0 || !is_file($convertedPath)) {
+    @unlink($convertedPath);
+    $errorMessage = 'Video conversion to MP4 failed on server.';
+    return null;
+  }
+
+  return $convertedPath;
+}
+
+function media_video_mime_from_extension(string $ext): string
+{
+  $ext = strtolower(trim($ext));
+  if ($ext === 'mp4' || $ext === 'm4v') {
+    return 'video/mp4';
+  }
+  if ($ext === 'webm') {
+    return 'video/webm';
+  }
+  if ($ext === 'ogg') {
+    return 'video/ogg';
+  }
+  if ($ext === 'mov') {
+    return 'video/quicktime';
+  }
+  if ($ext === 'avi') {
+    return 'video/x-msvideo';
+  }
+  if ($ext === 'mkv') {
+    return 'video/x-matroska';
+  }
+  if ($ext === 'mpeg' || $ext === 'mpg') {
+    return 'video/mpeg';
+  }
+  return 'video/mp4';
+}
+
 function media_upload_file(array $file, string &$errorMessage = '', string &$infoMessage = ''): ?string
 {
   $errorCode = (int)($file['error'] ?? UPLOAD_ERR_NO_FILE);
@@ -250,19 +321,34 @@ function media_upload_file(array $file, string &$errorMessage = '', string &$inf
       return null;
     }
 
-    $uploadMax = media_ini_size_to_bytes((string)ini_get('upload_max_filesize'));
-    $postMax = media_ini_size_to_bytes((string)ini_get('post_max_size'));
-    $serverMax = min($uploadMax > 0 ? $uploadMax : PHP_INT_MAX, $postMax > 0 ? $postMax : PHP_INT_MAX);
+    $serverMax = media_effective_upload_limit_bytes();
     if ($serverMax !== PHP_INT_MAX && $uploadSize > $serverMax) {
       $errorMessage = 'File is larger than current server limit (' . media_format_bytes((int)$serverMax) . ').';
       return null;
     }
 
     $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
-    $allowed = array('mp4', 'webm', 'ogg', 'm4v', 'mov', 'jpg', 'jpeg', 'png', 'webp');
+    $allowed = array('mp4', 'webm', 'ogg', 'm4v', 'mov', 'avi', 'mkv', 'mpeg', 'mpg', 'jpg', 'jpeg', 'png', 'webp', 'gif', 'svg');
     if (!in_array($ext, $allowed, true)) {
-      $errorMessage = 'Only MP4/WEBM/OGG/MOV videos and JPG/PNG/WEBP images are allowed.';
+      $errorMessage = 'Only MP4/WEBM/OGG/MOV/AVI/MKV/MPEG/MPG videos and JPG/PNG/WEBP/GIF/SVG images are allowed.';
         return null;
+    }
+
+    // Unified media pipeline for image uploads (async optimized variants).
+    if (!media_is_video_extension($ext)) {
+      $upload = \App\Services\UnifiedMediaService::upload($file, [
+        'module' => 'banner',
+        'entity_type' => 'banner',
+        'entity_id' => 0,
+        'admin_id' => (int)($_SESSION['admin'] ?? 0),
+        'allow_svg' => true,
+        'max_bytes' => media_effective_upload_limit_bytes(),
+      ]);
+      if (!$upload['ok']) {
+        $errorMessage = $upload['error'];
+        return null;
+      }
+      return $upload['relative_url'];
     }
 
     $safeName = 'media_' . date('Ymd_His') . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
@@ -284,10 +370,102 @@ function media_upload_file(array $file, string &$errorMessage = '', string &$inf
     }
 
     if (media_is_video_extension($ext)) {
-      media_try_optimize_video($target, $infoMessage);
+      $sourceExt = $ext;
+      if ($ext !== 'mp4') {
+        $convertError = '';
+        $convertedPath = media_convert_video_to_mp4($target, $convertError);
+        if ($convertedPath === null) {
+          @unlink($target);
+          $errorMessage = $convertError !== ''
+            ? ($convertError . ' Upload MP4 directly or enable FFmpeg on server for MOV/AVI/MKV/MPEG conversion.')
+            : 'Unable to convert uploaded video to MP4.';
+          return null;
+        }
+
+        @unlink($target);
+        $target = $convertedPath;
+        $ext = 'mp4';
+        $safeName = basename($target);
+        $infoMessage = 'Video converted to MP4 (H.264/AAC) for browser playback.';
+      }
+
+      $optInfo = '';
+      media_try_optimize_video($target, $optInfo);
+      if ($optInfo !== '') {
+        $infoMessage = $sourceExt === 'mp4' ? $optInfo : ($infoMessage . ' ' . $optInfo);
+      }
     }
 
     return '/uploads/' . $safeName;
+}
+
+function media_public_upload_path(string $url): ?string
+{
+  $path = trim((string)parse_url($url, PHP_URL_PATH));
+  if ($path === '') {
+    return null;
+  }
+
+  if (strpos($path, '/uploads/') !== 0 && strpos($path, '/public/uploads/') !== 0) {
+    return null;
+  }
+
+  $publicRoot = realpath(__DIR__ . '/../public');
+  if ($publicRoot === false) {
+    return null;
+  }
+
+  $normalized = $path;
+  if (strpos($normalized, '/uploads/') === 0) {
+    $normalized = '/public' . $normalized;
+  }
+
+  $absolute = dirname($publicRoot) . str_replace('/', DIRECTORY_SEPARATOR, $normalized);
+  $uploadRoot = realpath($publicRoot . DIRECTORY_SEPARATOR . 'uploads');
+  $parent = realpath(dirname($absolute));
+  if ($uploadRoot === false || $parent === false || strpos($parent, $uploadRoot) !== 0) {
+    return null;
+  }
+
+  return $absolute;
+}
+
+function media_delete_upload_if_unreferenced(mysqli $conn, string $oldUrl, ?string $newUrl = null): void
+{
+  $oldUrl = trim($oldUrl);
+  $newUrl = trim((string)$newUrl);
+  if ($oldUrl === '' || $oldUrl === $newUrl) {
+    return;
+  }
+
+  $absolute = media_public_upload_path($oldUrl);
+  if ($absolute === null || !is_file($absolute)) {
+    return;
+  }
+
+  $bannerCount = 0;
+  $bannerStmt = $conn->prepare('SELECT COUNT(*) AS total FROM banners WHERE image_url = ?');
+  if ($bannerStmt) {
+    $bannerStmt->bind_param('s', $oldUrl);
+    $bannerStmt->execute();
+    $bannerResult = $bannerStmt->get_result();
+    $bannerRow = $bannerResult ? $bannerResult->fetch_assoc() : null;
+    $bannerCount = (int)($bannerRow['total'] ?? 0);
+  }
+
+  $settingCount = 0;
+  $settingStmt = $conn->prepare('SELECT COUNT(*) AS total FROM settings WHERE setting_value = ?');
+  if ($settingStmt) {
+    $settingStmt->bind_param('s', $oldUrl);
+    $settingStmt->execute();
+    $settingResult = $settingStmt->get_result();
+    $settingRow = $settingResult ? $settingResult->fetch_assoc() : null;
+    $settingCount = (int)($settingRow['total'] ?? 0);
+  }
+
+  if (($bannerCount + $settingCount) === 0) {
+    @unlink($absolute);
+  }
 }
 
 function media_upsert_banner(mysqli $conn, string $placement, ?string $title, ?string $subtitle, ?string $imageUrl): void
@@ -309,10 +487,14 @@ function media_upsert_banner(mysqli $conn, string $placement, ?string $title, ?s
         $finalTitle = $title !== null ? $title : (string)($currentRow['title'] ?? '');
         $finalSubtitle = $subtitle !== null ? $subtitle : (string)($currentRow['subtitle'] ?? '');
         $finalImage = $imageUrl !== null ? $imageUrl : (string)($currentRow['image_url'] ?? '');
+        $oldImage = (string)($currentRow['image_url'] ?? '');
 
         $update = $conn->prepare('UPDATE banners SET title = ?, subtitle = ?, image_url = ?, is_active = 1, updated_at = NOW() WHERE id = ? LIMIT 1');
         $update->bind_param('sssi', $finalTitle, $finalSubtitle, $finalImage, $id);
         $update->execute();
+        if ($imageUrl !== null) {
+          media_delete_upload_if_unreferenced($conn, $oldImage, $finalImage);
+        }
         return;
     }
 
@@ -361,9 +543,11 @@ function media_upsert_offer_banner(
 function media_set_setting(mysqli $conn, string $key, string $value): void
 {
     $adminId = !empty($_SESSION['admin']) ? (int)$_SESSION['admin'] : null;
-    $stmt = $conn->prepare('INSERT INTO settings (setting_key, setting_value, updated_by_admin_id) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_by_admin_id = VALUES(updated_by_admin_id), updated_at = NOW()');
+    $oldValue = media_get_setting($conn, $key, '');
+    $stmt = $conn->prepare('INSERT INTO settings (setting_key, setting_value, updated_by_admin_id) VALUES (?, ?, ?) AS new ON DUPLICATE KEY UPDATE setting_value = new.setting_value, updated_by_admin_id = new.updated_by_admin_id, updated_at = NOW()');
     $stmt->bind_param('ssi', $key, $value, $adminId);
     $stmt->execute();
+    media_delete_upload_if_unreferenced($conn, $oldValue, $value);
 }
 
 function media_get_setting(mysqli $conn, string $key, string $fallback = ''): string
@@ -537,8 +721,9 @@ function media_render_preview_markup(string $value, string $fallback = ''): stri
   if ($resolved !== '' && !preg_match('#^data:image/#i', $resolved)) {
     $path = parse_url($resolved, PHP_URL_PATH);
     $ext = strtolower(pathinfo((string)($path ?? $resolved), PATHINFO_EXTENSION));
-    if (in_array($ext, array('mp4', 'webm', 'ogg', 'm4v', 'mov'), true)) {
-      return '<video src="' . $escaped . '" controls muted playsinline></video>';
+    if (in_array($ext, array('mp4', 'webm', 'ogg', 'm4v', 'mov', 'avi', 'mkv', 'mpeg', 'mpg'), true)) {
+      $mime = media_video_mime_from_extension($ext);
+      return '<video controls muted playsinline><source src="' . $escaped . '" type="' . htmlspecialchars($mime, ENT_QUOTES, 'UTF-8') . '"></video>';
     }
   }
 
@@ -640,9 +825,7 @@ $chefVideo = media_get_setting($conn, 'home_chef_video_url', '/client/assets/vid
 $healthyVideo = media_get_setting($conn, 'home_healthy_video_url', '/client/assets/video/Healthcake.MP4');
 $healthyHeading = media_get_setting($conn, 'home_healthy_heading', 'Healthy by Cakeouflage');
 
-$uploadMaxBytes = media_ini_size_to_bytes((string)ini_get('upload_max_filesize'));
-$postMaxBytes = media_ini_size_to_bytes((string)ini_get('post_max_size'));
-$effectiveUploadLimitBytes = min($uploadMaxBytes > 0 ? $uploadMaxBytes : PHP_INT_MAX, $postMaxBytes > 0 ? $postMaxBytes : PHP_INT_MAX);
+$effectiveUploadLimitBytes = media_effective_upload_limit_bytes();
 $effectiveUploadLimitLabel = $effectiveUploadLimitBytes === PHP_INT_MAX ? 'Server default' : media_format_bytes((int)$effectiveUploadLimitBytes);
 ?>
 <style>
@@ -747,7 +930,7 @@ $effectiveUploadLimitLabel = $effectiveUploadLimitBytes === PHP_INT_MAX ? 'Serve
     <div class="media-msg <?= $messageType === 'error' ? 'error' : 'success' ?>"><?= htmlspecialchars($message, ENT_QUOTES, 'UTF-8') ?></div>
   <?php endif; ?>
 
-  <p class="media-help">Current server upload limit: <strong><?= htmlspecialchars($effectiveUploadLimitLabel, ENT_QUOTES, 'UTF-8') ?></strong>. Large videos are auto-optimized for web streaming when FFmpeg is available on server.</p>
+  <p class="media-help">Upload limit: <strong><?= htmlspecialchars($effectiveUploadLimitLabel, ENT_QUOTES, 'UTF-8') ?></strong> (hard-capped at 100 MB by media policy). Large videos are auto-optimized for web streaming when FFmpeg is available on server.</p>
 
   <div class="media-grid">
     <form class="media-card" method="post" enctype="multipart/form-data">

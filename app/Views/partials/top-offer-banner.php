@@ -2,6 +2,16 @@
 $siteTopOffer = null;
 $showSiteTopOffer = false;
 $nowTs = time();
+$currentPath = (string)parse_url((string)($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH);
+$isCheckoutOrAuthRoute = in_array($currentPath, [
+  '/checkout',
+  '/login',
+  '/register',
+  '/forgot-password',
+  '/reset-password',
+  '/b2b/login',
+  '/b2b/register',
+], true);
 
 try {
     $db = \App\Core\Database::getInstance();
@@ -58,6 +68,7 @@ try {
   }
 
     if (is_array($siteTopOffer)) {
+      $pageScope = trim((string)($siteTopOffer['page_scope'] ?? 'all_pages'));
         $linkedCouponId = isset($siteTopOffer['linked_coupon_id']) ? (int)$siteTopOffer['linked_coupon_id'] : 0;
         if ($linkedCouponId > 0) {
             $couponActive = (int)($siteTopOffer['coupon_is_active'] ?? 0) === 1;
@@ -81,8 +92,13 @@ try {
 
       $showSiteTopOffer = $couponActive && !$couponDeleted && $couponWindowValid && $couponCode !== '';
         } else {
-      $showSiteTopOffer = false;
+          // Allow message-only top-offer campaigns with no linked coupon.
+          $showSiteTopOffer = true;
         }
+
+          if ($showSiteTopOffer && $pageScope === 'exclude_checkout_auth' && $isCheckoutOrAuthRoute) {
+            $showSiteTopOffer = false;
+          }
     }
 } catch (\Throwable $e) {
     $showSiteTopOffer = false;
@@ -96,7 +112,7 @@ $offerTitle = trim((string)($siteTopOffer['title'] ?? 'Limited-time Offer'));
 $offerSubtitle = trim((string)($siteTopOffer['subtitle'] ?? ''));
 $offerCode = trim((string)($siteTopOffer['coupon_code'] ?? ''));
 $offerCtaLabel = trim((string)($siteTopOffer['cta_label'] ?? 'Shop Now'));
-$offerCtaUrl = trim((string)($siteTopOffer['cta_url'] ?? '/shop'));
+$offerCtaUrl = trim((string)($siteTopOffer['cta_url'] ?? '/category'));
 $offerEndsAt = trim((string)($siteTopOffer['ends_at'] ?? ''));
 $couponEndsAt = trim((string)($siteTopOffer['coupon_ends_at'] ?? ''));
 $offerExpiryAt = '';
@@ -108,7 +124,7 @@ if ($offerEndsAt !== '' && $couponEndsAt !== '') {
   $offerExpiryAt = $couponEndsAt;
 }
 if ($offerCtaUrl === '') {
-    $offerCtaUrl = '/shop';
+    $offerCtaUrl = '/category';
 }
 ?>
 <style>

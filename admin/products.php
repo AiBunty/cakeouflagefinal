@@ -6,8 +6,9 @@ if (!isset($_SESSION['admin'])) {
     exit;
 }
 
-require __DIR__ . '/includes/db.php';
+require_once __DIR__ . '/includes/db.php';
 require_once __DIR__ . '/includes/image_helpers.php';
+require_once __DIR__ . '/../app/Services/UnifiedMediaService.php';
 
 function prod_h(string $value): string {
   return htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
@@ -22,7 +23,7 @@ function prod_unique_slug(mysqli $conn, string $baseSlug, int $productId): strin
   $slug = $baseSlug;
   $i = 2;
   while (true) {
-    $check = $conn->prepare('SELECT id FROM products WHERE slug = ? AND id != ? LIMIT 1');
+    $check = safePrepare($conn, 'SELECT id FROM products WHERE slug = ? AND id != ? LIMIT 1');
     $check->bind_param('si', $slug, $productId);
     $check->execute();
     $result = $check->get_result();
@@ -36,7 +37,7 @@ function prod_unique_slug(mysqli $conn, string $baseSlug, int $productId): strin
 }
 
 function prod_placeholder_image(): string {
-  return 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 56 56"><rect width="56" height="56" rx="10" fill="%23f8d8de"/><path d="M14 36l10-10 7 7 6-6 8 9H14z" fill="%23d6a0ae"/></svg>';
+  return '/assets/defaults/default-product-image.webp';
 }
 
 function prod_resolve_image_url(string $path): string {
@@ -53,7 +54,7 @@ function prod_resolve_image_url(string $path): string {
     $normalized = '/client/assets/images/product/' . basename($normalized);
   } elseif (strpos($normalized, '/assets/images/product/') === 0) {
     $normalized = '/client/assets/images/product/' . basename($normalized);
-  } elseif (strpos($normalized, '/assets/') === 0) {
+  } elseif (strpos($normalized, '/assets/') === 0 && strpos($normalized, '/assets/defaults/') !== 0) {
     $normalized = '/client' . $normalized;
   } elseif ($normalized !== '' && $normalized[0] !== '/') {
     $normalized = '/client/assets/images/product/' . ltrim($normalized, '/');
@@ -66,6 +67,39 @@ function prod_resolve_image_url(string $path): string {
   }
 
   return prod_placeholder_image();
+}
+
+function prod_resolve_optional_image_url(string $path): string {
+  $value = trim($path);
+  if ($value === '') {
+    return '';
+  }
+  if (preg_match('#^(data:|https?://)#i', $value)) {
+    return $value;
+  }
+
+  $normalized = preg_replace('#^/Cakeouflage-E-commerce#', '', $value);
+  if (strpos($normalized, '/assets/images/products/') === 0) {
+    $normalized = '/client/assets/images/product/' . basename($normalized);
+  } elseif (strpos($normalized, '/assets/images/product/') === 0) {
+    $normalized = '/client/assets/images/product/' . basename($normalized);
+  } elseif (strpos($normalized, '/assets/') === 0) {
+    $normalized = '/client' . $normalized;
+  } elseif ($normalized !== '' && $normalized[0] !== '/') {
+    $normalized = '/client/assets/images/product/' . ltrim($normalized, '/');
+  }
+
+  if ($normalized === '' || $normalized[0] !== '/') {
+    return '';
+  }
+
+  $documentRoot = rtrim((string)($_SERVER['DOCUMENT_ROOT'] ?? ''), '/\\');
+  $absolutePath = $documentRoot !== '' ? $documentRoot . $normalized : '';
+  if ($absolutePath !== '' && is_file($absolutePath)) {
+    return $normalized;
+  }
+
+  return '';
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string)($_POST['action'] ?? '') === 'update_product_inline') {
@@ -82,50 +116,62 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string)($_POST['action'] ?? '') ==
     $availabilityStatus = 'in_stock';
   }
 
+  // Server-side category fallback: if the JS dropdown failed to pre-select the category
+  // (e.g. the category was deleted, or openProductEditor received data-category-id="0"),
+  // the submitted value will be 0. Re-read the current value from DB so the NOT NULL FK
+  // constraint is satisfied and the update does not silently fail with updated=0.
+  if ($categoryId <= 0 && $id > 0) {
+    $catFbResult = $conn->query('SELECT collection_category_id FROM products WHERE id = ' . $id . ' AND deleted_at IS NULL LIMIT 1');
+    if ($catFbResult && ($catFbRow = $catFbResult->fetch_assoc())) {
+      $categoryId = (int)($catFbRow['collection_category_id'] ?? 0);
+    }
+  }
+
   if ($id <= 0 || $name === '' || $basePrice <= 0 || $categoryId <= 0) {
     header('Location: products.php?updated=0');
     exit;
   }
 
-  $newImagePath = $currentImage !== '' ? $currentImage : null;
+  $newImagePath = $currentImage !== '' ? $currentImage : '/assets/defaults/default-product-image.webp';
   $image1Changed = false;
+  $uploadWarning = '';
   if (!empty($_FILES['image']['name']) && (int)($_FILES['image']['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
-    $tmp = (string)($_FILES['image']['tmp_name'] ?? '');
-    $ext = strtolower((string)pathinfo((string)($_FILES['image']['name'] ?? ''), PATHINFO_EXTENSION));
-    $allowedExt = array('jpg', 'jpeg', 'png', 'webp', 'gif');
-    if ($tmp !== '' && in_array($ext, $allowedExt, true)) {
-      $baseName = time() . '_' . bin2hex(random_bytes(4));
-      $uploadDir = '../client/assets/images/product/';
-      if (!is_dir($uploadDir)) {
-        mkdir($uploadDir, 0777, true);
-      }
-      if (convert_to_webp($tmp, $uploadDir . $baseName . '.webp')) {
-        $newImagePath = '/client/assets/images/product/' . $baseName . '.webp';
-        $image1Changed = true;
-      } elseif (move_uploaded_file($tmp, $uploadDir . $baseName . '.' . $ext)) {
-        $newImagePath = '/client/assets/images/product/' . $baseName . '.' . $ext;
-        $image1Changed = true;
-      }
+    $imgResult  = \App\Services\UnifiedMediaService::upload(
+      $_FILES['image'],
+      [
+        'module' => 'product',
+        'entity_type' => 'product',
+        'entity_id' => $id,
+        'admin_id' => (int)($_SESSION['admin'] ?? 0),
+        'allow_svg' => false,
+      ]
+    );
+    if ($imgResult['ok']) {
+      $newImagePath  = $imgResult['relative_url'];
+      $image1Changed = true;
+    } else {
+      $uploadWarning = $imgResult['error'];
     }
   }
 
   // IMAGE 2 upload
   $newImage2Path = null;
   if (!empty($_FILES['image2']['name']) && (int)($_FILES['image2']['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
-    $tmp2 = (string)($_FILES['image2']['tmp_name'] ?? '');
-    $ext2 = strtolower((string)pathinfo((string)($_FILES['image2']['name'] ?? ''), PATHINFO_EXTENSION));
-    $allowedExt = array('jpg', 'jpeg', 'png', 'webp', 'gif');
-    if ($tmp2 !== '' && in_array($ext2, $allowedExt, true)) {
-      $baseName2 = time() . '_2_' . bin2hex(random_bytes(4));
-      $uploadDir = '../client/assets/images/product/';
-      if (!is_dir($uploadDir)) {
-        mkdir($uploadDir, 0777, true);
-      }
-      if (convert_to_webp($tmp2, $uploadDir . $baseName2 . '.webp')) {
-        $newImage2Path = '/client/assets/images/product/' . $baseName2 . '.webp';
-      } elseif (move_uploaded_file($tmp2, $uploadDir . $baseName2 . '.' . $ext2)) {
-        $newImage2Path = '/client/assets/images/product/' . $baseName2 . '.' . $ext2;
-      }
+    $img2Result  = \App\Services\UnifiedMediaService::upload(
+      $_FILES['image2'],
+      [
+        'module' => 'product_image_2',
+        'entity_type' => 'product',
+        'entity_id' => $id,
+        'admin_id' => (int)($_SESSION['admin'] ?? 0),
+        'allow_svg' => false,
+      ]
+    );
+    if ($img2Result['ok']) {
+      $newImage2Path = $img2Result['relative_url'];
+    } else {
+      // Image 2 is optional; log but don't overwrite the primary upload warning
+      error_log('[products.php] Image2 upload failed: id=' . $id . ' error=' . $img2Result['error']);
     }
   }
 
@@ -137,48 +183,62 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string)($_POST['action'] ?? '') ==
   $isVeg = isset($_POST['is_veg']) ? 1 : 0;
   $topperEnabled = isset($_POST['topper_enabled']) ? 1 : 0;
   $noteEnabled   = isset($_POST['note_enabled']) ? 1 : 0;
-  $stmt = $conn->prepare('UPDATE products SET name = ?, slug = ?, starting_price = ?, collection_category_id = ?, short_description = ?, featured_image = ?, availability_status = ?, is_chef_special = ?, dietary_tag = ?, is_veg = ?, topper_enabled = ?, note_enabled = ?, updated_at = NOW() WHERE id = ? LIMIT 1');
-  $stmt->bind_param('ssdisssisiiii', $name, $slug, $basePrice, $categoryId, $description, $newImagePath, $availabilityStatus, $isChefSpecial, $dietaryTag, $isVeg, $topperEnabled, $noteEnabled, $id);
-  $ok = $stmt->execute();
+  try {
+    $stmt = safePrepare($conn, 'UPDATE products SET name = ?, slug = ?, starting_price = ?, collection_category_id = ?, short_description = ?, featured_image = ?, availability_status = ?, is_chef_special = ?, dietary_tag = ?, is_veg = ?, topper_enabled = ?, note_enabled = ?, updated_at = NOW() WHERE id = ? LIMIT 1');
+    $stmt->bind_param('ssdisssisiiii', $name, $slug, $basePrice, $categoryId, $description, $newImagePath, $availabilityStatus, $isChefSpecial, $dietaryTag, $isVeg, $topperEnabled, $noteEnabled, $id);
+    $ok = $stmt->execute();
+    if (!$ok) {
+      error_log('[products.php] UPDATE failed: id=' . $id . ' mysql_error=' . $conn->error);
+    }
+  } catch (RuntimeException $e) {
+    error_log('[products.php] UPDATE exception: id=' . $id . ' msg=' . $e->getMessage());
+    header('Location: products.php?updated=0');
+    exit;
+  }
 
   // Keep variant prices aligned with base price logic from edit flow.
   if ($ok) {
     $weights = array('1', '1.5', '2', '2.5', '3', '4');
     foreach ($weights as $weight) {
       $variantPrice = $basePrice * (float)$weight;
-      $variantStmt = $conn->prepare('UPDATE product_variants SET price = ? WHERE product_id = ? AND weight_or_size = ?');
+      $variantStmt = safePrepare($conn, 'UPDATE product_variants SET price = ? WHERE product_id = ? AND weight_or_size = ?');
       $variantStmt->bind_param('dis', $variantPrice, $id, $weight);
       $variantStmt->execute();
     }
 
     // Sync product_images for gallery. sort_order=0 → image 1, sort_order=1 → image 2.
     if ($image1Changed && $newImagePath !== null) {
-      $piDel = $conn->prepare('DELETE FROM product_images WHERE product_id = ? AND sort_order = 0');
+      $piDel = safePrepare($conn, 'DELETE FROM product_images WHERE product_id = ? AND sort_order = 0');
       $piDel->bind_param('i', $id);
       $piDel->execute();
       $piDel->close();
-      $piIns = $conn->prepare('INSERT INTO product_images (product_id, image_url, sort_order) VALUES (?, ?, 0)');
+      $piIns = safePrepare($conn, 'INSERT INTO product_images (product_id, image_url, sort_order) VALUES (?, ?, 0)');
       $piIns->bind_param('is', $id, $newImagePath);
       $piIns->execute();
       $piIns->close();
     }
     if ($newImage2Path !== null) {
-      $pi2Del = $conn->prepare('DELETE FROM product_images WHERE product_id = ? AND sort_order = 1');
+      $pi2Del = safePrepare($conn, 'DELETE FROM product_images WHERE product_id = ? AND sort_order = 1');
       $pi2Del->bind_param('i', $id);
       $pi2Del->execute();
       $pi2Del->close();
-      $pi2Ins = $conn->prepare('INSERT INTO product_images (product_id, image_url, sort_order) VALUES (?, ?, 1)');
+      $pi2Ins = safePrepare($conn, 'INSERT INTO product_images (product_id, image_url, sort_order) VALUES (?, ?, 1)');
       $pi2Ins->bind_param('is', $id, $newImage2Path);
       $pi2Ins->execute();
       $pi2Ins->close();
     }
   }
 
-  header('Location: products.php?updated=' . ($ok ? '1' : '0'));
+  $redirectQuery = 'updated=' . ($ok ? '1' : '0');
+  if ($uploadWarning !== '') {
+    $redirectQuery .= '&uploadwarn=1';
+  }
+  header('Location: products.php?' . $redirectQuery);
   exit;
 }
 
 $flashUpdated = isset($_GET['updated']) ? (int)$_GET['updated'] : null;
+$flashUploadWarn = isset($_GET['uploadwarn']);
 $focusProductId = isset($_GET['focus']) ? (int)$_GET['focus'] : 0;
 
 $categoryOptions = array();
@@ -225,7 +285,7 @@ ksort($collections);
 ksort($subcategories);
 
 $pageTitle = "Products";
-include "layout.php";
+require_once __DIR__ . '/layout.php';
 ?>
 <style>
   .products-page {
@@ -598,6 +658,12 @@ include "layout.php";
     border: 1px solid #fecaca;
   }
 
+  .products-flash--warn {
+    background: #fffbeb;
+    color: #92400e;
+    border: 1px solid #fde68a;
+  }
+
   .prod-editor {
     display: none;
     background: #fff;
@@ -685,6 +751,61 @@ include "layout.php";
     grid-column: 1 / -1;
   }
 
+  .prod-editor-section {
+    border: 1px solid rgba(128, 0, 31, 0.08);
+    border-radius: 12px;
+    background: #fff;
+    padding: 10px;
+    display: grid;
+    gap: 8px;
+  }
+
+  .prod-editor-section__title {
+    margin: 0;
+    font-size: 0.84rem;
+    font-weight: 700;
+    color: #6f1130;
+    letter-spacing: 0.02em;
+  }
+
+  .prod-editor-section__hint {
+    margin: 0;
+    font-size: 0.72rem;
+    color: #8f6e7b;
+  }
+
+  .prod-feature-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .prod-feature-item {
+    border: 1px solid rgba(128, 0, 31, 0.12);
+    border-radius: 10px;
+    padding: 8px 10px;
+    background: #fff9fb;
+  }
+
+  .prod-feature-item label {
+    margin: 0;
+    font-size: 0.79rem;
+    color: #4f2e39;
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+  }
+
+  .prod-feature-item input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+  }
+
   .prod-editor-actions {
     display: flex;
     gap: 8px;
@@ -700,6 +821,11 @@ include "layout.php";
     font-weight: 700;
     padding: 9px 14px;
     cursor: pointer;
+  }
+
+  .prod-editor-save.is-saving {
+    opacity: 0.65;
+    cursor: not-allowed;
   }
 
   .prod-editor-img {
@@ -868,6 +994,10 @@ include "layout.php";
       grid-template-columns: 1fr;
     }
 
+    .prod-feature-grid {
+      grid-template-columns: 1fr;
+    }
+
     .products-toolbar__actions {
       justify-content: flex-end;
     }
@@ -953,8 +1083,14 @@ include "layout.php";
     </div>
 
     <?php if ($flashUpdated !== null): ?>
-      <div class="products-flash <?php echo $flashUpdated === 1 ? 'products-flash--ok' : 'products-flash--error'; ?>">
-        <?php echo $flashUpdated === 1 ? 'Product updated successfully.' : 'Product update failed. Please try again.'; ?>
+      <div class="products-flash <?php echo $flashUpdated === 1 && !$flashUploadWarn ? 'products-flash--ok' : ($flashUpdated === 1 ? 'products-flash--warn' : 'products-flash--error'); ?>">
+        <?php if ($flashUpdated === 1 && $flashUploadWarn): ?>
+          Product saved — but the image could not be stored on the server. Check storage permissions.
+        <?php elseif ($flashUpdated === 1): ?>
+          Product updated successfully.
+        <?php else: ?>
+          Product update failed. Please try again.
+        <?php endif; ?>
       </div>
     <?php endif; ?>
 
@@ -987,7 +1123,7 @@ include "layout.php";
               $price = $row['discount_price'] ?: $row['starting_price'];
             ?>
             <tr class="product-row" data-name="<?php echo htmlspecialchars(strtolower((string)$row['name'])); ?>" data-collection="<?php echo htmlspecialchars(strtolower($collection)); ?>" data-subcategory="<?php echo htmlspecialchars(strtolower($subcategory)); ?>">
-              <td><img class="products-table__thumb" src="<?php echo prod_h(prod_resolve_image_url((string)($row['featured_image'] ?? ''))); ?>" alt="<?php echo htmlspecialchars((string)$row['name']); ?>"></td>
+              <td><img class="products-table__thumb" src="<?php echo prod_h(prod_resolve_image_url((string)($row['featured_image'] ?? ''))); ?>" alt="<?php echo htmlspecialchars((string)$row['name']); ?>" onerror="this.onerror=null;this.src='/assets/defaults/default-product-image.webp';"></td>
               <td>
                 <p class="products-title"><?php echo $row['name']; ?></p>
                 <p class="products-subtitle">ID #<?php echo (int)$row['id']; ?></p>
@@ -1006,7 +1142,7 @@ include "layout.php";
                     data-description="<?php echo prod_h((string)($row['short_description'] ?? '')); ?>"
                     data-current-image="<?php echo prod_h((string)($row['featured_image'] ?? '')); ?>"
                     data-preview-image="<?php echo prod_h(prod_resolve_image_url((string)($row['featured_image'] ?? ''))); ?>"
-                    data-image2-url="<?php echo prod_h(prod_resolve_image_url((string)($row['image2_url'] ?? ''))); ?>"
+                    data-image2-url="<?php echo prod_h(prod_resolve_optional_image_url((string)($row['image2_url'] ?? ''))); ?>"
                     data-chef-special="<?php echo (int)($row['is_chef_special'] ?? 0); ?>"
                     data-availability="<?php echo prod_h((string)($row['availability_status'] ?? 'in_stock')); ?>"
                     data-topper-enabled="<?php echo (int)($row['topper_enabled'] ?? 1); ?>"
@@ -1037,7 +1173,7 @@ include "layout.php";
         ?>
         <article class="product-card product-row" data-name="<?php echo htmlspecialchars(strtolower((string)$row['name'])); ?>" data-collection="<?php echo htmlspecialchars(strtolower($collection)); ?>" data-subcategory="<?php echo htmlspecialchars(strtolower($subcategory)); ?>">
           <div class="product-card__media">
-            <img src="<?php echo prod_h(prod_resolve_image_url((string)($row['featured_image'] ?? ''))); ?>" alt="<?php echo htmlspecialchars((string)$row['name']); ?>">
+            <img src="<?php echo prod_h(prod_resolve_image_url((string)($row['featured_image'] ?? ''))); ?>" alt="<?php echo htmlspecialchars((string)$row['name']); ?>" onerror="this.onerror=null;this.src='/assets/defaults/default-product-image.webp';">
           </div>
           <div class="product-card__body">
             <h3><?php echo $row['name']; ?></h3>
@@ -1053,7 +1189,7 @@ include "layout.php";
                 data-description="<?php echo prod_h((string)($row['short_description'] ?? '')); ?>"
                 data-current-image="<?php echo prod_h((string)($row['featured_image'] ?? '')); ?>"
                 data-preview-image="<?php echo prod_h(prod_resolve_image_url((string)($row['featured_image'] ?? ''))); ?>"
-                data-image2-url="<?php echo prod_h(prod_resolve_image_url((string)($row['image2_url'] ?? ''))); ?>"
+                data-image2-url="<?php echo prod_h(prod_resolve_optional_image_url((string)($row['image2_url'] ?? ''))); ?>"
                 data-chef-special="<?php echo (int)($row['is_chef_special'] ?? 0); ?>"
                 data-availability="<?php echo prod_h((string)($row['availability_status'] ?? 'in_stock')); ?>"
                 data-dietary="<?php echo prod_h((string)($row['dietary_tag'] ?? 'regular')); ?>"
@@ -1081,82 +1217,99 @@ include "layout.php";
         <h3 class="prod-editor__title">Edit Product</h3>
         <button type="button" class="prod-editor__back" id="prodEditorBack">Back to List</button>
       </div>
-      <form method="POST" enctype="multipart/form-data" class="prod-editor__body">
+      <form id="prodEditForm" method="POST" enctype="multipart/form-data" class="prod-editor__body">
         <input type="hidden" name="action" value="update_product_inline">
         <input type="hidden" name="id" id="prodEditId" value="0">
         <input type="hidden" name="current_image" id="prodEditCurrentImage" value="">
 
-        <div class="prod-editor-grid">
-          <div class="prod-editor-field">
-            <label for="prodEditName">Product Name</label>
-            <input id="prodEditName" name="name" type="text" required>
-          </div>
+        <div class="prod-editor-section">
+          <h4 class="prod-editor-section__title">Basic Product Info</h4>
+          <p class="prod-editor-section__hint">Update name, pricing, category, stock state, and dietary type.</p>
+          <div class="prod-editor-grid">
+            <div class="prod-editor-field">
+              <label for="prodEditName">Product Name</label>
+              <input id="prodEditName" name="name" type="text" required>
+            </div>
 
-          <div class="prod-editor-field">
-            <label for="prodEditPrice">Base Price</label>
-            <input id="prodEditPrice" name="base_price" type="number" step="0.01" min="0.01" required>
-          </div>
+            <div class="prod-editor-field">
+              <label for="prodEditPrice">Base Price</label>
+              <input id="prodEditPrice" name="base_price" type="number" step="0.01" min="0.01" required>
+            </div>
 
-          <div class="prod-editor-field">
-            <label for="prodEditCategory">Collection Category</label>
-            <select id="prodEditCategory" name="category_id" required>
-              <option value="">-- Select Category --</option>
-              <?php foreach ($categoryOptions as $cat): ?>
-                <option value="<?php echo (int)$cat['id']; ?>"><?php echo prod_h((string)$cat['name']); ?></option>
-              <?php endforeach; ?>
-            </select>
-          </div>
+            <div class="prod-editor-field">
+              <label for="prodEditCategory">Collection Category</label>
+              <select id="prodEditCategory" name="category_id" required>
+                <option value="">-- Select Category --</option>
+                <?php foreach ($categoryOptions as $cat): ?>
+                  <option value="<?php echo (int)$cat['id']; ?>"><?php echo prod_h((string)$cat['name']); ?></option>
+                <?php endforeach; ?>
+              </select>
+            </div>
 
-          <div class="prod-editor-field">
-            <label for="prodEditAvailability">Availability</label>
-            <select id="prodEditAvailability" name="availability_status">
-              <option value="in_stock">In Stock</option>
-              <option value="out_of_stock">Out Of Stock</option>
-              <option value="preorder">Pre Order</option>
-              <option value="draft">Draft</option>
-            </select>
-          </div>
+            <div class="prod-editor-field">
+              <label for="prodEditAvailability">Availability</label>
+              <select id="prodEditAvailability" name="availability_status">
+                <option value="in_stock">In Stock</option>
+                <option value="out_of_stock">Out Of Stock</option>
+                <option value="preorder">Pre Order</option>
+                <option value="draft">Draft</option>
+              </select>
+            </div>
 
-          <div class="prod-editor-field">
-            <label for="prodEditImage">Change Image 1</label>
-            <input id="prodEditImage" name="image" type="file" accept="image/*">
+            <div class="prod-editor-field">
+              <label for="prodEditDietary">Dietary Type</label>
+              <select id="prodEditDietary" name="dietary_tag">
+                <option value="regular">Regular</option>
+                <option value="eggless">Eggless</option>
+                <option value="vegan">Vegan</option>
+                <option value="sugar_free">Sugar Free</option>
+                <option value="healthy">Healthy</option>
+              </select>
+            </div>
           </div>
+        </div>
 
-          <div class="prod-editor-field">
-            <label for="prodEditImage2">Change Image 2 <span style="font-weight:400;opacity:.7;">(optional)</span></label>
-            <input id="prodEditImage2" name="image2" type="file" accept="image/*">
+        <div class="prod-editor-section">
+          <h4 class="prod-editor-section__title">Product Media</h4>
+          <p class="prod-editor-section__hint">Only Image 1 and optional Image 2 are supported.</p>
+          <div class="prod-editor-grid">
+            <div class="prod-editor-field">
+              <label for="prodEditImage">Change Image 1</label>
+              <input id="prodEditImage" name="image" type="file" accept="image/*">
+            </div>
+
+            <div class="prod-editor-field">
+              <label for="prodEditImage2">Change Image 2 <span style="font-weight:400;opacity:.7;">(optional)</span></label>
+              <input id="prodEditImage2" name="image2" type="file" accept="image/*">
+            </div>
           </div>
+        </div>
 
-          <div class="prod-editor-field">
-            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" name="is_chef_special" id="prodEditChefSpecial" value="1"> Chef's Special</label>
+        <div class="prod-editor-section">
+          <h4 class="prod-editor-section__title">Product Features</h4>
+          <div class="prod-feature-grid">
+            <div class="prod-feature-item">
+              <label><input type="checkbox" name="is_chef_special" id="prodEditChefSpecial" value="1"> Chef's Special</label>
+            </div>
+            <div class="prod-feature-item">
+              <label><input type="checkbox" name="is_veg" id="prodEditIsVeg" value="1"> Veg</label>
+            </div>
+            <div class="prod-feature-item">
+              <label><input type="checkbox" name="topper_enabled" id="prodEditTopperEnabled" value="1" checked> Enable Topper Selection</label>
+            </div>
+            <div class="prod-feature-item">
+              <label><input type="checkbox" name="note_enabled" id="prodEditNoteEnabled" value="1" checked> Enable Note on Cake</label>
+            </div>
           </div>
+        </div>
 
-          <div class="prod-editor-field">
-            <label for="prodEditDietary">Dietary Type</label>
-            <select id="prodEditDietary" name="dietary_tag">
-              <option value="regular">Regular</option>
-              <option value="eggless">Eggless</option>
-              <option value="vegan">Vegan</option>
-              <option value="sugar_free">Sugar Free</option>
-              <option value="healthy">Healthy</option>
-            </select>
-          </div>
-
-          <div class="prod-editor-field">
-            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" name="is_veg" id="prodEditIsVeg" value="1"> Veg</label>
-          </div>
-
-          <div class="prod-editor-field">
-            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" name="topper_enabled" id="prodEditTopperEnabled" value="1" checked> Enable Topper Selection on PDP</label>
-          </div>
-
-          <div class="prod-editor-field">
-            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" name="note_enabled" id="prodEditNoteEnabled" value="1" checked> Enable Note on the Cake on PDP</label>
-          </div>
-
-          <div class="prod-editor-field prod-editor-field--wide">
-            <label for="prodEditDescription">Description</label>
-            <textarea id="prodEditDescription" name="description"></textarea>
+        <div class="prod-editor-section">
+          <h4 class="prod-editor-section__title">Description</h4>
+          <div class="prod-editor-grid">
+            <div class="prod-editor-field prod-editor-field--wide">
+              <label for="prodEditDescription">Description</label>
+              <textarea id="prodEditDescription" name="description"></textarea>
+            </div>
           </div>
         </div>
 
@@ -1219,6 +1372,8 @@ include "layout.php";
         normalized = '/client/assets/images/product/' + normalized.split('/').pop();
       } else if (normalized.indexOf('/assets/images/product/') === 0) {
         normalized = '/client/assets/images/product/' + normalized.split('/').pop();
+      } else if (normalized.indexOf('/assets/defaults/') === 0) {
+        // Brand default image — lives under public/assets/defaults/, no /client/ prefix needed.
       } else if (normalized.indexOf('/assets/') === 0) {
         normalized = '/client' + normalized;
       } else if (normalized.indexOf('/') !== 0) {
@@ -1350,7 +1505,11 @@ include "layout.php";
     if (prodEditImage2 && prodEditPreview2) {
       prodEditImage2.addEventListener('change', function () {
         const file = prodEditImage2.files && prodEditImage2.files[0] ? prodEditImage2.files[0] : null;
-        if (!file) { return; }
+        if (!file) {
+          prodEditPreview2.removeAttribute('src');
+          prodEditPreview2.style.display = 'none';
+          return;
+        }
         prodEditPreview2.src = URL.createObjectURL(file);
         prodEditPreview2.style.display = 'block';
       });
@@ -1416,6 +1575,19 @@ include "layout.php";
       if (focusBtn) {
         openProductEditor(focusBtn);
       }
+    }
+
+    // Save spinner — disable button while form submits to prevent double-saves
+    const prodEditForm = document.getElementById('prodEditForm');
+    if (prodEditForm) {
+      prodEditForm.addEventListener('submit', function () {
+        const saveBtn = prodEditForm.querySelector('.prod-editor-save');
+        if (saveBtn) {
+          saveBtn.disabled = true;
+          saveBtn.classList.add('is-saving');
+          saveBtn.textContent = 'Saving…';
+        }
+      });
     }
   })();
 </script>

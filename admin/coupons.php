@@ -36,6 +36,12 @@ function coupon_ensure_schema(mysqli $conn): void
     if (!coupon_column_exists($conn, 'deleted_at')) {
         $conn->query('ALTER TABLE coupons ADD COLUMN deleted_at DATETIME NULL AFTER is_deleted');
     }
+    if (!coupon_column_exists($conn, 'auto_apply')) {
+        $conn->query('ALTER TABLE coupons ADD COLUMN auto_apply TINYINT(1) NOT NULL DEFAULT 0 AFTER target_mode');
+    }
+    if (!coupon_column_exists($conn, 'applicable_to')) {
+        $conn->query("ALTER TABLE coupons ADD COLUMN applicable_to VARCHAR(64) NOT NULL DEFAULT 'online' AFTER auto_apply");
+    }
     $conn->query('CREATE TABLE IF NOT EXISTS coupon_target_users (
         id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
         coupon_id BIGINT UNSIGNED NOT NULL,
@@ -117,6 +123,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $endsAt = trim((string)($_POST['ends_at'] ?? ''));
         $targetMode = trim((string)($_POST['target_mode'] ?? 'all_users'));
         $targetUsersRaw = trim((string)($_POST['target_users'] ?? ''));
+        $autoApply = isset($_POST['auto_apply']) && $_POST['auto_apply'] === '1' ? 1 : 0;
+        $applicableToRaw = isset($_POST['applicable_to']) && is_array($_POST['applicable_to']) ? $_POST['applicable_to'] : ['online'];
+        $allowedModules = ['online', 'manual', 'byoc'];
+        $applicableToFiltered = array_values(array_intersect($applicableToRaw, $allowedModules));
+        if (count($applicableToFiltered) === 0) { $applicableToFiltered = ['online']; }
+        $applicableTo = implode(',', $applicableToFiltered);
 
         if ($code === '' && !$isEdit) {
             $code = coupon_generate_code(7);
@@ -177,9 +189,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     $message = 'Coupon has usage history. Core discount fields are locked; only safe fields were updated.';
                                 }
 
-                                $update = $conn->prepare('UPDATE coupons SET code = ?, discount_type = ?, discount_value = ?, max_discount = ?, min_order_amount = ?, usage_limit = ?, per_user_usage_limit = ?, starts_at = ?, ends_at = ?, target_mode = ?, updated_at = NOW() WHERE id = ? LIMIT 1');
+                                $update = $conn->prepare('UPDATE coupons SET code = ?, discount_type = ?, discount_value = ?, max_discount = ?, min_order_amount = ?, usage_limit = ?, per_user_usage_limit = ?, starts_at = ?, ends_at = ?, target_mode = ?, auto_apply = ?, applicable_to = ?, updated_at = NOW() WHERE id = ? LIMIT 1');
                                 if ($update) {
-                                  $update->bind_param('ssdddiisssi', $code, $discountType, $discountValue, $maxDiscountValue, $minOrderValue, $usageLimitValue, $perUserUsageLimitValue, $startsAtValue, $endsAtValue, $targetMode, $couponId);
+                                  $update->bind_param('ssdddiisssisi', $code, $discountType, $discountValue, $maxDiscountValue, $minOrderValue, $usageLimitValue, $perUserUsageLimitValue, $startsAtValue, $endsAtValue, $targetMode, $autoApply, $applicableTo, $couponId);
                                   $update->execute();
 
                                     if ($targetMode === 'specific_users' && $usageCount === 0) {
@@ -199,9 +211,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 }
                             }
                         } else {
-                            $insert = $conn->prepare('INSERT INTO coupons (code, discount_type, discount_value, max_discount, min_order_amount, usage_limit, per_user_usage_limit, starts_at, ends_at, target_mode, is_active, is_deleted) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0)');
+                            $insert = $conn->prepare('INSERT INTO coupons (code, discount_type, discount_value, max_discount, min_order_amount, usage_limit, per_user_usage_limit, starts_at, ends_at, target_mode, auto_apply, applicable_to, is_active, is_deleted) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0)');
                             if ($insert) {
-                                $insert->bind_param('ssdddiisss', $code, $discountType, $discountValue, $maxDiscountValue, $minOrderValue, $usageLimitValue, $perUserUsageLimitValue, $startsAtValue, $endsAtValue, $targetMode);
+                                $insert->bind_param('ssdddiisssis', $code, $discountType, $discountValue, $maxDiscountValue, $minOrderValue, $usageLimitValue, $perUserUsageLimitValue, $startsAtValue, $endsAtValue, $targetMode, $autoApply, $applicableTo);
                                 if ($insert->execute()) {
                                     $couponId = (int)$conn->insert_id;
                                     if ($targetMode === 'specific_users') {
@@ -332,7 +344,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $coupons = [];
-$result = $conn->query('SELECT id, code, discount_type, discount_value, max_discount, min_order_amount, usage_limit, per_user_usage_limit, usage_count, starts_at, ends_at, target_mode, is_active, is_deleted, deleted_at, created_at FROM coupons ORDER BY id DESC');
+$result = $conn->query('SELECT id, code, discount_type, discount_value, max_discount, min_order_amount, usage_limit, per_user_usage_limit, usage_count, starts_at, ends_at, target_mode, auto_apply, applicable_to, is_active, is_deleted, deleted_at, created_at FROM coupons ORDER BY id DESC');
 while ($result && ($row = $result->fetch_assoc())) {
     $coupons[] = $row;
 }
@@ -398,7 +410,7 @@ while ($inlineRedemptionsResult && ($row = $inlineRedemptionsResult->fetch_assoc
   $redemptionRowsByCoupon[$couponId][] = $row;
 }
 
-include __DIR__ . '/layout.php';
+require_once __DIR__ . '/layout.php';
 ?>
 <style>
   .coupon-shell { display: grid; gap: 16px; }
@@ -529,6 +541,22 @@ include __DIR__ . '/layout.php';
             <option value="specific_users">Specific users only</option>
           </select>
         </div>
+        <div class="coupon-field">
+          <label style="display:block;margin-bottom:4px">Auto Apply</label>
+          <label style="font-weight:400;cursor:pointer">
+            <input type="hidden" name="auto_apply" value="0">
+            <input type="checkbox" id="auto_apply" name="auto_apply" value="1">
+            Auto-apply at cart load
+          </label>
+        </div>
+        <div class="coupon-field" style="grid-column: span 2;">
+          <label>Applicable To</label>
+          <div style="display:flex;gap:16px;flex-wrap:wrap;padding-top:4px">
+            <label style="font-weight:400;cursor:pointer"><input type="checkbox" name="applicable_to[]" value="online" checked> Online Order</label>
+            <label style="font-weight:400;cursor:pointer"><input type="checkbox" name="applicable_to[]" value="manual"> Manual Order</label>
+            <label style="font-weight:400;cursor:pointer"><input type="checkbox" name="applicable_to[]" value="byoc"> BYOC Order</label>
+          </div>
+        </div>
         <div class="coupon-field" style="grid-column: span 2;">
           <label for="target_users">Target user IDs or emails (comma/newline)</label>
           <textarea id="target_users" name="target_users" placeholder="22, 31, customer@example.com"></textarea>
@@ -582,6 +610,8 @@ include __DIR__ . '/layout.php';
           <th>Code</th>
           <th>Discount</th>
           <th>Rules</th>
+          <th>Auto Apply</th>
+          <th>Applies To</th>
           <th>Usage</th>
           <th>Window</th>
           <th>Targets</th>
@@ -589,7 +619,7 @@ include __DIR__ . '/layout.php';
           <th>Actions</th>
         </tr>
         <?php if (!$coupons): ?>
-          <tr><td colspan="8">No coupons found.</td></tr>
+          <tr><td colspan="10">No coupons found.</td></tr>
         <?php endif; ?>
         <?php foreach ($coupons as $coupon): ?>
           <?php
@@ -623,6 +653,8 @@ include __DIR__ . '/layout.php';
             <td><strong><?= htmlspecialchars((string)$coupon['code'], ENT_QUOTES, 'UTF-8') ?></strong></td>
             <td><?= htmlspecialchars($discountText, ENT_QUOTES, 'UTF-8') ?></td>
             <td><?= htmlspecialchars($ruleText, ENT_QUOTES, 'UTF-8') ?></td>
+            <td><?= (int)($coupon['auto_apply'] ?? 0) === 1 ? '<span class="coupon-pill active">Auto</span>' : '<span style="color:#888">Manual</span>' ?></td>
+            <td><?= htmlspecialchars(str_replace(',', ', ', (string)($coupon['applicable_to'] ?? 'online')), ENT_QUOTES, 'UTF-8') ?></td>
             <td><?= (int)$coupon['usage_count'] ?><?= $coupon['usage_limit'] !== null ? ' / ' . (int)$coupon['usage_limit'] : '' ?></td>
             <td><?= htmlspecialchars((string)($coupon['starts_at'] ?? '-'), ENT_QUOTES, 'UTF-8') ?><br><?= htmlspecialchars((string)($coupon['ends_at'] ?? '-'), ENT_QUOTES, 'UTF-8') ?></td>
             <td><?= htmlspecialchars($targetDisplay, ENT_QUOTES, 'UTF-8') ?></td>
@@ -666,7 +698,7 @@ include __DIR__ . '/layout.php';
             </td>
           </tr>
           <tr id="coupon-audit-<?= $couponId ?>" class="coupon-audit-row" style="display:none;">
-            <td colspan="8">
+            <td colspan="10">
               <div class="coupon-inline-audit">
                 <h4>Coupon Redemptions for <?= htmlspecialchars((string)$coupon['code'], ENT_QUOTES, 'UTF-8') ?></h4>
                 <?php $inlineRows = $redemptionRowsByCoupon[$couponId] ?? []; ?>
@@ -708,7 +740,7 @@ include __DIR__ . '/layout.php';
             </td>
           </tr>
           <tr id="coupon-edit-<?= $couponId ?>" class="coupon-edit-row" style="display:none;">
-            <td colspan="8">
+            <td colspan="10">
               <form method="post">
                 <input type="hidden" name="action" value="edit">
                 <input type="hidden" name="coupon_id" value="<?= $couponId ?>">
@@ -759,6 +791,26 @@ include __DIR__ . '/layout.php';
                       <option value="specific_users" <?= $targetMode === 'specific_users' ? 'selected' : '' ?>>Specific users only</option>
                     </select>
                   </div>
+                  <div class="coupon-field">
+                    <label style="display:block;margin-bottom:4px">Auto Apply</label>
+                    <label style="font-weight:400;cursor:pointer">
+                      <input type="hidden" name="auto_apply" value="0">
+                      <input type="checkbox" name="auto_apply" value="1" <?= (int)($coupon['auto_apply'] ?? 0) === 1 ? 'checked' : '' ?>>
+                      Auto-apply at cart load
+                    </label>
+                  </div>
+                  <div class="coupon-field" style="grid-column: span 2;">
+                    <label>Applicable To</label>
+                    <div style="display:flex;gap:16px;flex-wrap:wrap;padding-top:4px">
+                      <?php foreach (['online' => 'Online Order', 'manual' => 'Manual Order', 'byoc' => 'BYOC Order'] as $mod => $modLabel): ?>
+                        <?php $modChecked = in_array($mod, explode(',', (string)($coupon['applicable_to'] ?? 'online')), true); ?>
+                        <label style="font-weight:400;cursor:pointer">
+                          <input type="checkbox" name="applicable_to[]" value="<?= $mod ?>" <?= $modChecked ? 'checked' : '' ?>>
+                          <?= $modLabel ?>
+                        </label>
+                      <?php endforeach; ?>
+                    </div>
+                  </div>
                   <div class="coupon-field" style="grid-column: span 2;">
                     <label>Target Users (IDs or emails)</label>
                     <textarea name="target_users"><?= htmlspecialchars((string)($targetMap[$couponId] ?? ''), ENT_QUOTES, 'UTF-8') ?></textarea>
@@ -771,7 +823,7 @@ include __DIR__ . '/layout.php';
             </td>
           </tr>
           <tr id="coupon-banner-<?= $couponId ?>" class="coupon-banner-row" style="display:none;">
-            <td colspan="8">
+            <td colspan="10">
               <?php
                 $bfTitle     = $isTopOfferLinked ? (string)($topOfferLink['title'] ?? '') : 'Use code ' . (string)($coupon['code'] ?? '');
                 $bfSubtitle  = $isTopOfferLinked ? (string)($topOfferLink['subtitle'] ?? '') : '';

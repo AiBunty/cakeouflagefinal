@@ -65,7 +65,7 @@ if ($paymentMode !== 'all') {
     $whereConditions[] = "o.payment_method = '" . $conn->real_escape_string($paymentMode) . "'";
 }
 if ($statusFilter !== 'all') {
-    $whereConditions[] = "o.status = '" . $conn->real_escape_string($statusFilter) . "'";
+    $whereConditions[] = "o.order_status = '" . $conn->real_escape_string($statusFilter) . "'";
 }
 
 $where = implode(' AND ', $whereConditions);
@@ -119,12 +119,12 @@ $paymentSales = $conn->query($paymentSalesQuery);
 
 $statusSalesQuery = "
     SELECT 
-        o.status,
+        o.order_status,
         COUNT(*) as count,
         SUM(o.grand_total) as amount
     FROM orders o
     WHERE $where
-    GROUP BY o.status
+    GROUP BY o.order_status
     ORDER BY amount DESC
 ";
 $statusSales = $conn->query($statusSalesQuery);
@@ -217,11 +217,19 @@ $statusSales = $conn->query($statusSalesQuery);
           Order Status
           <select name="status" onchange="this.form.submit()">
             <option value="all">All Status</option>
-            <option value="pending" <?= ($statusFilter === 'pending') ? 'selected' : '' ?>>Pending</option>
+            <option value="pending_payment" <?= ($statusFilter === 'pending_payment') ? 'selected' : '' ?>>Pending Payment</option>
+            <option value="payment_under_review" <?= ($statusFilter === 'payment_under_review') ? 'selected' : '' ?>>Under Review</option>
             <option value="confirmed" <?= ($statusFilter === 'confirmed') ? 'selected' : '' ?>>Confirmed</option>
-            <option value="in_preparation" <?= ($statusFilter === 'in_preparation') ? 'selected' : '' ?>>Order Ready</option>
+            <option value="preparing" <?= ($statusFilter === 'preparing') ? 'selected' : '' ?>>Preparing</option>
+            <option value="out_for_delivery" <?= ($statusFilter === 'out_for_delivery') ? 'selected' : '' ?>>Out for Delivery</option>
+            <option value="ready_for_pickup" <?= ($statusFilter === 'ready_for_pickup') ? 'selected' : '' ?>>Ready for Pickup</option>
+            <option value="delivered" <?= ($statusFilter === 'delivered') ? 'selected' : '' ?>>Delivered</option>
             <option value="completed" <?= ($statusFilter === 'completed') ? 'selected' : '' ?>>Completed</option>
             <option value="cancelled" <?= ($statusFilter === 'cancelled') ? 'selected' : '' ?>>Cancelled</option>
+            <option value="rejected" <?= ($statusFilter === 'rejected') ? 'selected' : '' ?>>Rejected</option>
+            <option value="refund_requested" <?= ($statusFilter === 'refund_requested') ? 'selected' : '' ?>>Refund Requested</option>
+            <option value="refunded" <?= ($statusFilter === 'refunded') ? 'selected' : '' ?>>Refunded</option>
+            <option value="partially_refunded" <?= ($statusFilter === 'partially_refunded') ? 'selected' : '' ?>>Partially Refunded</option>
           </select>
         </label>
       </div>

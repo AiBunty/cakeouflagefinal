@@ -869,10 +869,53 @@ document.addEventListener("DOMContentLoaded", () => {
       const form = document.getElementById("mediaUploadForm");
       const input = document.getElementById("mediaUploadInput");
       const status = document.getElementById("mediaUploadStatus");
+      const progress = document.getElementById("mediaUploadProgress");
+      const progressText = document.getElementById("mediaUploadProgressText");
+      const activeVideoInfo = document.getElementById("mediaActiveVideoInfo");
       const previewWrap = document.getElementById("mediaPreviewWrap");
       const grid = document.getElementById("mediaLibraryGrid");
       const attachProduct = document.getElementById("mediaAttachProductId");
       const attachMode = document.getElementById("mediaAttachMode");
+      const queuePending = document.getElementById("mediaQueuePending");
+      const queueProcessing = document.getElementById("mediaQueueProcessing");
+      const queueCompleted = document.getElementById("mediaQueueCompleted");
+      const queueFailed = document.getElementById("mediaQueueFailed");
+      const storageOriginal = document.getElementById("mediaStorageOriginal");
+      const storageOptimized = document.getElementById("mediaStorageOptimized");
+      const storageSavings = document.getElementById("mediaStorageSavings");
+      const storageRatio = document.getElementById("mediaStorageRatio");
+      const queueOrphans = document.getElementById("mediaQueueOrphans");
+      const queueStatus = document.getElementById("mediaQueueStatus");
+      const queueRefresh = document.getElementById("mediaQueueRefresh");
+      const queueJobs = document.getElementById("mediaQueueJobs");
+      const queueHealthBadge = document.getElementById("mediaQueueHealthBadge");
+      const savingsBadge = document.getElementById("mediaSavingsBadge");
+      const failureSparkline = document.getElementById("mediaFailureSparkline");
+      const throughputSparkline = document.getElementById("mediaThroughputSparkline");
+      const failureTrendValue = document.getElementById("mediaFailureTrendValue");
+      const throughputTrendValue = document.getElementById("mediaThroughputTrendValue");
+      let isUploading = false;
+      const maxUploadBytes = 100 * 1024 * 1024;
+      const trendState = {
+        failedSeries: [],
+        throughputSeries: [],
+        lastCompleted: null,
+      };
+
+      const setUploadProgress = (value) => {
+        if (!progress || !progressText) return;
+        if (value <= 0 || value >= 100) {
+          progress.hidden = true;
+          progressText.hidden = true;
+          progress.value = 0;
+          progressText.textContent = "Uploading: 0%";
+          return;
+        }
+        progress.hidden = false;
+        progressText.hidden = false;
+        progress.value = value;
+        progressText.textContent = `Uploading: ${value}%`;
+      };
 
       const loadProducts = async () => {
         const payload = await utils.apiGet("/api/admin/products?limit=200");
@@ -888,14 +931,38 @@ document.addEventListener("DOMContentLoaded", () => {
           return;
         }
 
+        const mediaMarkup = (item) => {
+          const path = item.url || item.path || "";
+          const ext = path.split("?")[0].split(".").pop()?.toLowerCase() || "";
+          const videoExts = new Set(["mp4", "webm", "mov", "m4v", "ogg", "avi", "mkv", "mpg", "mpeg"]);
+          if (videoExts.has(ext)) {
+            return `<video class="media-card__image" src="${item.url}" muted playsinline controls preload="metadata"></video>`;
+          }
+          return `<img class="media-card__image" src="${item.url}" alt="${item.name}" loading="lazy" />`;
+        };
+
+        const firstVideo = items.find((item) => {
+          const ext = (item.path || "").split("?")[0].split(".").pop()?.toLowerCase() || "";
+          return ["mp4", "webm", "mov", "m4v", "ogg", "avi", "mkv", "mpg", "mpeg"].includes(ext);
+        });
+        if (activeVideoInfo) {
+          if (firstVideo) {
+            const conversionStatus = firstVideo.conversion_status ? ` | Conversion: ${firstVideo.conversion_status}` : "";
+            activeVideoInfo.textContent = `Active video candidate: ${firstVideo.name || "video"} (${formatBytes(Number(firstVideo.size || 0))})${conversionStatus}`;
+          } else {
+            activeVideoInfo.textContent = "No video found in current media library.";
+          }
+        }
+
         grid.innerHTML = items
           .map(
             (item) => `
               <article class="media-card">
-                <img class="media-card__image" src="${item.url}" alt="${item.name}" loading="lazy" />
+                ${mediaMarkup(item)}
                 <div class="media-card__body">
                   <p><strong>${item.name}</strong></p>
-                  <p class="text-muted">${formatBytes(item.size)} | ${item.updated_at}</p>
+                  <p class="text-muted">${formatBytes(Number(item.size || 0))} | ${item.updated_at || item.uploaded_at || "-"}</p>
+                  <p class="text-muted">${item.conversion_status ? `Status: ${item.conversion_status}` : "Status: ready"}${item.conversion_error ? ` | ${item.conversion_error}` : ""}</p>
                   <div class="product-card__actions">
                     <button class="btn btn--secondary" type="button" data-action="copy" data-path="${item.path}">Copy Path</button>
                     <button class="btn btn--secondary" type="button" data-action="attach" data-path="${item.path}">Attach</button>
@@ -913,6 +980,170 @@ document.addEventListener("DOMContentLoaded", () => {
         renderMedia(payload.data?.items || []);
       };
 
+      const setBadge = (element, type, label) => {
+        if (!element) return;
+        element.className = `badge media-health-badge badge--${type}`;
+        element.textContent = label;
+      };
+
+      const updateSparkline = (container, points, tone, label) => {
+        if (!container) return;
+        const normalized = points.slice(-12);
+        const max = Math.max(1, ...normalized.map((point) => Number(point?.value || 0)));
+        container.className = `media-sparkline media-sparkline--${tone}`;
+        container.innerHTML = normalized
+          .map((point) => {
+            const value = Number(point?.value || 0);
+            const timestamp = String(point?.timestamp || "-");
+            const pct = Math.max(8, Math.round((value / max) * 100));
+            const tooltip = `${label}: ${value}\n${timestamp}`;
+            return `<span class="media-sparkline__bar" style="height:${pct}%" title="${tooltip}"></span>`;
+          })
+          .join("");
+      };
+
+      const updateTrendChips = (counts) => {
+        const failedCount = Number(counts.failed || 0);
+        const completedCount = Number(counts.completed || 0);
+        const refreshTimestamp = new Date().toLocaleString();
+
+        let throughputDelta = 0;
+        if (trendState.lastCompleted !== null) {
+          throughputDelta = Math.max(0, completedCount - Number(trendState.lastCompleted || 0));
+        }
+        trendState.lastCompleted = completedCount;
+
+        trendState.failedSeries.push({ value: failedCount, timestamp: refreshTimestamp });
+        trendState.throughputSeries.push({ value: throughputDelta, timestamp: refreshTimestamp });
+        trendState.failedSeries = trendState.failedSeries.slice(-12);
+        trendState.throughputSeries = trendState.throughputSeries.slice(-12);
+
+        if (failureTrendValue) {
+          failureTrendValue.textContent = String(failedCount);
+        }
+        if (throughputTrendValue) {
+          throughputTrendValue.textContent = `+${throughputDelta}`;
+        }
+
+        updateSparkline(failureSparkline, trendState.failedSeries, failedCount > 0 ? "danger" : "warning", "Failures");
+        updateSparkline(throughputSparkline, trendState.throughputSeries, "success", "Throughput");
+      };
+
+      const renderProcessingSummary = (data) => {
+        const counts = data?.counts || {};
+        const storage = data?.storage || {};
+        const orphans = data?.orphans || {};
+        const pendingCount = Number(counts.pending || 0);
+        const processingCount = Number(counts.processing || 0);
+        const failedCount = Number(counts.failed || 0);
+        const savingsRatio = Number(storage.optimization_ratio || 0);
+
+        if (queuePending) queuePending.textContent = String(pendingCount);
+        if (queueProcessing) queueProcessing.textContent = String(processingCount);
+        if (queueCompleted) queueCompleted.textContent = String(Number(counts.completed || 0));
+        if (queueFailed) queueFailed.textContent = String(failedCount);
+
+        if (storageOriginal) storageOriginal.textContent = formatBytes(Number(storage.original_bytes || 0));
+        if (storageOptimized) storageOptimized.textContent = formatBytes(Number(storage.optimized_bytes || 0));
+        if (storageSavings) storageSavings.textContent = formatBytes(Number(storage.savings_bytes || 0));
+        if (storageRatio) storageRatio.textContent = `${savingsRatio}%`;
+
+        if (queueOrphans) queueOrphans.textContent = String(Number(orphans.optimized_without_queue || 0));
+
+        if (failedCount > 0) {
+          setBadge(queueHealthBadge, "danger", "Queue: At Risk");
+        } else if (pendingCount > 0 || processingCount > 0) {
+          setBadge(queueHealthBadge, "warning", "Queue: Active");
+        } else {
+          setBadge(queueHealthBadge, "success", "Queue: Healthy");
+        }
+
+        if (savingsRatio >= 40) {
+          setBadge(savingsBadge, "success", `Savings: ${savingsRatio}%`);
+        } else if (savingsRatio >= 15) {
+          setBadge(savingsBadge, "warning", `Savings: ${savingsRatio}%`);
+        } else {
+          setBadge(savingsBadge, "danger", `Savings: ${savingsRatio}%`);
+        }
+
+        updateTrendChips(counts);
+      };
+
+      const renderProcessingJobs = (items) => {
+        if (!queueJobs) return;
+
+        if (!Array.isArray(items) || !items.length) {
+          queueJobs.innerHTML = "No queue jobs to show.";
+          return;
+        }
+
+        queueJobs.innerHTML = `
+          <div class="table-responsive">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Status</th>
+                  <th>Module</th>
+                  <th>Entity</th>
+                  <th>Attempts</th>
+                  <th>Updated</th>
+                  <th>Error</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${items
+                  .map((item) => {
+                    const status = String(item.processing_status || "-");
+                    const moduleName = String(item.module_name || "-");
+                    const entity = `${String(item.entity_type || "-")}#${Number(item.entity_id || 0)}`;
+                    const attempts = Number(item.attempts || 0);
+                    const updated = String(item.updated_at || item.processed_at || item.created_at || "-");
+                    const error = String(item.last_error || "-").slice(0, 120);
+                    return `
+                      <tr>
+                        <td>${Number(item.id || 0)}</td>
+                        <td>${status}</td>
+                        <td>${moduleName}</td>
+                        <td>${entity}</td>
+                        <td>${attempts}</td>
+                        <td>${updated}</td>
+                        <td>${error}</td>
+                      </tr>
+                    `;
+                  })
+                  .join("")}
+              </tbody>
+            </table>
+          </div>
+        `;
+      };
+
+      const loadProcessingDashboard = async () => {
+        if (queueStatus) queueStatus.textContent = "Refreshing queue metrics...";
+
+        try {
+          const [summaryPayload, jobsPayload] = await Promise.all([
+            utils.apiGet("/api/admin/media/processing/summary"),
+            utils.apiGet("/api/admin/media/processing/jobs?limit=20"),
+          ]);
+
+          renderProcessingSummary(summaryPayload.data || {});
+          const items = (jobsPayload.data?.items || []).filter((item) =>
+            ["pending", "processing", "failed"].includes(String(item.processing_status || ""))
+          );
+          renderProcessingJobs(items.slice(0, 20));
+
+          if (queueStatus) {
+            queueStatus.textContent = `Updated ${new Date().toLocaleString()}`;
+          }
+        } catch (error) {
+          if (queueStatus) {
+            queueStatus.textContent = `Queue metrics unavailable: ${error.message}`;
+          }
+        }
+      };
+
       input?.addEventListener("change", () => {
         const file = input.files?.[0];
         if (!file) {
@@ -922,6 +1153,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const reader = new FileReader();
         reader.onload = () => {
+          if (file.type.startsWith("video/")) {
+            previewWrap.innerHTML = `<video src="${reader.result}" controls muted playsinline></video>`;
+            return;
+          }
           previewWrap.innerHTML = `<img src="${reader.result}" alt="Preview" />`;
         };
         reader.readAsDataURL(file);
@@ -930,9 +1165,19 @@ document.addEventListener("DOMContentLoaded", () => {
       form?.addEventListener("submit", async (event) => {
         event.preventDefault();
 
+        if (isUploading) {
+          status.textContent = "Upload already in progress. Please wait...";
+          return;
+        }
+
         const file = input.files?.[0];
         if (!file) {
-          status.textContent = "Please select an image.";
+          status.textContent = "Please select a media file.";
+          return;
+        }
+
+        if (Number(file.size || 0) > maxUploadBytes) {
+          status.textContent = "File exceeds 100 MB media upload limit.";
           return;
         }
 
@@ -940,25 +1185,58 @@ document.addEventListener("DOMContentLoaded", () => {
         formData.append("file", file);
         utils.appendCsrfToFormData(formData);
 
-        status.textContent = "Uploading image...";
+        status.textContent = "Uploading media...";
+        isUploading = true;
+        const submitBtn = form.querySelector('button[type="submit"]');
+        if (submitBtn instanceof HTMLButtonElement) {
+          submitBtn.disabled = true;
+        }
+        setUploadProgress(1);
+
         try {
-          const response = await fetch("/api/admin/media/upload", {
-            method: "POST",
-            body: formData,
-            credentials: "same-origin"
+          const payload = await new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open("POST", "/api/admin/media/upload", true);
+            xhr.withCredentials = true;
+            xhr.upload.onprogress = (progressEvent) => {
+              if (!progressEvent.lengthComputable) return;
+              const percent = Math.max(1, Math.min(99, Math.round((progressEvent.loaded / progressEvent.total) * 100)));
+              setUploadProgress(percent);
+            };
+            xhr.onerror = () => reject(new Error("Upload failed"));
+            xhr.onload = () => {
+              try {
+                const json = JSON.parse(xhr.responseText || "{}");
+                if (xhr.status < 200 || xhr.status >= 300 || json.success === false) {
+                  reject(new Error(json.message || "Upload failed"));
+                  return;
+                }
+                resolve(json);
+              } catch (parseError) {
+                reject(new Error("Upload response parsing failed"));
+              }
+            };
+            xhr.send(formData);
           });
-          const payload = await response.json();
 
-          if (!response.ok || payload.success === false) {
-            throw new Error(payload.message || "Upload failed");
+          const uploadData = payload.data || {};
+
+          if (uploadData.conversion_status && uploadData.conversion_status !== "ready") {
+            status.textContent = `Uploaded: ${uploadData.path}. Conversion status: ${uploadData.conversion_status}.`;
+          } else {
+            status.textContent = `Uploaded: ${uploadData.path}`;
           }
-
-          status.textContent = `Uploaded: ${payload.data?.path}`;
           form.reset();
           previewWrap.innerHTML = "";
           await loadMedia();
         } catch (error) {
           status.textContent = error.message;
+        } finally {
+          isUploading = false;
+          if (submitBtn instanceof HTMLButtonElement) {
+            submitBtn.disabled = false;
+          }
+          setUploadProgress(0);
         }
       });
 
@@ -1016,8 +1294,13 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       });
 
+      queueRefresh?.addEventListener("click", async () => {
+        await loadProcessingDashboard();
+      });
+
       await loadProducts();
       await loadMedia();
+      await loadProcessingDashboard();
     });
   };
 

@@ -25,7 +25,7 @@ function invoice_fetch_order(mysqli $conn, int $orderId): ?array
         return null;
     }
 
-    $itemsStmt = $conn->prepare('SELECT product_name_snapshot, quantity, unit_price, line_total FROM order_items WHERE order_id = ? ORDER BY id ASC');
+    $itemsStmt = $conn->prepare('SELECT product_name_snapshot, quantity, unit_price, line_total, cake_message, topper_name_snapshot, topper_price_snapshot, customisation_note FROM order_items WHERE order_id = ? ORDER BY id ASC');
     $itemsStmt->bind_param('i', $orderId);
     $itemsStmt->execute();
     $itemsResult = $itemsStmt->get_result();
@@ -98,7 +98,21 @@ function invoice_render_html(array $order): string
         $qty = (int)($item['quantity'] ?? 0);
         $rate = number_format((float)($item['unit_price'] ?? 0), 2);
         $lineTotal = number_format((float)($item['line_total'] ?? 0), 2);
-        $itemsHtml .= '<tr><td>' . $name . '</td><td style="text-align:center">' . $qty . '</td><td style="text-align:right">Rs ' . $rate . '</td><td style="text-align:right">Rs ' . $lineTotal . '</td></tr>';
+        $details = array();
+        $cakeMessage = trim((string)($item['cake_message'] ?? ''));
+        $topperName = trim((string)($item['topper_name_snapshot'] ?? ''));
+        $topperPrice = (float)($item['topper_price_snapshot'] ?? 0);
+        $customNote = trim((string)($item['customisation_note'] ?? ''));
+        if ($cakeMessage !== '') {
+            $details[] = '<div style="margin-top:4px;color:#5b1f3a;font-size:11px;">🎂 ' . htmlspecialchars($cakeMessage, ENT_QUOTES, 'UTF-8') . '</div>';
+        }
+        if ($topperName !== '' && $topperName !== 'No Topper') {
+            $details[] = '<div style="margin-top:4px;color:#5b1f3a;font-size:11px;">🎀 ' . htmlspecialchars($topperName, ENT_QUOTES, 'UTF-8') . ($topperPrice > 0 ? ' (+₹' . number_format($topperPrice, 0) . ')' : '') . '</div>';
+        }
+        if ($customNote !== '') {
+            $details[] = '<div style="margin-top:4px;color:#7a4a1d;font-size:11px;">📝 ' . htmlspecialchars($customNote, ENT_QUOTES, 'UTF-8') . '</div>';
+        }
+        $itemsHtml .= '<tr><td>' . $name . implode('', $details) . '</td><td style="text-align:center">' . $qty . '</td><td style="text-align:right">Rs ' . $rate . '</td><td style="text-align:right">Rs ' . $lineTotal . '</td></tr>';
     }
 
     if ($itemsHtml === '') {
@@ -132,6 +146,12 @@ function invoice_render_html(array $order): string
     $businessName = htmlspecialchars((string)$businessSettings['business_name'], ENT_QUOTES, 'UTF-8');
     $businessPhone = htmlspecialchars((string)$businessSettings['business_phone'], ENT_QUOTES, 'UTF-8');
     $businessEmail = htmlspecialchars((string)$businessSettings['business_email'], ENT_QUOTES, 'UTF-8');
+    $invoiceLogoUrl = trim((string)($businessSettings['email_logo_url'] ?? ''));
+    // Fall back to a safe relative path only for browser-viewed invoices (not emailed)
+    if ($invoiceLogoUrl === '') {
+        $invoiceLogoUrl = '/client/assets/images/mainlogo.svg';
+    }
+    $invoiceLogoUrl = htmlspecialchars($invoiceLogoUrl, ENT_QUOTES, 'UTF-8');
     
     $businessAddressParts = array();
     if ($businessSettings['business_address_line1']) {
@@ -175,7 +195,7 @@ function invoice_render_html(array $order): string
       @media print{body{padding:0}.invoice{border:1px solid #111;box-shadow:none}}
     </style></head><body><div class="invoice">
       <div class="head">
-        <div class="brand"><img src="/client/assets/images/mainlogo.svg" alt="' . $businessName . '"><div class="brand-text">' . $businessName . '</div></div>
+        <div class="brand"><img src="' . $invoiceLogoUrl . '" alt="' . $businessName . '"><div class="brand-text">' . $businessName . '</div></div>
         <div class="meta">
           <div><strong>Invoice #:</strong> ' . $invoiceNumber . '</div>
           <div><strong>Date:</strong> ' . $createdAt . '</div>

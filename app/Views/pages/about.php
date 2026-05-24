@@ -406,17 +406,17 @@ try {
       <p class="offer-subtitle">Celebration-worthy creations designed to delight every moment.</p>
     </div>
     <div class="offer-grid">
-      <a href="/shop?category=birthday-cakes" class="offer-card">
+      <a href="/category/birthday-cakes" class="offer-card">
         <span class="offer-card__emoji">🎂</span>
         <h3>Celebration Cakes</h3>
         <p>Birthday, anniversary, baby shower, wedding, and custom occasion cakes — fully personalised.</p>
       </a>
-      <a href="/shop?category=cheesecakes" class="offer-card">
+      <a href="/category/cheesecakes" class="offer-card">
         <span class="offer-card__emoji">🍰</span>
         <h3>Dessert Range</h3>
         <p>Cheesecakes, opera cakes, mousse cakes, tiramisu, tarts, and seasonal specials.</p>
       </a>
-      <a href="/shop?category=brownies" class="offer-card">
+      <a href="/category/brownies" class="offer-card">
         <span class="offer-card__emoji">🍫</span>
         <h3>Small Bakes &amp; Gifting</h3>
         <p>Brownies, cookies, chocolates, dessert tubs, and premium gifting hampers for every occasion.</p>

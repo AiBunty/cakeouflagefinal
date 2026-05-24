@@ -51,6 +51,7 @@
   </script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="icon" type="image/svg+xml" href="/client/assets/images/mainlogo.svg" />
   <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Cormorant+Garamond:ital@0;1&family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=League+Spartan:wght@600;700&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&display=swap" rel="stylesheet">
@@ -59,7 +60,7 @@
 <link rel="stylesheet" href="/client/assets/css/base.css" />
 <link rel="stylesheet" href="/client/assets/css/layout.css" />
 <link rel="stylesheet" href="/client/assets/css/components.css" />
-<link rel="stylesheet" href="/client/assets/css/pages.css" />
+<link rel="stylesheet" href="/client/assets/css/pages.css?v=<?= filemtime(__DIR__ . '/../../../client/assets/css/pages.css') ?>" />
 <link rel="stylesheet" href="/client/assets/css/responsive.css" />
 </head>
 <body>

@@ -5,7 +5,7 @@ require_once __DIR__ . '/includes/db.php';
 
 function upsert_setting(mysqli $conn, string $key, string $value, int $adminId): bool
 {
-    $stmt = $conn->prepare('INSERT INTO settings (setting_key, setting_value, updated_by_admin_id) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_by_admin_id = VALUES(updated_by_admin_id), updated_at = NOW()');
+    $stmt = $conn->prepare('INSERT INTO settings (setting_key, setting_value, updated_by_admin_id) VALUES (?, ?, ?) AS new ON DUPLICATE KEY UPDATE setting_value = new.setting_value, updated_by_admin_id = new.updated_by_admin_id, updated_at = NOW()');
     $stmt->bind_param('ssi', $key, $value, $adminId);
     return $stmt->execute();
 }
@@ -83,6 +83,20 @@ $appsScriptMode = trim((string)($_POST['upi_apps_script_mode'] ?? 'disabled'));
 $appsScriptSenderAllowlist = trim((string)($_POST['upi_apps_script_sender_allowlist'] ?? ''));
 $allowPartialPayment = trim((string)($_POST['allow_partial_payment'] ?? '1'));
 if (!in_array($allowPartialPayment, ['0', '1'], true)) { $allowPartialPayment = '1'; }
+$screenshotRequired = trim((string)($_POST['payment_screenshot_required'] ?? '1'));
+if (!in_array($screenshotRequired, ['0', '1'], true)) { $screenshotRequired = '1'; }
+
+// Branding fields
+$emailLogoUrl       = trim((string)($_POST['email_logo_url'] ?? ''));
+$navbarLogoUrl      = trim((string)($_POST['navbar_logo_url'] ?? ''));
+$footerLogoUrl      = trim((string)($_POST['footer_logo_url'] ?? ''));
+$brandPrimaryColor  = trim((string)($_POST['brand_primary_color'] ?? '#80001F'));
+$brandSecondaryColor = trim((string)($_POST['brand_secondary_color'] ?? '#140b0f'));
+$supportEmail       = trim((string)($_POST['support_email'] ?? ''));
+$supportPhone       = trim((string)($_POST['support_phone'] ?? ''));
+if (!preg_match('/^#[0-9a-fA-F]{3,8}$/', $brandPrimaryColor)) { $brandPrimaryColor = '#80001F'; }
+if (!preg_match('/^#[0-9a-fA-F]{3,8}$/', $brandSecondaryColor)) { $brandSecondaryColor = '#140b0f'; }
+
 $settingsAction = trim((string)($_POST['settings_action'] ?? 'save'));
 
 if ($businessName === '') {
@@ -127,6 +141,14 @@ try {
     upsert_setting($conn, 'upi_apps_script_mode', $appsScriptMode, $adminId);
     upsert_setting($conn, 'upi_apps_script_sender_allowlist', $appsScriptSenderAllowlist, $adminId);
     upsert_setting($conn, 'allow_partial_payment', $allowPartialPayment, $adminId);
+    upsert_setting($conn, 'payment_screenshot_required', $screenshotRequired, $adminId);
+    upsert_setting($conn, 'email_logo_url', $emailLogoUrl, $adminId);
+    upsert_setting($conn, 'navbar_logo_url', $navbarLogoUrl, $adminId);
+    upsert_setting($conn, 'footer_logo_url', $footerLogoUrl, $adminId);
+    upsert_setting($conn, 'brand_primary_color', $brandPrimaryColor, $adminId);
+    upsert_setting($conn, 'brand_secondary_color', $brandSecondaryColor, $adminId);
+    upsert_setting($conn, 'support_email', $supportEmail, $adminId);
+    upsert_setting($conn, 'support_phone', $supportPhone, $adminId);
 
     if ($settingsAction === 'test_apps_script') {
         if ($appsScriptEndpoint === '') {

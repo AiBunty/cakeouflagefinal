@@ -1,0 +1,12 @@
+[2026-05-23 15:04:20] OK context=product file=Gemini_Generated_Image_wdjqogwdjqogwdjq.png→1779548659_43fc2f39.png bytes=7762193 admin=1 note=fallback
+[2026-05-23 15:04:20] OK context=product_img2 file=whitelogo.png→1779548660_2_d8426484.png bytes=1855219 admin=1 note=fallback
+[2026-05-23 15:04:38] OK context=product file=Gemini_Generated_Image_wdjqogwdjqogwdjq.png→1779548677_a646ae71.png bytes=7762193 admin=1 note=fallback
+[2026-05-23 20:35:21] OK context=branding file=whitelogo.png→navbar_logo_url-whitelogo-203521-ef24.png bytes=1855219 admin=1 note=fallback
+[2026-05-23 20:35:35] OK context=branding file=whitelogo.png→footer_logo_url-whitelogo-203535-ac9d.png bytes=1855219 admin=1 note=fallback
+[2026-05-23 20:35:45] OK context=branding file=whitelogo.png→email_logo_url-whitelogo-203544-06fb.png bytes=1855219 admin=1 note=fallback
+[2026-05-23 20:44:26] OK context=branding file=mainlogo.png→email_logo_url-mainlogo-204425-ac39.png bytes=110470 admin=1 note=fallback
+[2026-05-23 15:29:46] OK context=product file=mainlogo.png→1779550186_977d76de.png bytes=110470 admin=1 note=fallback
+[2026-05-23 15:29:46] OK context=product_img2 file=Gemini_Generated_Image_wdjqogwdjqogwdjq.png→1779550186_2_68c03943.png bytes=7762193 admin=1 note=fallback
+[2026-05-23 15:30:32] OK context=product file=mainlogo.png→1779550232_fc8735e7.png bytes=110470 admin=1 note=fallback
+[2026-05-23 15:30:32] OK context=product_img2 file=whitelogo.png→1779550232_2_656a8c94.png bytes=1855219 admin=1 note=fallback
+[2026-05-23 15:31:10] OK context=product file=whitelogo.png→1779550270_e69956c0.png bytes=1855219 admin=1 note=fallback

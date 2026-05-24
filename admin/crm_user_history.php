@@ -9,7 +9,7 @@ $q = trim((string)($_GET['q'] ?? ''));
 $user = $userId > 0 ? fetch_crm_report_user($conn, $userId) : null;
 $orders = $userId > 0 ? fetch_user_orders($conn, $userId) : [];
 
-include __DIR__ . '/layout.php';
+require_once __DIR__ . '/layout.php';
 ?>
 <style>
   .history-shell {

@@ -20,44 +20,125 @@ final class SmtpTransportService
         $this->settings = $settings;
     }
 
-    public static function fromDatabase(PDO $pdo): self
+    private static function isPlaceholderValue(?string $value): bool
     {
-        $stmt = $pdo->query('SELECT host, port, username, password_encrypted, encryption, from_name, from_email, is_active FROM smtp_settings ORDER BY id DESC LIMIT 1');
-        $settings = $stmt instanceof \PDOStatement ? ($stmt->fetch(PDO::FETCH_ASSOC) ?: []) : [];
-
-        $hasDbConfig = (int)($settings['is_active'] ?? 0) === 1
-            && trim((string)($settings['host'] ?? '')) !== ''
-            && (int)($settings['port'] ?? 0) > 0
-            && trim((string)($settings['from_email'] ?? '')) !== '';
-
-        if (!$hasDbConfig) {
-            $settings = self::fromEnvironment();
+        $normalized = strtolower(trim((string)$value));
+        if ($normalized === '') {
+            return false;
         }
 
-        return new self($settings);
+        return str_starts_with($normalized, 'your_')
+            || str_starts_with($normalized, 'replace_with_')
+            || str_starts_with($normalized, 'dummy')
+            || str_starts_with($normalized, 'example');
     }
 
-    /** @return array<string,mixed> */
-    private static function fromEnvironment(): array
+    /** @param array<string,mixed> $settings
+     *  @return array<string,mixed>
+     */
+    private static function normalizeSettings(array $settings): array
     {
-        $secure = strtolower(trim((string)(Env::get('SMTP_SECURE', 'ssl') ?? 'ssl')));
+        $host = trim((string)($settings['host'] ?? ''));
+        $username = trim((string)($settings['username'] ?? ''));
+        $password = (string)($settings['password_encrypted'] ?? '');
+        $fromName = trim((string)($settings['from_name'] ?? 'Cakeouflage')) ?: 'Cakeouflage';
+        $fromEmail = trim((string)($settings['from_email'] ?? ''));
+
+        if (self::isPlaceholderValue($host)) {
+            $host = '';
+        }
+        if (self::isPlaceholderValue($username)) {
+            $username = '';
+        }
+        if (self::isPlaceholderValue($password)) {
+            $password = '';
+        }
+        if (self::isPlaceholderValue($fromEmail)) {
+            $fromEmail = '';
+        }
+        if (self::isPlaceholderValue($fromName)) {
+            $fromName = 'Cakeouflage';
+        }
+
+        $secure = strtolower(trim((string)($settings['encryption'] ?? 'tls')));
         if ($secure === 'smtps') {
             $secure = 'ssl';
         } elseif ($secure === 'starttls') {
             $secure = 'tls';
         }
 
-        $fromEmail = trim((string)(Env::get('SMTP_FROM_EMAIL', Env::get('SMTP_USER', '')) ?? ''));
-
         return [
+            'host' => $host,
+            'port' => (int)($settings['port'] ?? 0),
+            'username' => $username,
+            'password_encrypted' => $password,
+            'encryption' => in_array($secure, ['none', 'ssl', 'tls'], true) ? $secure : 'tls',
+            'from_name' => $fromName,
+            'from_email' => $fromEmail,
+            'is_active' => (int)($settings['is_active'] ?? 0),
+        ];
+    }
+
+    public static function fromActiveDatabase(PDO $pdo): ?self
+    {
+        $stmt = $pdo->query('SELECT host, port, username, password_encrypted, encryption, from_name, from_email, is_active FROM smtp_settings ORDER BY id DESC LIMIT 1');
+        $settings = $stmt instanceof \PDOStatement ? ($stmt->fetch(PDO::FETCH_ASSOC) ?: []) : [];
+        $settings = self::normalizeSettings($settings);
+
+        $hasDbConfig = (int)($settings['is_active'] ?? 0) === 1
+            && trim((string)($settings['host'] ?? '')) !== ''
+            && (int)($settings['port'] ?? 0) > 0
+            && trim((string)($settings['username'] ?? '')) !== ''
+            && trim((string)($settings['password_encrypted'] ?? '')) !== ''
+            && trim((string)($settings['from_email'] ?? '')) !== '';
+
+        if (!$hasDbConfig) {
+            return null;
+        }
+
+        return new self($settings);
+    }
+
+    public static function fromDatabase(PDO $pdo): self
+    {
+        $dbTransport = self::fromActiveDatabase($pdo);
+        if ($dbTransport instanceof self) {
+            return $dbTransport;
+        }
+
+        return new self(self::fromEnvironment());
+    }
+
+    /** @return array<string,mixed> */
+    private static function fromEnvironment(): array
+    {
+        $settings = [
             'host' => trim((string)(Env::get('SMTP_HOST', '') ?? '')),
             'port' => (int)(Env::get('SMTP_PORT', '0') ?? '0'),
             'username' => trim((string)(Env::get('SMTP_USER', '') ?? '')),
             'password_encrypted' => (string)(Env::get('SMTP_PASS', '') ?? ''),
-            'encryption' => $secure,
+            'encryption' => (string)(Env::get('SMTP_SECURE', 'tls') ?? 'tls'),
             'from_name' => (string)(Env::get('SMTP_FROM_NAME', 'Cakeouflage') ?? 'Cakeouflage'),
-            'from_email' => $fromEmail,
-            'is_active' => $fromEmail !== '' ? 1 : 0,
+            'from_email' => (string)(Env::get('SMTP_FROM_EMAIL', Env::get('SMTP_USER', '')) ?? ''),
+            'is_active' => 1,
+        ];
+
+        $settings = self::normalizeSettings($settings);
+        $settings['is_active'] = ($settings['host'] !== '' && (int)$settings['port'] > 0 && $settings['username'] !== '' && (string)$settings['password_encrypted'] !== '' && $settings['from_email'] !== '') ? 1 : 0;
+
+        return $settings;
+    }
+
+    /** @return array{host:string,port:int,encryption:string,auth_enabled:bool,username_set:bool,from_email_set:bool} */
+    public function getPublicMeta(): array
+    {
+        return [
+            'host' => trim((string)($this->settings['host'] ?? '')) !== '' ? (string)$this->settings['host'] : '(empty)',
+            'port' => (int)($this->settings['port'] ?? 0),
+            'encryption' => (string)($this->settings['encryption'] ?? 'tls'),
+            'auth_enabled' => true,
+            'username_set' => trim((string)($this->settings['username'] ?? '')) !== '',
+            'from_email_set' => trim((string)($this->settings['from_email'] ?? '')) !== '',
         ];
     }
 
@@ -242,12 +323,12 @@ final class SmtpTransportService
         $encryption = (string)($this->settings['encryption'] ?? 'tls');
         $transport = $encryption === 'ssl' ? 'ssl://' . $host : $host;
 
-        $socket = @stream_socket_client($transport . ':' . $port, $errno, $errstr, 20, STREAM_CLIENT_CONNECT);
+        $socket = @stream_socket_client($transport . ':' . $port, $errno, $errstr, 5, STREAM_CLIENT_CONNECT);
         if (!is_resource($socket)) {
             throw new \RuntimeException('SMTP socket connection failed: ' . $errstr . ' (' . $errno . ')');
         }
 
-        stream_set_timeout($socket, 20);
+        stream_set_timeout($socket, 5);
         $this->socket = $socket;
         $this->expect([220]);
 

@@ -249,7 +249,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($action === 'save_whatsapp_toggle') {
             $newWaVal = ($_POST['byoc_whatsapp_enabled'] ?? '1') === '0' ? '0' : '1';
             $adminId = (int)($_SESSION['admin_id'] ?? 0);
-            $upsertWa = $conn->prepare('INSERT INTO settings (setting_key, setting_value, updated_by_admin_id, updated_at) VALUES ("byoc_whatsapp_enabled", ?, ?, NOW()) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_by_admin_id = VALUES(updated_by_admin_id), updated_at = NOW()');
+            $upsertWa = $conn->prepare('INSERT INTO settings (setting_key, setting_value, updated_by_admin_id, updated_at) VALUES ("byoc_whatsapp_enabled", ?, ?, NOW()) AS new ON DUPLICATE KEY UPDATE setting_value = new.setting_value, updated_by_admin_id = new.updated_by_admin_id, updated_at = NOW()');
             if ($upsertWa) {
                 $upsertWa->bind_param('si', $newWaVal, $adminId);
                 $upsertWa->execute();

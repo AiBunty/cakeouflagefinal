@@ -32,6 +32,7 @@ $categorySlug = (string)($product['category_slug'] ?? '');
 $images = array_values(array_filter($images ?? [], function ($img) {
   return trim((string)($img['image_url'] ?? '')) !== '';
 }));
+$images = array_slice($images, 0, 2);
 
 if (!empty($images)) {
   // first image only (sorted already)

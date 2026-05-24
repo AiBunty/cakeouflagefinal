@@ -3,44 +3,47 @@ define('SKIP_AUTH_ORDER_AUTO_HANDLER', true);
 require_once __DIR__ . '/../app/bootstrap.php';
 require_once __DIR__ . '/includes/auth.php';
 require_admin_permission('order_edit');
-require_once __DIR__ . '/includes/db.php';
+
+use App\Core\Database;
+use App\Services\OrderEditService;
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     header('Location: orders.php');
     exit;
 }
 
-$id                  = isset($_POST['order_id']) ? (int)$_POST['order_id'] : 0;
-$customerPhone       = trim((string)($_POST['customer_phone'] ?? ''));
-$adminNote           = trim((string)($_POST['admin_note'] ?? ''));
-$scheduledSlotLabel  = trim((string)($_POST['scheduled_slot_label'] ?? ''));
-$redirectTo          = trim((string)($_POST['redirect_to'] ?? ''));
+$id = isset($_POST['order_id']) ? (int)$_POST['order_id'] : 0;
+$redirectTo = trim((string)($_POST['redirect_to'] ?? ''));
 
 if ($id <= 0) {
     http_response_code(400);
     die('Invalid order');
 }
 
-// Sanitise phone: allow digits, spaces, +, -, ( ) only
-$customerPhone = preg_replace('/[^0-9 +\-()]/', '', $customerPhone);
-$customerPhone = substr($customerPhone, 0, 20);
-$adminNote     = substr($adminNote, 0, 1000);
-$scheduledSlotLabel = substr($scheduledSlotLabel, 0, 100);
+$payload = [
+    'customer_phone' => (string)($_POST['customer_phone'] ?? ''),
+    'admin_note' => (string)($_POST['admin_note'] ?? ''),
+    'scheduled_slot_label' => (string)($_POST['scheduled_slot_label'] ?? ''),
+    'edit_reason' => (string)($_POST['edit_reason'] ?? ''),
+    'discount_override' => $_POST['discount_override'] ?? null,
+    'delivery_fee_override' => $_POST['delivery_fee_override'] ?? null,
+    'items' => is_array($_POST['items'] ?? null) ? $_POST['items'] : [],
+    'items_new' => is_array($_POST['items_new'] ?? null) ? $_POST['items_new'] : [],
+    'delete_item_ids' => is_array($_POST['delete_item_ids'] ?? null) ? $_POST['delete_item_ids'] : [],
+];
 
-$stmt = $conn->prepare(
-    'UPDATE orders SET customer_phone = ?, admin_note = ?, scheduled_slot_label = ? WHERE id = ? LIMIT 1'
+$adminId = (int)($_SESSION['admin'] ?? 0);
+$result = (new OrderEditService())->apply(
+    Database::getConnection(),
+    $id,
+    $payload,
+    $adminId,
+    [
+        'admin_role' => (string)($_SESSION['admin_role'] ?? ''),
+        'admin_permissions' => isset($_SESSION['permissions']) && is_array($_SESSION['permissions']) ? $_SESSION['permissions'] : [],
+        'ip_address' => (string)($_SERVER['REMOTE_ADDR'] ?? ''),
+    ]
 );
-if (!$stmt) {
-    http_response_code(500);
-    die('DB error');
-}
-$stmt->bind_param('sssi', $customerPhone, $adminNote, $scheduledSlotLabel, $id);
-if (!$stmt->execute()) {
-    error_log('[save_order_edit] execute failed: ' . $stmt->error);
-    http_response_code(500);
-    die('Update failed');
-}
-$stmt->close();
 
 // Safe redirect
 $safeRedirects = array('orders.php', 'order_details.php');
@@ -63,11 +66,13 @@ if ($path === 'order_details.php') {
     }
     $base = $path . ($query !== '' ? '?' . $query : '');
     $sep = strpos($base, '?') === false ? '?' : '&';
+    $level = !empty($result['success']) ? 'success' : 'error';
+    $message = !empty($result['success']) ? 'Order details updated successfully.' : (string)($result['message'] ?? 'Order update failed.');
     $target = $base . $sep . http_build_query([
         'action_order_id' => $id,
-        'action_status' => 'edited',
-        'action_level' => 'success',
-        'action_message' => 'Order details updated successfully.',
+        'action_status' => !empty($result['success']) ? 'edited' : 'edit_failed',
+        'action_level' => $level,
+        'action_message' => $message,
     ]);
 }
 

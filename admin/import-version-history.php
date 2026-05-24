@@ -5,10 +5,10 @@
  */
 
 $pageTitle = "Import Version History";
-include "includes/auth.php";
+require_once __DIR__ . '/includes/auth.php';
 require_permission_for_current_admin_page();
-require 'includes/db.php';
-include 'layout.php';
+require_once __DIR__ . '/includes/db.php';
+require_once __DIR__ . '/layout.php';
 
 // Get recent imports from API (for modern approach)
 // For now, query directly from DB

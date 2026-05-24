@@ -1,6 +1,6 @@
 <?php
 $pageTitle = 'CRM Settings';
-include 'layout.php';
+require_once __DIR__ . '/layout.php';
 
 require_once __DIR__ . '/includes/crm_settings_helpers.php';
 
@@ -275,6 +275,7 @@ $flash = isset($_GET['status']) ? $_GET['status'] : '';
                             <button type="button" class="crm-btn crm-btn--secondary" onclick="resetToken(<?= (int) $row['id'] ?>)">Reset</button>
                             <button type="button" class="crm-btn crm-btn--secondary" onclick="openTestPush(<?= (int) $row['id'] ?>, '<?= htmlspecialchars($row['setting_key']) ?>')">Test Push</button>
                             <a class="crm-btn crm-btn--secondary" href="crm_push_logs.php">View Logs</a>
+                            <a class="crm-btn crm-btn--secondary" href="crm_diagnostics.php">Diagnostics</a>
                         </div>
                     </form>
                 <?php endforeach; ?>
@@ -313,12 +314,16 @@ $flash = isset($_GET['status']) ? $_GET['status'] : '';
         <form id="crmTestForm" class="crm-settings-form" style="padding:0;">
             <input type="hidden" name="crm_id" id="crmTestCrmId" value="">
             <div>
-                <label for="crm_test_name">Name</label>
-                <input type="text" id="crm_test_name" name="name" required>
+                <label for="crm_test_name">Name <span style="color:#c0392b;">*</span></label>
+                <input type="text" id="crm_test_name" name="name" required placeholder="Test Customer">
             </div>
             <div>
-                <label for="crm_test_mobile">Mobile</label>
-                <input type="text" id="crm_test_mobile" name="mobile" required>
+                <label for="crm_test_email">Email</label>
+                <input type="email" id="crm_test_email" name="email" placeholder="test@example.com">
+            </div>
+            <div>
+                <label for="crm_test_mobile">Mobile <span style="color:#888;font-size:0.85em;">(or email required)</span></label>
+                <input type="text" id="crm_test_mobile" name="mobile" placeholder="+919876543210">
             </div>
             <div class="crm-settings-actions">
                 <button type="submit" class="crm-btn">Run Test Push</button>

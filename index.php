@@ -1,6 +1,10 @@
 <?php
-
 declare(strict_types=1);
+
+// Capture any stray output (PHP notices, warnings, deprecation messages) before
+// Response::json() runs so they cannot corrupt JSON responses or trigger
+// "headers already sent" by locking in HTTP 200 prematurely.
+ob_start();
 
 $requestUri = $_SERVER['REQUEST_URI'] ?? '';
 if (is_string($requestUri) && parse_url($requestUri, PHP_URL_PATH) === '/db_probe.php') {

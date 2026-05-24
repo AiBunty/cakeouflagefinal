@@ -289,6 +289,45 @@
 }
 .product-card__actions .btn { flex: 1; }
 
+/* ── Shared product-card action button system ── */
+.btn-card-primary,
+.btn-card-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 38px;
+  padding: 0 14px;
+  border-radius: 12px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.15s;
+  white-space: nowrap;
+  text-decoration: none;
+  border: 1.5px solid transparent;
+}
+.btn-card-primary {
+  background: var(--color-burgundy);
+  color: #fff;
+  border-color: var(--color-burgundy);
+}
+.btn-card-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(128, 0, 31, 0.25);
+}
+.btn-card-secondary {
+  background: transparent;
+  color: var(--color-burgundy);
+  border-color: var(--color-burgundy);
+}
+.btn-card-secondary:hover {
+  background: rgba(128, 0, 31, 0.06);
+  transform: translateY(-1px);
+}
+.product-card__actions .btn-card-primary,
+.product-card__actions .btn-card-secondary { flex: 1; }
+
 /* Dietary tags */
 .tag-group { display: flex; gap: var(--space-2); flex-wrap: wrap; }
 .tag {
@@ -932,15 +971,65 @@
   border-radius: var(--radius-md); display: grid; place-items: center;
   color: var(--color-muted); overflow: hidden;
 }
-.media-preview-wrap img { width: 100%; max-height: 260px; object-fit: cover; }
+.media-preview-wrap img,
+.media-preview-wrap video { width: 100%; max-height: 260px; object-fit: cover; }
 .media-attach-box {
   margin-bottom: var(--space-4); padding: var(--space-3);
   border-radius: var(--radius-md); border: 1px solid var(--color-border); background: #fff;
 }
 .media-grid { display: grid; gap: var(--space-3); }
 .media-card { border: 1px solid var(--color-border); border-radius: var(--radius-md); overflow: hidden; background: #fff; }
-.media-card__image { width: 100%; height: 160px; object-fit: cover; background: var(--color-pink-100); }
+.media-card__image { width: 100%; height: 160px; object-fit: cover; background: var(--color-pink-100); display: block; }
 .media-card__body { padding: var(--space-3); display: grid; gap: var(--space-2); }
+.media-health-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+.media-health-badge {
+  border: 1px solid transparent;
+  padding: 0.28rem 0.72rem;
+}
+.media-trend-chips {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+.media-trend-chip {
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: #fff;
+  padding: var(--space-3);
+  display: grid;
+  gap: var(--space-2);
+}
+.media-trend-chip--danger { border-color: #f5c4cb; background: #fff7f8; }
+.media-trend-chip--success { border-color: #c9ead6; background: #f5fcf8; }
+.media-trend-chip__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+.media-trend-chip__head strong { color: var(--color-ink); }
+.media-sparkline {
+  min-height: 28px;
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  align-items: end;
+  gap: 2px;
+}
+.media-sparkline__bar {
+  border-radius: 999px;
+  min-height: 3px;
+  opacity: 0.95;
+}
+.media-sparkline--danger .media-sparkline__bar { background: #cc4758; }
+.media-sparkline--warning .media-sparkline__bar { background: #c07a0e; }
+.media-sparkline--success .media-sparkline__bar { background: #2d8b57; }
 .admin-inline-panel { margin-top: var(--space-5); border-top: 1px solid var(--color-border); padding-top: var(--space-4); }
 .admin-gallery-list { display: grid; gap: var(--space-3); }
 .admin-gallery-item {
@@ -1015,6 +1104,12 @@
   color: var(--color-muted-light); font-size: var(--text-sm); font-style: italic;
 }
 .admin-panel-grid--two { grid-template-columns: 1fr 1fr; }
+
+@media (max-width: 900px) {
+  .media-trend-chips {
+    grid-template-columns: 1fr;
+  }
+}
 
 /* Admin badge */
 .badge {

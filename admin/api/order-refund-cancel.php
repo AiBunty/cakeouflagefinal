@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../includes/auth.php';
 require_permission_for_current_admin_page();
 require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../../app/bootstrap.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(400);
@@ -43,25 +44,45 @@ header('Content-Type: application/json; charset=utf-8');
 
 $transactionOpen = false;
 try {
+    $pdo = \App\Core\Database::getConnection();
+    $stateManager = new \App\Services\OrderStateManager();
+
     if ($action === 'cancel') {
-        if (!admin_has_permission('order_reject')) {
+        if (!admin_has_permission('order_reject') && !admin_has_permission('can_cancel_unpaid_orders') && !admin_has_permission('order_refund')) {
             throw new Exception('You do not have permission to reject/cancel orders');
         }
 
-        if ($order['order_status'] === 'completed' || $order['order_status'] === 'cancelled') {
-            throw new Exception('Cannot cancel a ' . $order['order_status'] . ' order');
+        $transition = $stateManager->transition(
+            $pdo,
+            $orderId,
+            'cancelled',
+            $adminId,
+            [
+                'admin_role' => isset($_SESSION['admin_role']) ? (string)$_SESSION['admin_role'] : '',
+                'admin_permissions' => isset($_SESSION['admin_permissions']) && is_array($_SESSION['admin_permissions']) ? $_SESSION['admin_permissions'] : [],
+                'ip_address' => $_SERVER['REMOTE_ADDR'] ?? '',
+                'reason' => $reason,
+                'metadata' => ['source' => 'legacy-order-refund-cancel-endpoint'],
+            ]
+        );
+
+        if (!$transition['success']) {
+            throw new Exception($transition['message']);
         }
 
-        $conn->begin_transaction();
-        $transactionOpen = true;
-        $cancelStatus = 'cancelled';
-        $noteLine = "\n[Admin " . $adminId . '] Order cancelled. Reason: ' . $reason;
-        $updateStmt = $conn->prepare('UPDATE orders SET order_status = ?, admin_note = CONCAT(IFNULL(admin_note, ""), ?) WHERE id = ?');
-        $updateStmt->bind_param('ssi', $cancelStatus, $noteLine, $orderId);
-        $updateStmt->execute();
+        $stateManager->writeOrderAudit($pdo, [
+            'order_id' => $orderId,
+            'action_type' => 'cancel_request',
+            'previous_status' => (string)($order['order_status'] ?? ''),
+            'new_status' => 'cancelled',
+            'payment_status' => (string)($order['payment_status'] ?? ''),
+            'admin_id' => $adminId,
+            'admin_role' => isset($_SESSION['admin_role']) ? (string)$_SESSION['admin_role'] : '',
+            'ip_address' => $_SERVER['REMOTE_ADDR'] ?? '',
+            'message' => 'Order cancelled from legacy endpoint',
+            'metadata' => ['reason' => $reason],
+        ]);
 
-        $conn->commit();
-        $transactionOpen = false;
         echo json_encode([
             'success' => true,
             'message' => 'Order cancelled successfully',
@@ -71,33 +92,51 @@ try {
     }
 
     if ($action === 'refund') {
-        if (!admin_has_permission('order_refund')) {
+        if (!admin_has_permission('order_refund') && !admin_has_permission('can_approve_refund') && !admin_has_permission('can_force_refund')) {
             throw new Exception('You do not have permission to process refunds');
         }
 
-        if ($order['payment_status'] === 'refunded') {
-            throw new Exception('Order is already refunded');
+        $refundService = new \App\Services\RefundService();
+        $amount = (float)($order['grand_total'] ?? 0);
+        $result = $refundService->processRefund(
+            $pdo,
+            $orderId,
+            [
+                'refund_amount' => $amount,
+                'reason_code' => 'ADMIN_ADJUSTMENT',
+                'reason_notes' => $reason,
+            ],
+            $adminId,
+            [
+                'admin_role' => isset($_SESSION['admin_role']) ? (string)$_SESSION['admin_role'] : '',
+                'admin_permissions' => isset($_SESSION['admin_permissions']) && is_array($_SESSION['admin_permissions']) ? $_SESSION['admin_permissions'] : [],
+                'ip_address' => $_SERVER['REMOTE_ADDR'] ?? '',
+                'admin_name' => isset($_SESSION['admin_name']) ? (string)$_SESSION['admin_name'] : 'Admin',
+            ]
+        );
+
+        if (!$result['success']) {
+            throw new Exception($result['message']);
         }
 
-        if ($order['payment_status'] !== 'paid') {
-            throw new Exception('Cannot refund an order with payment status: ' . $order['payment_status']);
-        }
+        $stateManager->writeOrderAudit($pdo, [
+            'order_id' => $orderId,
+            'action_type' => 'refund_processed',
+            'previous_status' => (string)($order['order_status'] ?? ''),
+            'new_status' => (string)($result['order_status'] ?? ''),
+            'payment_status' => 'refunded',
+            'admin_id' => $adminId,
+            'admin_role' => isset($_SESSION['admin_role']) ? (string)$_SESSION['admin_role'] : '',
+            'ip_address' => $_SERVER['REMOTE_ADDR'] ?? '',
+            'message' => 'Refund processed from legacy endpoint',
+            'metadata' => ['refund_number' => $result['refund_number'] ?? null, 'reason' => $reason],
+        ]);
 
-        $conn->begin_transaction();
-        $transactionOpen = true;
-        $noteLine = "\n[Admin " . $adminId . '] Refund processed. Reason: ' . $reason;
-        $updateStmt = $conn->prepare('UPDATE orders SET payment_status = ?, admin_note = CONCAT(IFNULL(admin_note, ""), ?) WHERE id = ?');
-        $refundStatus = 'refunded';
-        $updateStmt->bind_param('ssi', $refundStatus, $noteLine, $orderId);
-        $updateStmt->execute();
-
-        $conn->commit();
-        $transactionOpen = false;
         echo json_encode([
             'success' => true,
             'message' => 'Refund processed successfully',
-            'new_status' => 'refunded',
-            'refund_amount' => (float)$order['grand_total']
+            'new_status' => (string)($result['order_status'] ?? 'fully_refunded'),
+            'refund_amount' => $amount
         ], JSON_UNESCAPED_SLASHES);
         exit;
     }

@@ -14,7 +14,7 @@ $targetParams = array_filter($targetParams, static fn($v) => $v !== '' && $v !==
 header('Location: sales_register.php?' . http_build_query($targetParams));
 exit;
 
-require __DIR__ . '/includes/db.php';
+require_once __DIR__ . '/includes/db.php';
 
 $period = $_GET['period'] ?? 'all';
 $agingFilter = $_GET['aging'] ?? 'all';

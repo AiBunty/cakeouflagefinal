@@ -62,7 +62,7 @@ if (!in_array($paymentMethod, $allowedPaymentMethods, true)) {
     $paymentMethod = 'upi_manual';
 }
 
-$allowed = array('pending', 'confirmed', 'in_preparation', 'completed', 'cancelled');
+$allowed = array('pending_payment', 'payment_under_review', 'awaiting_confirmation', 'confirmed', 'preparing', 'ready_for_pickup', 'out_for_delivery', 'delivered', 'completed', 'cancelled', 'rejected', 'partially_refunded', 'fully_refunded');
 if ($id <= 0 || !in_array($status, $allowed, true)) {
     http_response_code(400);
     echo 'Invalid order update request';
@@ -70,16 +70,35 @@ if ($id <= 0 || !in_array($status, $allowed, true)) {
 }
 
 // Check if order exists
-$checkOrder = $conn->query('SELECT id FROM orders WHERE id = ' . (int)$id . ' LIMIT 1');
-if (!$checkOrder || !$checkOrder->fetch_assoc()) {
+$checkOrder = $conn->query('SELECT id, order_number, payment_status, payment_method, grand_total, COALESCE(refund_amount, 0) AS refund_amount FROM orders WHERE id = ' . (int)$id . ' LIMIT 1');
+$orderBefore = $checkOrder ? $checkOrder->fetch_assoc() : null;
+if (!$orderBefore) {
     http_response_code(404);
     echo 'Order not found: id=' . $id;
     exit;
 }
+$existingPaymentStatusBefore = (string)($orderBefore['payment_status'] ?? '');
+
+// Cancel-on-paid guard with explicit finance-safe messaging.
+if ($status === 'cancelled') {
+    $paidRow = $conn->query(
+        'SELECT order_status, payment_status FROM orders WHERE id = ' . (int)$id . ' LIMIT 1'
+    );
+    $paidRowData = $paidRow ? $paidRow->fetch_assoc() : null;
+    $currentPaymentStatus = (string)($paidRowData['payment_status'] ?? '');
+    $currentOrderStatus = (string)($paidRowData['order_status'] ?? '');
+    if (in_array($currentPaymentStatus, ['paid', 'credit', 'refund_pending', 'partially_refunded', 'refunded'], true)
+        || in_array($currentOrderStatus, ['confirmed', 'preparing', 'ready_for_pickup', 'out_for_delivery', 'delivered', 'completed', 'partially_refunded', 'fully_refunded', 'refunded'], true)
+    ) {
+        http_response_code(422);
+        echo 'Confirmed or delivered orders cannot be cancelled. Use refund workflow.';
+        exit;
+    }
+}
 
 // Permission gate
 if ($status === 'cancelled') {
-    if (!admin_has_permission('order_reject')) {
+    if (!admin_has_permission('order_reject') && !admin_has_permission('order_refund') && !admin_has_permission('can_cancel_unpaid_orders')) {
         http_response_code(403);
         echo 'Access denied';
         exit;
@@ -99,16 +118,39 @@ if ($status === 'cancelled') {
 }
 
 $adminId = isset($_SESSION['admin']) ? (int)$_SESSION['admin'] : 0;
+$adminName = isset($_SESSION['admin_name']) ? (string)$_SESSION['admin_name'] : 'Admin';
 
-// ── Step 1: Update order_status ──
-$statusStmt = $conn->prepare('UPDATE orders SET order_status = ? WHERE id = ? LIMIT 1');
-if ($statusStmt) {
-    $statusStmt->bind_param('si', $status, $id);
-    $statusStmt->execute();
-    $statusStmt->close();
+// ── Step 1: Transition order_status via state machine ──
+try {
+    $stateManager = new \App\Services\OrderStateManager();
+    $adminRole        = isset($_SESSION['admin_role']) ? (string)$_SESSION['admin_role'] : '';
+    $adminPermissions = isset($_SESSION['admin_permissions']) && is_array($_SESSION['admin_permissions'])
+        ? $_SESSION['admin_permissions'] : [];
+    $smResult = $stateManager->transition(
+        \App\Core\Database::getConnection(),
+        $id,
+        $status,
+        $adminId,
+        [
+            'admin_role'        => $adminRole,
+            'admin_permissions' => $adminPermissions,
+            'ip_address'        => $_SERVER['REMOTE_ADDR'] ?? '',
+            'reason'            => 'Admin form update',
+        ]
+    );
+    if (!$smResult['success']) {
+        http_response_code(422);
+        echo htmlspecialchars($smResult['message'], ENT_QUOTES, 'UTF-8');
+        exit;
+    }
+} catch (\Throwable $smErr) {
+    error_log('[update_order_status][state_machine] ' . $smErr->getMessage());
+    http_response_code(500);
+    echo 'Order status update failed';
+    exit;
 }
 
-// ── Step 2: Payment update for confirmed orders ──
+// Step 2: Payment update for confirmed orders.
 if ($status === 'confirmed') {
     if ($paymentMethod === 'credit') {
         $payStmt = $conn->prepare(
@@ -119,6 +161,50 @@ if ($status === 'confirmed') {
             $payStmt->execute();
             $payStmt->close();
         }
+
+        try {
+            $stateManager = new \App\Services\OrderStateManager();
+            $stateManager->writeOrderAudit(\App\Core\Database::getConnection(), [
+                'order_id' => $id,
+                'action_type' => 'payment_status_update',
+                'new_status' => $status,
+                'payment_status' => 'credit',
+                'admin_id' => $adminId,
+                'admin_role' => isset($_SESSION['admin_role']) ? (string)$_SESSION['admin_role'] : '',
+                'ip_address' => $_SERVER['REMOTE_ADDR'] ?? '',
+                'message' => 'Order confirmed on credit from admin orders page',
+            ]);
+        } catch (\Throwable $auditErr) {
+            error_log('[update_order_status][audit] ' . $auditErr->getMessage());
+        }
+
+        $financialRead = $conn->prepare('SELECT order_number, payment_status, payment_method, payment_confirmed_at, grand_total, COALESCE(refund_amount, 0) AS refund_amount FROM orders WHERE id = ? LIMIT 1');
+        if ($financialRead) {
+            $financialRead->bind_param('i', $id);
+            $financialRead->execute();
+            $financialRow = $financialRead->get_result()->fetch_assoc();
+            $financialRead->close();
+
+            if ($financialRow && (string)$financialRow['payment_status'] === 'credit' && $existingPaymentStatusBefore !== 'credit') {
+                $engine = new \App\Services\FinancialTransactionEngine();
+                $recognizedAmount = max(0.0, round((float)($financialRow['grand_total'] ?? 0) - (float)($financialRow['refund_amount'] ?? 0), 2));
+                $idempotencyKey = 'update-order-status-credit:' . $id;
+                $postResult = $engine->recordCreditSaleRecognized([
+                    'order_id' => $id,
+                    'order_number' => (string)($financialRow['order_number'] ?? ''),
+                    'amount' => $recognizedAmount,
+                    'payment_status' => (string)$financialRow['payment_status'],
+                    'source_reference' => 'admin/update_order_status.php',
+                    'idempotency_key' => $idempotencyKey,
+                    'admin_id' => $adminId,
+                    'admin_name' => $adminName,
+                    'narration' => 'Credit sale recognized via legacy order status update',
+                ]);
+                if (!$postResult['success']) {
+                    error_log('[update_order_status][fte-credit] ' . $postResult['message']);
+                }
+            }
+        }
     } else {
         $payStmt = $conn->prepare(
             'UPDATE orders SET payment_status = "paid", payment_method = ?, payment_confirmed_at = NOW(), payment_confirmed_by_admin_id = ? WHERE id = ? LIMIT 1'
@@ -127,6 +213,69 @@ if ($status === 'confirmed') {
             $payStmt->bind_param('sii', $paymentMethod, $adminId, $id);
             $payStmt->execute();
             $payStmt->close();
+        }
+
+        try {
+            $stateManager = new \App\Services\OrderStateManager();
+            $stateManager->writeOrderAudit(\App\Core\Database::getConnection(), [
+                'order_id' => $id,
+                'action_type' => 'payment_status_update',
+                'new_status' => $status,
+                'payment_status' => 'paid',
+                'admin_id' => $adminId,
+                'admin_role' => isset($_SESSION['admin_role']) ? (string)$_SESSION['admin_role'] : '',
+                'ip_address' => $_SERVER['REMOTE_ADDR'] ?? '',
+                'message' => 'Order payment confirmed from admin orders page',
+                'metadata' => ['payment_method' => $paymentMethod],
+            ]);
+        } catch (\Throwable $auditErr) {
+            error_log('[update_order_status][audit] ' . $auditErr->getMessage());
+        }
+
+        $financialRead = $conn->prepare('SELECT order_number, payment_status, payment_method, payment_confirmed_at, grand_total, COALESCE(refund_amount, 0) AS refund_amount FROM orders WHERE id = ? LIMIT 1');
+        if ($financialRead) {
+            $financialRead->bind_param('i', $id);
+            $financialRead->execute();
+            $financialRow = $financialRead->get_result()->fetch_assoc();
+            $financialRead->close();
+
+            if ($financialRow && (string)$financialRow['payment_status'] === 'paid') {
+                $engine = new \App\Services\FinancialTransactionEngine();
+                $recognizedAmount = max(0.0, round((float)($financialRow['grand_total'] ?? 0) - (float)($financialRow['refund_amount'] ?? 0), 2));
+
+                if ($existingPaymentStatusBefore === 'credit') {
+                    $idempotencyKey = 'update-order-status-balance-settled:' . $id . ':' . (string)($financialRow['payment_method'] ?? '');
+                    $postResult = $engine->recordBalanceSettled([
+                        'order_id' => $id,
+                        'order_number' => (string)($financialRow['order_number'] ?? ''),
+                        'amount' => $recognizedAmount,
+                        'payment_method' => (string)($financialRow['payment_method'] ?? $paymentMethod),
+                        'source_reference' => 'admin/update_order_status.php',
+                        'idempotency_key' => $idempotencyKey,
+                        'admin_id' => $adminId,
+                        'admin_name' => $adminName,
+                        'narration' => 'Credit balance settled via legacy order status update',
+                    ]);
+                } else {
+                    $idempotencyKey = 'update-order-status-payment:' . $id . ':' . (string)($financialRow['payment_method'] ?? '');
+                    $postResult = $engine->recordPaymentReceived([
+                        'order_id' => $id,
+                        'order_number' => (string)($financialRow['order_number'] ?? ''),
+                        'amount' => $recognizedAmount,
+                        'payment_method' => (string)($financialRow['payment_method'] ?? $paymentMethod),
+                        'payment_status' => (string)($financialRow['payment_status'] ?? 'paid'),
+                        'source_reference' => 'admin/update_order_status.php',
+                        'idempotency_key' => $idempotencyKey,
+                        'admin_id' => $adminId,
+                        'admin_name' => $adminName,
+                        'narration' => 'Payment received via legacy order status update',
+                    ]);
+                }
+
+                if (!$postResult['success']) {
+                    error_log('[update_order_status][fte] ' . $postResult['message']);
+                }
+            }
         }
 
         byoc_finalize_quote_after_payment($conn, $id);
@@ -166,10 +315,12 @@ if ($status === 'confirmed') {
     $actionMessage = $paymentMethod === 'credit'
         ? 'Order confirmed on credit. Payment collection pending.'
         : 'Payment confirmed and order approved.';
-} elseif ($status === 'in_preparation') {
+} elseif ($status === 'preparing') {
     $actionMessage = 'Order marked ready for preparation/dispatch.';
+} elseif ($status === 'delivered') {
+    $actionMessage = 'Order marked as delivered.';
 } elseif ($status === 'completed') {
-    $actionMessage = 'Order marked delivered/completed.';
+    $actionMessage = 'Order closed and completed.';
 } elseif ($status === 'cancelled') {
     $actionMessage = 'Order cancelled successfully.';
 }

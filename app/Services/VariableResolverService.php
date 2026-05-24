@@ -35,6 +35,34 @@ final class VariableResolverService
             }
         }
 
+        // Refund-specific variables
+        if ($normalized === 'refund_amount') {
+            return (string)($context['refund_amount'] ?? '0.00');
+        }
+        if ($normalized === 'refund_reason') {
+            return (string)($context['refund_reason'] ?? '');
+        }
+        if ($normalized === 'refund_type') {
+            return (string)($context['refund_type'] ?? '');
+        }
+        if ($normalized === 'refund_notes') {
+            return (string)($context['refund_notes'] ?? '');
+        }
+        if ($normalized === 'refund_reference') {
+            return (string)($context['refund_reference'] ?? $context['settlement_reference'] ?? '');
+        }
+        if ($normalized === 'total_refunded') {
+            return (string)($context['total_refunded'] ?? '0.00');
+        }
+        if ($normalized === 'remaining_sales_amount') {
+            if (isset($context['remaining_sales_amount'])) {
+                return (string)$context['remaining_sales_amount'];
+            }
+            $grandTotal  = (float)($context['grand_total']    ?? 0);
+            $totalRef    = (float)($context['total_refunded'] ?? 0);
+            return number_format(max(0.0, $grandTotal - $totalRef), 2);
+        }
+
         return $fallback ?? 'Valued Customer';
     }
 
@@ -72,6 +100,14 @@ final class VariableResolverService
     public function sampleContext(): array
     {
         return [
+            // Branding (injected at send-time by EmailBrandingService)
+            'email_logo_url'        => 'https://via.placeholder.com/240x80/80001F/ffffff?text=YOUR+LOGO',
+            'business_name'         => 'Cakeouflage',
+            'brand_primary_color'   => '#80001F',
+            'brand_secondary_color' => '#140b0f',
+            'support_email'         => 'support@cakeouflage.com',
+            'support_phone'         => '+91 00000 00000',
+            // Customer / order context
             'customer_name' => 'Priya Sharma',
             'first_name' => 'Priya',
             'order_number' => 'CK1024',
@@ -89,6 +125,14 @@ final class VariableResolverService
             'topper_price' => '₹0',
             'special_instructions' => 'No nuts please',
             'item_details' => '1× Chocolate Fantasy Cake',
+            // Refund preview values
+            'refund_amount'          => '1250.00',
+            'refund_reason'          => 'Quality Complaint',
+            'refund_type'            => 'Partial',
+            'refund_notes'           => 'Customer received damaged cake',
+            'refund_reference'       => 'REF-20260523-A1B2',
+            'total_refunded'         => '1250.00',
+            'remaining_sales_amount' => '600.00',
         ];
     }
 }

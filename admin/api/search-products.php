@@ -26,6 +26,8 @@ $query = "
         p.base_price, 
         p.discount_price, 
         p.featured_image,
+        p.topper_enabled,
+        p.note_enabled,
         (SELECT COUNT(*) FROM product_variants pv WHERE pv.product_id = p.id AND pv.is_active = 1) as variant_count,
         p.stock_quantity,
         p.availability_status
@@ -79,6 +81,8 @@ while ($result && ($row = $result->fetch_assoc())) {
         'base_price' => (float)$row['base_price'],
         'discount_price' => (float)($row['discount_price'] ?? 0),
         'image' => (string)($row['featured_image'] ?? ''),
+        'topper_enabled' => (int)($row['topper_enabled'] ?? 0) === 1,
+        'note_enabled' => (int)($row['note_enabled'] ?? 0) === 1,
         'has_variants' => (int)$row['variant_count'] > 0 ? true : false,
         'variants' => $variants,
         'stock' => (int)$row['stock_quantity'],

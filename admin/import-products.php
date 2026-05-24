@@ -4,10 +4,10 @@
 //  Phases 4 + 5 + 7 of the catalog redesign
 // ============================================================
 $pageTitle = "Import Products";
-include "includes/auth.php";
+require_once __DIR__ . '/includes/auth.php';
 require_permission_for_current_admin_page();
 
-require 'includes/db.php';                        // $conn (MySQLi) + Env loaded
+require_once __DIR__ . '/includes/db.php';       // $conn (MySQLi) + Env loaded
 require_once __DIR__ . '/../vendor/autoload.php'; // Composer PSR-4
 
 use App\Core\Database;
@@ -428,7 +428,7 @@ try {
     // silently degrade
 }
 
-include 'layout.php';
+require_once __DIR__ . '/layout.php';
 ?>
 <style>
 .imp-page { max-width: 1200px; }

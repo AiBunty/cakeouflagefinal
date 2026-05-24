@@ -6,8 +6,9 @@ require_once __DIR__ . '/includes/auth.php';
 require_permission_for_current_admin_page();
 
 // DB connection
-require __DIR__ . '/includes/db.php';
+require_once __DIR__ . '/includes/db.php';
 require_once __DIR__ . '/includes/image_helpers.php';
+require_once __DIR__ . '/../app/Services/UnifiedMediaService.php';
 // =========================
 // BACKEND LOGIC
 // =========================
@@ -34,13 +35,14 @@ $slug = $base_slug;
 $i = 1;
 
 while (true) {
-    $check = $conn->query("SELECT id FROM products WHERE slug = '$slug'");
-    
-    if ($check->num_rows == 0) {
-        break; // unique slug मिळाला
+    $check = safePrepare($conn, 'SELECT id FROM products WHERE slug = ? LIMIT 1');
+    $check->bind_param('s', $slug);
+    $check->execute();
+    $checkResult = $check->get_result();
+    if (!$checkResult || $checkResult->num_rows === 0) {
+        break;
     }
-
-    $slug = $base_slug . "-" . $i;
+    $slug = $base_slug . '-' . $i;
     $i++;
 }
 
@@ -103,64 +105,73 @@ while (true) {
     // IMAGE UPLOAD
     // =========================
 
-    $db_image_path = NULL;
+    // Default to the branded fallback; replaced below if a valid file is uploaded.
+    $db_image_path = '/assets/defaults/default-product-image.webp';
 
     if (!empty($_FILES['image']['name']) && (int)($_FILES['image']['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
-
-        $tmp_name = (string)$_FILES['image']['tmp_name'];
-        $orig_ext = strtolower((string)pathinfo((string)$_FILES['image']['name'], PATHINFO_EXTENSION));
-        $allowedExt1 = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
-        if ($tmp_name !== '' && in_array($orig_ext, $allowedExt1, true)) {
-            $base1 = time() . '_' . bin2hex(random_bytes(4));
-            $upload_dir = '../client/assets/images/product/';
-            if (!is_dir($upload_dir)) { mkdir($upload_dir, 0777, true); }
-            if (convert_to_webp($tmp_name, $upload_dir . $base1 . '.webp')) {
-                $db_image_path = '/client/assets/images/product/' . $base1 . '.webp';
-            } elseif (move_uploaded_file($tmp_name, $upload_dir . $base1 . '.' . $orig_ext)) {
-                $db_image_path = '/client/assets/images/product/' . $base1 . '.' . $orig_ext;
-            }
+        $imgResult  = \App\Services\UnifiedMediaService::upload(
+            $_FILES['image'],
+            [
+                'module' => 'product',
+                'entity_type' => 'product',
+                'entity_id' => 0,
+                'admin_id' => (int)($_SESSION['admin'] ?? 0),
+                'allow_svg' => false,
+            ]
+        );
+        if ($imgResult['ok']) {
+            $db_image_path = $imgResult['relative_url'];
+        } else {
+            error_log('[add-product.php] Image upload failed: ' . $imgResult['error']);
         }
     }
 
     // IMAGE 2
     $db_image2_path = NULL;
     if (!empty($_FILES['image2']['name']) && (int)($_FILES['image2']['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
-        $tmp2 = (string)$_FILES['image2']['tmp_name'];
-        $ext2 = strtolower(pathinfo((string)$_FILES['image2']['name'], PATHINFO_EXTENSION));
-        $allowedExt = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
-        if ($tmp2 !== '' && in_array($ext2, $allowedExt, true)) {
-            $base2 = time() . '_2_' . bin2hex(random_bytes(4));
-            $upload_dir = '../client/assets/images/product/';
-            if (!is_dir($upload_dir)) {
-                mkdir($upload_dir, 0777, true);
-            }
-            if (convert_to_webp($tmp2, $upload_dir . $base2 . '.webp')) {
-                $db_image2_path = '/client/assets/images/product/' . $base2 . '.webp';
-            } elseif (move_uploaded_file($tmp2, $upload_dir . $base2 . '.' . $ext2)) {
-                $db_image2_path = '/client/assets/images/product/' . $base2 . '.' . $ext2;
-            }
+        $img2Result  = \App\Services\UnifiedMediaService::upload(
+            $_FILES['image2'],
+            [
+                'module' => 'product_image_2',
+                'entity_type' => 'product',
+                'entity_id' => 0,
+                'admin_id' => (int)($_SESSION['admin'] ?? 0),
+                'allow_svg' => false,
+            ]
+        );
+        if ($img2Result['ok']) {
+            $db_image2_path = $img2Result['relative_url'];
+        } else {
+            error_log('[add-product.php] Image2 upload failed: ' . $img2Result['error']);
         }
     }
 
     // =========================
     // INSERT QUERY
     // =========================
-$child_id_value = ($child_id !== NULL && $child_id != 0) ? "'$child_id'" : "NULL";
-$subcategory_id_value = ($subcategory_id !== NULL && $subcategory_id != 0) ? "'$subcategory_id'" : "NULL";
-$collection_id_value = ($collection_id !== NULL && $collection_id != 0) ? "'$collection_id'" : "NULL";
 $is_chef_special = isset($_POST['is_chef_special']) ? 1 : 0;
 $dietary_tag     = in_array($_POST['dietary_tag'] ?? '', ['regular','eggless','vegan','sugar_free','healthy'], true) ? $_POST['dietary_tag'] : 'regular';
 $is_veg          = (isset($_POST['is_veg']) && $_POST['is_veg'] === '0') ? 0 : 1;
 $topper_enabled  = isset($_POST['topper_enabled']) ? 1 : 0;
 $note_enabled    = isset($_POST['note_enabled']) ? 1 : 0;
+$base_price_str  = (string)(float)$base_price;
 
-  $sql = "INSERT INTO products 
-(name, slug, sku, starting_price, collection_category_id, subcategory_id, child_category_id, featured_image, short_description, is_chef_special, dietary_tag, is_veg, topper_enabled, note_enabled, created_at)
-VALUES 
-('$name', '$slug', '$sku', '$base_price', $collection_id_value, $subcategory_id_value, $child_id_value, '$db_image_path', '$description', $is_chef_special, '$dietary_tag', $is_veg, $topper_enabled, $note_enabled, NOW())";
+    $insertStmt = safePrepare($conn,
+        'INSERT INTO products
+        (name, slug, sku, starting_price, collection_category_id, subcategory_id, child_category_id,
+         featured_image, short_description, is_chef_special, dietary_tag, is_veg, topper_enabled, note_enabled, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())'
+    );
+    $insertStmt->bind_param(
+        'ssssiiissisiii',
+        $name, $slug, $sku, $base_price_str,
+        $collection_id, $subcategory_id, $child_id,
+        $db_image_path, $description,
+        $is_chef_special, $dietary_tag,
+        $is_veg, $topper_enabled, $note_enabled
+    );
 
-
-    if ($conn->query($sql) === TRUE) {
+    if ($insertStmt->execute()) {
    $product_id = $conn->insert_id;
 
    // Insert images into product_images for gallery support
@@ -187,16 +198,20 @@ foreach ($weights as $index => $weight) {
 
     $is_default = ($index == 0) ? 1 : 0; // 🔥 first variant default
 
-    $conn->query("
-        INSERT INTO product_variants 
-        (product_id, variant_label, weight_or_size, price, stock_quantity, is_default, is_active)
-        VALUES 
-        ('$product_id', '$label', '$weight', '$variant_price', 100, '$is_default', 1)
-    ");
+    $varStmt = safePrepare($conn,
+        'INSERT INTO product_variants (product_id, variant_label, weight_or_size, price, stock_quantity, is_default, is_active)
+         VALUES (?, ?, ?, ?, 100, ?, 1)'
+    );
+    $varWeight = (string)$weight;
+    $varPrice  = (string)round($variant_price, 2);
+    $varStmt->bind_param('isssi', $product_id, $label, $varWeight, $varPrice, $is_default);
+    $varStmt->execute();
+    $varStmt->close();
 }
         echo "<script>alert('Product Added Successfully'); window.location='products.php';</script>";
     } else {
-        echo "Error: " . $conn->error;
+        error_log('[add-product.php] INSERT failed: ' . $conn->error);
+        echo "<script>alert('Error saving product. Please try again.'); history.back();</script>";
     }
 }
 
@@ -207,7 +222,7 @@ foreach ($weights as $index => $weight) {
 $categories = $conn->query("SELECT id, name FROM categories WHERE is_active = 1 AND deleted_at IS NULL ORDER BY name ASC");
 
 $pageTitle = "Add Product";
-include "layout.php";
+require_once __DIR__ . '/layout.php';
 ?>
 <style>
     .product-form-card {
@@ -264,6 +279,55 @@ include "layout.php";
         margin-top: 8px;
     }
 
+    .form-section {
+        border: 1px solid rgba(128, 0, 31, 0.1);
+        border-radius: 14px;
+        padding: 14px;
+        margin-bottom: 14px;
+        background: #fff;
+    }
+
+    .form-section h3 {
+        margin: 0 0 6px;
+        font-size: 0.95rem;
+        color: #6f1130;
+    }
+
+    .form-section__hint {
+        margin: 0 0 10px;
+        font-size: 0.78rem;
+        color: #8f6e7b;
+    }
+
+    .feature-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+    }
+
+    .feature-item {
+        border: 1px solid rgba(128, 0, 31, 0.12);
+        border-radius: 10px;
+        padding: 8px 10px;
+        background: #fff9fb;
+    }
+
+    .feature-item label {
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.84rem;
+        color: #4f2e39;
+        cursor: pointer;
+    }
+
+    .feature-item input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+        margin: 0;
+    }
+
     .btn {
         background: #80001F;
         color: #fff;
@@ -290,6 +354,12 @@ include "layout.php";
         background: #f8d8de;
         box-shadow: 0 10px 22px rgba(96, 18, 45, 0.14);
     }
+
+    @media (max-width: 760px) {
+        .feature-grid {
+            grid-template-columns: 1fr;
+        }
+    }
 </style>
 
 <div class="product-form-card">
@@ -297,6 +367,9 @@ include "layout.php";
 
 <form method="POST" enctype="multipart/form-data">
 
+<div class="form-section">
+<h3>Basic Product Info</h3>
+<p class="form-section__hint">Set the core product details and category mapping.</p>
 <div class="form-group">
 <label>Name</label>
 <input class="form-control" type="text" name="name" required>
@@ -318,9 +391,24 @@ include "layout.php";
 </div>
 
 <div class="form-group">
+<label>Dietary Type</label>
+<select class="form-control" name="dietary_tag">
+    <option value="regular">Regular</option>
+    <option value="eggless">Eggless</option>
+    <option value="vegan">Vegan</option>
+    <option value="sugar_free">Sugar Free</option>
+    <option value="healthy">Healthy</option>
+</select>
+</div>
+</div>
+
+<div class="form-section">
+<h3>Product Media</h3>
+<p class="form-section__hint">Use Image 1 as primary image, and Image 2 as optional secondary image. If no image is uploaded, the Cakeouflage brand default will be used automatically.</p>
+<div class="form-group">
 <label>Image 1</label>
 <input class="form-control" type="file" name="image" id="productImageInput" accept="image/*">
-<img id="productImagePreview" class="image-preview" alt="Product preview">
+<img id="productImagePreview" class="image-preview" src="/assets/defaults/default-product-image.webp" alt="Product preview" style="display:block;" onerror="this.onerror=null;this.src='/assets/defaults/default-product-image.png';">
 </div>
 
 <div class="form-group">
@@ -328,37 +416,32 @@ include "layout.php";
 <input class="form-control" type="file" name="image2" id="productImage2Input" accept="image/*">
 <img id="productImage2Preview" class="image-preview" alt="Product image 2 preview">
 </div>
-
-<div class="form-group">
-<label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" name="is_chef_special" value="1"> Chef's Special</label>
 </div>
 
-<div class="form-group">
-<label>Dietary Type</label>
-<select class="form-control" name="dietary_tag">
-  <option value="regular">Regular</option>
-  <option value="eggless">Eggless</option>
-  <option value="vegan">Vegan</option>
-  <option value="sugar_free">Sugar Free</option>
-  <option value="healthy">Healthy</option>
-</select>
+<div class="form-section">
+<h3>Product Features</h3>
+<div class="feature-grid">
+    <div class="feature-item">
+        <label><input type="checkbox" name="is_chef_special" value="1"> Chef's Special</label>
+    </div>
+    <div class="feature-item">
+        <label><input type="checkbox" name="is_veg" value="0"> Mark as Non-Veg</label>
+    </div>
+    <div class="feature-item">
+        <label><input type="checkbox" name="topper_enabled" value="1" checked> Enable Topper Selection</label>
+    </div>
+    <div class="feature-item">
+        <label><input type="checkbox" name="note_enabled" value="1" checked> Enable Note on Cake</label>
+    </div>
+</div>
 </div>
 
-<div class="form-group">
-<label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" name="is_veg" value="0"> Non-Veg (uncheck = Veg)</label>
-</div>
-
-<div class="form-group">
-<label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" name="topper_enabled" value="1" checked> Enable Topper Selection on PDP</label>
-</div>
-
-<div class="form-group">
-<label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" name="note_enabled" value="1" checked> Enable Note on the Cake on PDP</label>
-</div>
-
+<div class="form-section">
+<h3>Description</h3>
 <div class="form-group">
 <label>Description</label>
 <textarea class="form-control" name="description"></textarea>
+</div>
 </div>
 
 <div class="form-actions">
@@ -379,8 +462,8 @@ include "layout.php";
         productImageInput.addEventListener('change', function () {
             const file = this.files && this.files[0];
             if (!file) {
-                productImagePreview.style.display = 'none';
-                productImagePreview.removeAttribute('src');
+                productImagePreview.src = '/assets/defaults/default-product-image.webp';
+                productImagePreview.style.display = 'block';
                 return;
             }
 

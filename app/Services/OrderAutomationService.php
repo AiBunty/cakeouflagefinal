@@ -74,12 +74,12 @@ final class OrderAutomationService
             $fulfilmentMode = 'pickup';
         }
 
-        $allowedOrderStatus = ['pending', 'confirmed', 'in_preparation', 'completed', 'cancelled'];
+        $allowedOrderStatus = ['pending_payment', 'confirmed', 'preparing', 'delivered', 'completed', 'cancelled', 'rejected'];
         if (!in_array($orderStatus, $allowedOrderStatus, true)) {
             $orderStatus = 'confirmed';
         }
 
-        $allowedPaymentStatus = ['pending', 'paid', 'failed', 'refunded'];
+        $allowedPaymentStatus = ['pending', 'paid', 'failed', 'refunded', 'credit', 'under_review'];
         if (!in_array($paymentStatus, $allowedPaymentStatus, true)) {
             $paymentStatus = 'paid';
         }
@@ -207,6 +207,19 @@ final class OrderAutomationService
         }
 
         $context = $this->buildOrderContext($order);
+
+        // Enrich context with refund variables so email/CRM templates can use them
+        $refundAmount   = (float)($order['total_refunded'] ?? $order['refund_amount'] ?? 0);
+        $grandTotal     = (float)($order['grand_total'] ?? 0);
+        $context['refund_amount']            = number_format($refundAmount, 2);
+        $context['refund_reason']            = (string)($order['refund_reason']         ?? '');
+        $context['refund_notes']             = (string)($order['refund_notes']          ?? '');
+        $context['settlement_reference']     = (string)($order['settlement_reference']  ?? '');
+        $context['refund_reference']         = $context['settlement_reference'];
+        $context['total_refunded']           = number_format($refundAmount, 2);
+        $context['remaining_sales_amount']   = number_format(max(0.0, $grandTotal - $refundAmount), 2);
+        $context['refund_type']              = (string)($order['order_status'] === 'fully_refunded' ? 'Full' : ($refundAmount > 0 ? 'Partial' : ''));
+
         $result = [
             'order_id' => $orderId,
             'status' => $status,
@@ -217,11 +230,8 @@ final class OrderAutomationService
 
         $pdo->beginTransaction();
         try {
-            $update = $pdo->prepare('UPDATE orders SET order_status = :order_status WHERE id = :id');
-            $update->execute([
-                'order_status' => $status,
-                'id' => $orderId,
-            ]);
+            // OrderStateManager now owns order_status writes; this method only handles
+            // side-effects (emails, CRM jobs, follow-ups). No direct UPDATE here.
 
             if ($status === 'confirmed') {
                 $result['emails_queued'] += $this->queueCustomerStatusEmail($pdo, 'payment_confirmed', $context);
@@ -229,24 +239,55 @@ final class OrderAutomationService
                 $result['crm_jobs_queued'] += $this->maybeQueueCrmTriggerJob($pdo, 'payment_confirmed', $context);
             }
 
-            if ($status === 'cancelled') {
+            if ($status === 'cancelled' || $status === 'rejected') {
                 $result['emails_queued'] += $this->queueCustomerStatusEmail($pdo, 'reject_order', $context);
                 $result['emails_queued'] += $this->queueAdminStatusEmail($pdo, 'reject_order', $context);
                 $result['crm_jobs_queued'] += $this->maybeQueueCrmTriggerJob($pdo, 'reject_order', $context);
                 $this->cancelPendingFollowUpsForOrder($pdo, $orderId);
             }
 
-            if ($status === 'in_preparation') {
+            if ($status === 'preparing') {
                 $result['emails_queued'] += $this->queueCustomerStatusEmail($pdo, 'ready_order', $context);
                 $result['emails_queued'] += $this->queueAdminStatusEmail($pdo, 'ready_order', $context);
                 $result['crm_jobs_queued'] += $this->maybeQueueCrmTriggerJob($pdo, 'ready_order', $context);
             }
 
-            if ($status === 'completed') {
+            if ($status === 'delivered' || $status === 'completed') {
                 $result['emails_queued'] += $this->queueCustomerStatusEmail($pdo, 'order_delivered', $context);
                 $result['emails_queued'] += $this->queueAdminStatusEmail($pdo, 'order_delivered', $context);
                 $result['crm_jobs_queued'] += $this->maybeQueueCrmTriggerJob($pdo, 'order_delivered', $context);
-                $result['follow_ups_scheduled'] += $this->scheduleCompletedOrderFollowUps($pdo, $context, $adminId);
+                if ($status === 'completed') {
+                    $result['follow_ups_scheduled'] += $this->scheduleCompletedOrderFollowUps($pdo, $context, $adminId);
+                }
+            }
+
+            if ($status === 'refund_requested') {
+                $result['crm_jobs_queued'] += $this->maybeQueueCrmTriggerJob($pdo, 'refund_requested', $context);
+            }
+
+            // Legacy: old "refunded" status (pre-migration rows resolved through approve flow)
+            if ($status === 'refunded') {
+                $result['crm_jobs_queued'] += $this->maybeQueueCrmTriggerJob($pdo, 'refund_approved', $context);
+            }
+
+            // Atomic partial refund (new path)
+            if ($status === 'partially_refunded') {
+                $result['emails_queued'] += $this->queueCustomerStatusEmail($pdo, 'partial_refund_processed_customer', $context);
+                $result['emails_queued'] += $this->queueAdminStatusEmail($pdo, 'partial_refund_processed_admin', $context);
+                $result['emails_queued'] += $this->queueCustomerStatusEmail($pdo, 'refund_processed_customer', $context);
+                $result['emails_queued'] += $this->queueAdminStatusEmail($pdo, 'refund_processed_admin', $context);
+                $result['crm_jobs_queued'] += $this->maybeQueueCrmTriggerJob($pdo, 'partial_refund_processed', $context);
+                $result['crm_jobs_queued'] += $this->maybeQueueCrmTriggerJob($pdo, 'refund_processed', $context);
+            }
+
+            // Atomic full refund (new path)
+            if ($status === 'fully_refunded') {
+                $result['emails_queued'] += $this->queueCustomerStatusEmail($pdo, 'full_refund_processed_customer', $context);
+                $result['emails_queued'] += $this->queueAdminStatusEmail($pdo, 'full_refund_processed_admin', $context);
+                $result['emails_queued'] += $this->queueCustomerStatusEmail($pdo, 'refund_processed_customer', $context);
+                $result['emails_queued'] += $this->queueAdminStatusEmail($pdo, 'refund_processed_admin', $context);
+                $result['crm_jobs_queued'] += $this->maybeQueueCrmTriggerJob($pdo, 'full_refund_processed', $context);
+                $result['crm_jobs_queued'] += $this->maybeQueueCrmTriggerJob($pdo, 'refund_processed', $context);
             }
 
             $pdo->commit();
@@ -254,8 +295,9 @@ final class OrderAutomationService
             $verify = $pdo->prepare('SELECT order_status FROM orders WHERE id = :id LIMIT 1');
             $verify->execute(['id' => $orderId]);
             $persistedStatus = (string)($verify->fetchColumn() ?: '');
+            // Note: OrderStateManager owns the write; we only verify the status matches what was requested.
             if ($persistedStatus !== $status) {
-                throw new \RuntimeException('Order status update did not persist for order #' . $orderId . ' (expected ' . $status . ', found ' . ($persistedStatus !== '' ? $persistedStatus : 'missing') . ')');
+                throw new \RuntimeException('Order status mismatch for order #' . $orderId . ' (expected ' . $status . ', found ' . ($persistedStatus !== '' ? $persistedStatus : 'missing') . ')');
             }
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) {
@@ -587,6 +629,8 @@ final class OrderAutomationService
             throw new \RuntimeException('CRM trigger setting key is required');
         }
 
+        $this->ensureCrmPushLogsSchema($pdo);
+
         $stmt = $pdo->prepare('SELECT id, setting_key, endpoint, api_token, is_enabled FROM crm_settings WHERE setting_key = :setting_key LIMIT 1');
         $stmt->execute(['setting_key' => $settingKey]);
         $crm = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -604,41 +648,130 @@ final class OrderAutomationService
             throw new \RuntimeException('CRM setting is incomplete for key: ' . $settingKey);
         }
 
+        // Extract automation_id from URL (e.g. /automations/69fd7a437e280/execute)
+        $automationId = '';
+        if (preg_match('#automations/([^/]+)/execute#', $endpoint, $m)) {
+            $automationId = $m[1];
+        }
+
+        // Mask token: first4***last4
+        $apiTokenMasked = strlen($apiToken) > 8
+            ? substr($apiToken, 0, 4) . '***' . substr($apiToken, -4)
+            : str_repeat('*', strlen($apiToken));
+
         $context = isset($payload['context']) && is_array($payload['context']) ? $payload['context'] : [];
-        $params = $this->buildCrmParams($apiToken, $context);
 
+        // ── Pre-send validation ──────────────────────────────────────────────
+        $contactName  = trim((string)($context['customer_name'] ?? ''));
+        $contactEmail = trim((string)($context['customer_email'] ?? ''));
+        $contactPhone = $this->normalizePhoneForCrm((string)($context['customer_phone'] ?? ''));
+
+        if ($contactName === '' || ($contactEmail === '' && $contactPhone === '')) {
+            $errMsg = $contactName === ''
+                ? 'Validation failed: contact_name is required'
+                : 'Validation failed: contact_email or contact_phone is required';
+            $log = $pdo->prepare(
+                'INSERT INTO crm_push_logs'
+                . ' (name, mobile, trigger_key, endpoint, automation_id, api_token_masked,'
+                . '  payload_json, http_status, execution_status, error_message, response_time_ms, status, response, created_at)'
+                . ' VALUES (:name, :mobile, :trigger_key, :endpoint, :automation_id, :api_token_masked,'
+                . '  :payload_json, NULL, :execution_status, :error_message, 0, "fail", :response, NOW())'
+            );
+            $log->execute([
+                'name'             => $contactName,
+                'mobile'           => $contactPhone,
+                'trigger_key'      => $settingKey,
+                'endpoint'         => $endpoint,
+                'automation_id'    => $automationId,
+                'api_token_masked' => $apiTokenMasked,
+                'payload_json'     => null,
+                'execution_status' => 'validation_failed',
+                'error_message'    => $errMsg,
+                'response'         => $errMsg,
+            ]);
+            throw new \RuntimeException($errMsg);
+        }
+
+        // ── Build JSON body ──────────────────────────────────────────────────
+        $body        = $this->buildCrmBody($apiToken, $context);
+        $bodyJson    = json_encode($body, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+
+        // ── Execute curl ─────────────────────────────────────────────────────
+        $startTime = microtime(true);
         $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, $endpoint);
+        curl_setopt($ch, CURLOPT_URL,            $endpoint);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($params));
-
-        $response = curl_exec($ch);
-        $curlError = curl_error($ch);
-        $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_setopt($ch, CURLOPT_POST,           true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS,     $bodyJson);
+        curl_setopt($ch, CURLOPT_HTTPHEADER,     ['Content-Type: application/json', 'Accept: application/json']);
+        curl_setopt($ch, CURLOPT_TIMEOUT,        15);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+        $responseRaw = curl_exec($ch);
+        $curlError   = curl_error($ch);
+        $httpCode    = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
+        $responseTimeMs = (int)round((microtime(true) - $startTime) * 1000);
 
-        $ok = $response !== false && $curlError === '' && $httpCode >= 200 && $httpCode < 400;
-        $status = $ok ? 'success' : 'fail';
-        $details = $response !== false ? (string)$response : $curlError;
+        // ── Determine execution status ───────────────────────────────────────
+        // Success requires: HTTP 200 AND response JSON {"status":"success"}
+        $executionStatus = 'failed';
+        $errorMessage    = '';
+        if ($responseRaw === false || $curlError !== '') {
+            $errorMessage    = $curlError !== '' ? $curlError : 'curl_exec returned false';
+            $executionStatus = 'failed';
+        } elseif ($httpCode !== 200) {
+            $errorMessage    = 'HTTP ' . $httpCode . ' received (expected 200)';
+            $executionStatus = 'failed';
+        } else {
+            $decoded = json_decode((string)$responseRaw, true);
+            if (is_array($decoded) && isset($decoded['status']) && $decoded['status'] === 'success') {
+                $executionStatus = 'success';
+            } else {
+                $errorMessage    = 'Response did not contain {"status":"success"}';
+                $executionStatus = 'failed';
+            }
+        }
 
-        $log = $pdo->prepare('INSERT INTO crm_push_logs (name, mobile, status, response, created_at) VALUES (:name, :mobile, :status, :response, NOW())');
+        $details = $responseRaw !== false ? (string)$responseRaw : $curlError;
+
+        // ── Log ──────────────────────────────────────────────────────────────
+        $log = $pdo->prepare(
+            'INSERT INTO crm_push_logs'
+            . ' (name, mobile, trigger_key, endpoint, automation_id, api_token_masked,'
+            . '  payload_json, http_status, execution_status, error_message, response_time_ms, status, response, created_at)'
+            . ' VALUES (:name, :mobile, :trigger_key, :endpoint, :automation_id, :api_token_masked,'
+            . '  :payload_json, :http_status, :execution_status, :error_message, :response_time_ms,'
+            . '  :status, :response, NOW())'
+        );
         $log->execute([
-            'name' => (string)($context['customer_name'] ?? ''),
-            'mobile' => (string)($context['customer_phone'] ?? ''),
-            'status' => $status,
-            'response' => mb_substr($details, 0, 65000),
+            'name'             => $contactName,
+            'mobile'           => $contactPhone,
+            'trigger_key'      => $settingKey,
+            'endpoint'         => $endpoint,
+            'automation_id'    => $automationId,
+            'api_token_masked' => $apiTokenMasked,
+            'payload_json'     => $bodyJson,
+            'http_status'      => $httpCode > 0 ? $httpCode : null,
+            'execution_status' => $executionStatus,
+            'error_message'    => $errorMessage !== '' ? $errorMessage : null,
+            'response_time_ms' => $responseTimeMs,
+            'status'           => $executionStatus === 'success' ? 'success' : 'fail',
+            'response'         => mb_substr($details, 0, 65000),
         ]);
 
-        if (!$ok) {
-            throw new \RuntimeException($details !== '' ? $details : 'CRM push failed');
+        if ($executionStatus !== 'success') {
+            $msg = $errorMessage !== '' ? $errorMessage : 'CRM push failed';
+            throw new \RuntimeException($msg);
         }
 
         return [
-            'setting_key' => $settingKey,
-            'status' => $status,
-            'http_code' => $httpCode,
-            'response' => $details,
+            'setting_key'      => $settingKey,
+            'status'           => $executionStatus,
+            'http_code'        => $httpCode,
+            'automation_id'    => $automationId,
+            'response_time_ms' => $responseTimeMs,
+            'response'         => $details,
         ];
     }
 
@@ -954,45 +1087,10 @@ final class OrderAutomationService
         $stmt = $pdo->prepare(
             'INSERT INTO crm_settings (setting_key, endpoint, api_token, is_enabled)
              VALUES (:setting_key, "", "", 0)
-             ON DUPLICATE KEY UPDATE setting_key = VALUES(setting_key)'
+               AS new
+               ON DUPLICATE KEY UPDATE setting_key = new.setting_key'
         );
         $stmt->execute(['setting_key' => $settingKey]);
-
-        if (!in_array($settingKey, ['manual_order_received', 'online_order_received', 'ready_order', 'order_delivered'], true)) {
-            return;
-        }
-
-        $currentStmt = $pdo->prepare('SELECT endpoint, api_token, is_enabled FROM crm_settings WHERE setting_key = :setting_key LIMIT 1');
-        $currentStmt->execute(['setting_key' => $settingKey]);
-        $current = $currentStmt->fetch(PDO::FETCH_ASSOC) ?: [];
-
-        $currentEndpoint = trim((string)($current['endpoint'] ?? ''));
-        $currentToken = trim((string)($current['api_token'] ?? ''));
-        $currentEnabled = (int)($current['is_enabled'] ?? 0);
-
-        if ($currentEndpoint !== '' && $currentToken !== '' && $currentEnabled === 1) {
-            return;
-        }
-
-        $templateStmt = $pdo->prepare('SELECT endpoint, api_token, is_enabled FROM crm_settings WHERE setting_key = :setting_key LIMIT 1');
-        $templateStmt->execute(['setting_key' => 'payment_confirmed']);
-        $template = $templateStmt->fetch(PDO::FETCH_ASSOC) ?: [];
-
-        $templateEndpoint = trim((string)($template['endpoint'] ?? ''));
-        $templateToken = trim((string)($template['api_token'] ?? ''));
-        $templateEnabled = (int)($template['is_enabled'] ?? 0) === 1 ? 1 : 0;
-
-        if ($templateEndpoint === '' || $templateToken === '') {
-            return;
-        }
-
-        $updateStmt = $pdo->prepare('UPDATE crm_settings SET endpoint = :endpoint, api_token = :api_token, is_enabled = :is_enabled WHERE setting_key = :setting_key');
-        $updateStmt->execute([
-            'endpoint' => $templateEndpoint,
-            'api_token' => $templateToken,
-            'is_enabled' => $templateEnabled,
-            'setting_key' => $settingKey,
-        ]);
     }
 
     /** @param array<string,mixed> $context */
@@ -1549,37 +1647,66 @@ final class OrderAutomationService
     /** @param array<string,mixed> $context
      *  @return array<string,string>
      */
-    private function buildCrmParams(string $apiToken, array $context): array
+    private function ensureCrmPushLogsSchema(PDO $pdo): void
     {
-        $customerName = trim((string)($context['customer_name'] ?? ''));
-        $customerEmail = trim((string)($context['customer_email'] ?? ''));
-        $phone = $this->normalizePhoneForCrm((string)($context['customer_phone'] ?? ''));
+        try {
+            $newCols = [
+                'trigger_key'      => 'VARCHAR(80) NULL',
+                'endpoint'         => 'VARCHAR(512) NULL',
+                'automation_id'    => 'VARCHAR(80) NULL',
+                'api_token_masked' => 'VARCHAR(50) NULL',
+                'payload_json'     => 'LONGTEXT NULL',
+                'http_status'      => 'SMALLINT NULL',
+                'execution_status' => 'VARCHAR(40) NULL',
+                'error_message'    => 'TEXT NULL',
+                'response_time_ms' => 'INT UNSIGNED NULL',
+            ];
+            foreach ($newCols as $col => $def) {
+                $check = $pdo->prepare(
+                    'SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS'
+                    . ' WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = \'crm_push_logs\' AND COLUMN_NAME = :col'
+                );
+                $check->execute(['col' => $col]);
+                if ((int)$check->fetchColumn() === 0) {
+                    $pdo->exec("ALTER TABLE crm_push_logs ADD COLUMN {$col} {$def}");
+                }
+            }
+        } catch (\Throwable $ignored) {
+        }
+    }
 
-        $params = [
-            'api_token' => $apiToken,
-            'contact_name' => $customerName,
-            'contact_phone' => $phone,
+    private function buildCrmBody(string $apiToken, array $context): array
+    {
+        $customerName  = trim((string)($context['customer_name'] ?? ''));
+        $customerEmail = trim((string)($context['customer_email'] ?? ''));
+        $phone         = $this->normalizePhoneForCrm((string)($context['customer_phone'] ?? ''));
+
+        $body = [
+            'api_token'     => $apiToken,
+            'contact_name'  => $customerName,
             'contact_email' => $customerEmail,
-            'contact.name' => $customerName,
+            'contact_phone' => $phone,
+            // Standard CRM contact fields
+            'contact.name'       => $customerName,
             'contact.first_name' => trim((string)($context['first_name'] ?? $customerName)),
-            'contact.mobile' => $phone,
-            'contact.phone' => $phone,
-            'contact.email' => $customerEmail,
-            'contact.orderid' => trim((string)($context['order_number'] ?? '')),
-            'contact.amount' => trim((string)($context['grand_total'] ?? '0.00')),
-            'contact.item' => trim((string)($context['item_names'] ?? 'Cake order')),
-            'contact.upi_link' => trim((string)($context['upi_link'] ?? '')),
+            'contact.mobile'     => $phone,
+            'contact.phone'      => $phone,
+            'contact.email'      => $customerEmail,
+            'contact.orderid'    => trim((string)($context['order_number'] ?? '')),
+            'contact.amount'     => trim((string)($context['grand_total'] ?? '0.00')),
+            'contact.item'       => trim((string)($context['item_names'] ?? 'Cake order')),
+            'contact.upi_link'   => trim((string)($context['upi_link'] ?? '')),
         ];
 
-        // Allow custom CRM keys provided by specific workflows (e.g., build-your-own-cake webhook mapping).
+        // Allow workflow-specific contact.* fields to override/extend
         foreach ($context as $key => $value) {
             if (!is_string($key) || strpos($key, 'contact.') !== 0 || !is_scalar($value)) {
                 continue;
             }
-            $params[$key] = trim((string)$value);
+            $body[$key] = trim((string)$value);
         }
 
-        return $params;
+        return $body;
     }
 
     private function normalizePhoneForCrm(string $phone): string

@@ -15,11 +15,13 @@ if (($targetParams['payment_method'] ?? '') === 'upi_bank') {
   $targetParams['payment_method'] = 'bank';
 }
 if (($targetParams['payment_status'] ?? '') === 'paid_only') {
-  $targetParams['payment_status'] = 'paid';
+  $targetParams['payment_status'] = 'confirmed_only';
 } elseif (($targetParams['payment_status'] ?? '') === 'payment_pending') {
   $targetParams['payment_status'] = 'pending';
+} elseif (($targetParams['payment_status'] ?? '') === 'rejected_orders') {
+  $targetParams['payment_status'] = 'rejected';
 } else {
-  $targetParams['payment_status'] = 'all';
+  $targetParams['payment_status'] = 'confirmed_only';
 }
 
 $targetParams = array_filter($targetParams, static fn($v) => $v !== '' && $v !== null);
@@ -486,7 +488,7 @@ if ($export === 'pdf') {
     exit;
 }
 
-include __DIR__ . '/layout.php';
+require_once __DIR__ . '/layout.php';
 ?>
 <style>
   .revenue-shell { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 18px; align-items: start; }

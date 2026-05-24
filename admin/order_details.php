@@ -3,9 +3,9 @@
 
 
 $pageTitle = "Order Details";
-include "layout.php";
+require_once __DIR__ . '/layout.php';
 
-require __DIR__ . '/includes/db.php';
+require_once __DIR__ . '/includes/db.php';
 $order_id = intval($_GET['id'] ?? 0);
 $returnTo = trim((string)($_GET['return_to'] ?? ''));
 $backHref = 'orders.php';
@@ -22,6 +22,7 @@ if ($returnTo !== '') {
 }
 $canOrderReject = admin_has_permission('order_reject');
 $canOrderRefund = admin_has_permission('order_refund');
+$canRefund      = admin_has_permission('can_approve_refund') || admin_has_permission('can_force_refund');
 
 // 🔥 ORDER FETCH
 $order = $conn->query("SELECT * FROM orders WHERE id=$order_id")->fetch_assoc();
@@ -141,13 +142,34 @@ function getStatus($s){
 <div class="container-box" style="background: #fef2f2; border: 1px solid #fecdd3;">
   <div class="title" style="margin-bottom:14px; color:#9f1239;">Order Actions</div>
   <div style="display:flex; gap:8px; flex-wrap:wrap;">
-    <?php if ($canOrderReject && $order['order_status'] !== 'completed' && $order['order_status'] !== 'cancelled'): ?>
+    <?php
+    $terminalStates = ['completed', 'cancelled', 'rejected', 'refunded', 'partially_refunded', 'fully_refunded'];
+    $cancelableUnpaidStates = ['pending_payment', 'payment_under_review'];
+    $currentOrderStatus = (string)($order['order_status'] ?? '');
+    $currentPayStatus   = (string)($order['payment_status'] ?? '');
+    $isPaidState = in_array($currentPayStatus, ['paid', 'credit'], true);
+    // Eligible for atomic refund: any paid, unrefunded, non-terminal mid-flow state
+    $refundEligibleStatuses = ['confirmed', 'preparing', 'ready_for_pickup', 'out_for_delivery', 'delivered', 'completed'];
+    $alreadyRefundedStatuses = ['partially_refunded', 'fully_refunded', 'refunded'];
+    $isRefundEligible = in_array($currentOrderStatus, $refundEligibleStatuses, true)
+        && $isPaidState
+        && !in_array($currentOrderStatus, $alreadyRefundedStatuses, true);
+    $isAlreadyRefunded = in_array($currentOrderStatus, $alreadyRefundedStatuses, true);
+    ?>
+    <?php if ($canOrderReject && in_array($currentOrderStatus, $cancelableUnpaidStates, true)): ?>
       <button type="button" class="btn-back" style="background:#ef4444; color:#fff;" onclick="cancelOrder(<?php echo (int)$order['id']; ?>)">🚫 Cancel Order</button>
     <?php endif; ?>
-    <?php if ($canOrderRefund && $order['payment_status'] === 'paid'): ?>
-      <button type="button" class="btn-back" style="background:#8b5cf6; color:#fff;" onclick="refundOrder(<?php echo (int)$order['id']; ?>)">💰 Process Refund</button>
+    <?php if ($canRefund && $isRefundEligible): ?>
+      <button type="button" class="btn-back" style="background:#7c3aed; color:#fff;" data-bs-toggle="modal" data-bs-target="#refundModal" onclick="prepRefundModal(<?php echo (int)$order['id']; ?>, <?php echo (float)$order['grand_total']; ?>)">💰 Process Refund</button>
+    <?php elseif ($isAlreadyRefunded): ?>
+      <span style="display:inline-flex;align-items:center;gap:6px;background:#f3f4f6;border:1px solid #d1d5db;padding:6px 14px;border-radius:20px;font-size:12px;font-weight:700;color:<?php echo $currentOrderStatus === 'fully_refunded' ? '#166534' : '#86198f'; ?>">
+        <?php echo $currentOrderStatus === 'fully_refunded' ? '✅ Fully Refunded' : '🔶 Partially Refunded'; ?>
+        <?php if (!empty($order['total_refunded']) && (float)$order['total_refunded'] > 0): ?>
+          &mdash; ₹<?php echo number_format((float)$order['total_refunded'], 2); ?>
+        <?php endif; ?>
+      </span>
     <?php endif; ?>
-    <?php if (!$canOrderReject && !$canOrderRefund): ?>
+    <?php if (!$canOrderReject && !$canOrderRefund && !$canRefund): ?>
       <span style="font-size:13px;color:#8b5c67;">No action permissions assigned for this account.</span>
     <?php endif; ?>
   </div>
@@ -161,6 +183,79 @@ function getStatus($s){
   <p>📞 <?php echo $order['customer_phone']; ?></p>
   <p>📧 <?php echo $order['customer_email']; ?></p>
   <p>💳 Payment: <strong><?php echo htmlspecialchars((string)$order['payment_method']); ?></strong> | Status: <strong><?php echo htmlspecialchars((string)$order['payment_status']); ?></strong></p>
+  <?php if (!empty($order['payment_proof_url'])): ?>
+    <p>📸 <strong>Payment Screenshot:</strong>
+      <a href="<?php echo htmlspecialchars((string)$order['payment_proof_url']); ?>" target="_blank" rel="noopener">
+        <img src="<?php echo htmlspecialchars((string)$order['payment_proof_url']); ?>" alt="Payment proof" style="display:block;max-width:220px;max-height:160px;margin-top:6px;border-radius:6px;border:1px solid #ddd;box-shadow:0 1px 6px rgba(0,0,0,.1);">
+      </a>
+      <?php if (!empty($order['payment_proof_uploaded_at'])): ?>
+        <small style="color:#888">Uploaded: <?php echo htmlspecialchars((string)$order['payment_proof_uploaded_at']); ?></small>
+      <?php endif; ?>
+    </p>
+  <?php endif; ?>
+
+  <?php if (!in_array((string)($order['payment_status'] ?? ''), ['paid', 'rejected'], true) && !in_array((string)($order['order_status'] ?? ''), ['cancelled', 'completed', 'delivered'], true)): ?>
+  <div id="payment-action-area" style="margin:12px 0;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+    <button onclick="adminConfirmPayment(<?php echo (int)$order['id']; ?>)"
+      style="background:#22c55e;color:#fff;border:none;padding:9px 18px;border-radius:6px;font-weight:600;cursor:pointer;font-size:14px;">
+      ✅ Confirm Payment &amp; Reserve Slot
+    </button>
+    <button onclick="adminRejectPayment(<?php echo (int)$order['id']; ?>)"
+      style="background:#ef4444;color:#fff;border:none;padding:9px 18px;border-radius:6px;font-weight:600;cursor:pointer;font-size:14px;">
+      ❌ Reject Payment
+    </button>
+    <span id="payment-action-msg" style="font-size:13px;color:#555;"></span>
+  </div>
+  <script>
+  function adminConfirmPayment(orderId) {
+    if (!confirm('Confirm payment and officially reserve the slot for this order?')) return;
+    var btn = document.querySelector('#payment-action-area button');
+    var msg = document.getElementById('payment-action-msg');
+    msg.textContent = 'Processing…';
+    fetch('/api/admin/orders/' + orderId + '/confirm-payment', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
+      credentials: 'same-origin',
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(data) {
+      if (data.success) {
+        msg.style.color = '#22c55e';
+        msg.textContent = '✅ ' + data.message;
+        setTimeout(function(){ location.reload(); }, 1500);
+      } else {
+        msg.style.color = '#ef4444';
+        msg.textContent = '❌ ' + (data.message || 'Failed');
+      }
+    })
+    .catch(function(){ msg.style.color='#ef4444'; msg.textContent='Network error'; });
+  }
+  function adminRejectPayment(orderId) {
+    var reason = prompt('Rejection reason (optional):') || '';
+    if (reason === null) return; // cancelled
+    var msg = document.getElementById('payment-action-msg');
+    msg.textContent = 'Processing…';
+    fetch('/api/admin/orders/' + orderId + '/reject-payment', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
+      credentials: 'same-origin',
+      body: JSON.stringify({reason: reason}),
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(data) {
+      if (data.success) {
+        msg.style.color = '#22c55e';
+        msg.textContent = '✅ ' + data.message;
+        setTimeout(function(){ location.reload(); }, 1500);
+      } else {
+        msg.style.color = '#ef4444';
+        msg.textContent = '❌ ' + (data.message || 'Failed');
+      }
+    })
+    .catch(function(){ msg.style.color='#ef4444'; msg.textContent='Network error'; });
+  }
+  </script>
+  <?php endif; ?>
   <?php if (!empty($order['billing_address_line1']) || !empty($order['billing_city']) || !empty($order['billing_postal_code'])): ?>
     <p>🏠 <?php echo htmlspecialchars(trim(($order['billing_address_line1'] ?? '') . ' ' . ($order['billing_address_line2'] ?? ''))); ?><br>
       <?php echo htmlspecialchars(trim(($order['billing_city'] ?? '') . ', ' . ($order['billing_state'] ?? '') . ' ' . ($order['billing_postal_code'] ?? ''))); ?></p>
@@ -213,29 +308,80 @@ function getStatus($s){
 
     <li>Order Created</li>
 
-    <?php if($order['order_status'] == 'pending'): ?>
+    <?php if($order['order_status'] == 'pending_payment'): ?>
 
       <li>Waiting For Payment Verification</li>
+
+    <?php elseif($order['order_status'] == 'payment_under_review'): ?>
+
+      <li>Payment Under Review</li>
 
     <?php elseif($order['order_status'] == 'confirmed'): ?>
 
       <li>Payment Verified</li>
       <li>Preparing</li>
 
-    <?php elseif($order['order_status'] == 'in_preparation'): ?>
+    <?php elseif($order['order_status'] == 'preparing'): ?>
 
       <li>Payment Verified</li>
       <li>Preparing</li>
+      <li>Ready / Dispatching</li>
+
+    <?php elseif($order['order_status'] == 'ready_for_pickup'): ?>
+
+      <li>Payment Verified</li>
+      <li>Prepared</li>
+      <li>Ready For Pickup</li>
+
+    <?php elseif($order['order_status'] == 'out_for_delivery'): ?>
+
+      <li>Payment Verified</li>
+      <li>Prepared</li>
+      <li>Out For Delivery</li>
+
+    <?php elseif($order['order_status'] == 'delivered'): ?>
+
+      <li>Payment Verified</li>
+      <li>Prepared</li>
       <li>Out for Delivery</li>
+      <li>Delivered</li>
 
     <?php elseif($order['order_status'] == 'completed'): ?>
 
       <li>Payment Verified</li>
-      <li>Preparing</li>
-      <li>Out for Delivery</li>
+      <li>Prepared</li>
       <li>Delivered</li>
+      <li style="color:#166534;">Order Completed ✓</li>
+
+    <?php elseif($order['order_status'] == 'refund_requested'): ?>
+
+      <li>Payment Verified</li>
+      <li>Prepared / Delivered</li>
+      <li style="color:#9a3412;">Refund Requested</li>
+
+    <?php elseif($order['order_status'] == 'refunded'): ?>
+
+      <li>Payment Verified</li>
+      <li>Delivered</li>
+      <li style="color:#6b21a8;">Refund Processed ✓</li>
+
+    <?php elseif($order['order_status'] == 'partially_refunded'): ?>
+
+      <li>Payment Verified</li>
+      <li>Delivered</li>
+      <li style="color:#86198f;">Partial Refund Processed</li>
+
+    <?php elseif($order['order_status'] == 'fully_refunded'): ?>
+
+      <li>Payment Verified</li>
+      <li>Delivered</li>
+      <li style="color:#166534;">Full Refund Processed ✓</li>
 
     <?php elseif($order['order_status'] == 'cancelled'): ?>
+
+      <li style="color:red;">Order Cancelled</li>
+
+    <?php elseif($order['order_status'] == 'rejected'): ?>
 
       <li style="color:red;">Payment Not Received</li>
       <li style="color:red;">Order Rejected</li>
@@ -272,29 +418,204 @@ function cancelOrder(orderId) {
   .catch(err => alert('Error: ' + err.message));
 }
 
-function refundOrder(orderId) {
-  const reason = prompt('Enter refund reason (optional):', '');
-  if (reason === null) return;
-
-  const form = new FormData();
-  form.append('action', 'refund');
-  form.append('order_id', orderId);
-  form.append('reason', reason);
-  form.append('redirect_to', window.location.href);
-
-  fetch('/admin/api/order-refund-cancel.php', {
-    method: 'POST',
-    body: form
-  })
-  .then(r => r.json())
-  .then(data => {
-    if (data.success) {
-      alert('✓ Refund processed successfully\nRefund Amount: Rs ' + data.refund_amount);
-      location.reload();
-    } else {
-      alert('✗ ' + (data.error || 'Failed to process refund'));
-    }
-  })
-  .catch(err => alert('Error: ' + err.message));
+// ── Refund Modal helpers ───────────────────────────────────────────────────
+function prepRefundModal(orderId, grandTotal) {
+  document.getElementById('refund-order-id').value = orderId;
+  document.getElementById('refund-grand-total').value = grandTotal;
+  document.getElementById('refund-amount').value = '';
+  document.getElementById('refund-amount').max = grandTotal;
+  document.getElementById('refund-reason').value = '';
+  document.getElementById('refund-notes').value = '';
+  document.getElementById('refund-settlement-ref').value = '';
+  document.getElementById('refund-proof-url').value = '';
+  document.getElementById('refund-proof-filename').textContent = '';
+  document.getElementById('refund-modal-msg').textContent = '';
+  document.getElementById('refund-type-full').checked = false;
+  document.getElementById('refund-type-partial').checked = false;
+  document.getElementById('refund-notes-group').style.display = 'none';
 }
+
+document.addEventListener('DOMContentLoaded', function() {
+  // Auto-fill amount on Full refund selection
+  document.getElementById('refund-type-full').addEventListener('change', function() {
+    if (this.checked) {
+      var gt = parseFloat(document.getElementById('refund-grand-total').value || 0);
+      document.getElementById('refund-amount').value = gt.toFixed(2);
+    }
+  });
+  document.getElementById('refund-type-partial').addEventListener('change', function() {
+    if (this.checked) {
+      document.getElementById('refund-amount').value = '';
+    }
+  });
+
+  // Show/hide notes when reason = OTHER
+  document.getElementById('refund-reason').addEventListener('change', function() {
+    var show = this.value === 'OTHER';
+    document.getElementById('refund-notes-group').style.display = show ? 'block' : 'none';
+    document.getElementById('refund-notes').required = show;
+  });
+
+  // Settlement proof upload
+  document.getElementById('refund-proof-file').addEventListener('change', async function() {
+    var file = this.files[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      alert('File must be under 5 MB');
+      this.value = '';
+      return;
+    }
+    var allowed = ['image/jpeg','image/png','image/webp','application/pdf'];
+    if (!allowed.includes(file.type)) {
+      alert('Only JPEG, PNG, WebP and PDF files are allowed');
+      this.value = '';
+      return;
+    }
+    var form = new FormData();
+    form.append('proof', file);
+    document.getElementById('refund-proof-filename').textContent = 'Uploading…';
+    try {
+      var r = await fetch('/api/admin/refunds/upload-proof', {
+        method: 'POST',
+        body: form,
+        credentials: 'same-origin',
+        headers: {'X-Requested-With': 'XMLHttpRequest'}
+      });
+      var data = await r.json();
+      if (data.success) {
+        document.getElementById('refund-proof-url').value = data.url;
+        document.getElementById('refund-proof-filename').textContent = '✓ ' + file.name;
+      } else {
+        document.getElementById('refund-proof-filename').textContent = '✗ Upload failed';
+      }
+    } catch (e) {
+      document.getElementById('refund-proof-filename').textContent = '✗ Network error';
+    }
+  });
+
+  // Submit refund form
+  document.getElementById('refund-submit-btn').addEventListener('click', async function() {
+    var orderId    = parseInt(document.getElementById('refund-order-id').value, 10);
+    var amount     = parseFloat(document.getElementById('refund-amount').value || 0);
+    var grandTotal = parseFloat(document.getElementById('refund-grand-total').value || 0);
+    var reason     = document.getElementById('refund-reason').value;
+    var notes      = document.getElementById('refund-notes').value.trim();
+    var ref        = document.getElementById('refund-settlement-ref').value.trim();
+    var proofUrl   = document.getElementById('refund-proof-url').value.trim();
+    var msg        = document.getElementById('refund-modal-msg');
+
+    if (!orderId || amount <= 0) { msg.style.color='#dc2626'; msg.textContent='Please enter a valid refund amount.'; return; }
+    if (amount > grandTotal)     { msg.style.color='#dc2626'; msg.textContent='Amount cannot exceed order total ₹' + grandTotal.toFixed(2); return; }
+    if (!reason)                  { msg.style.color='#dc2626'; msg.textContent='Please select a refund reason.'; return; }
+    if (reason === 'OTHER' && !notes) { msg.style.color='#dc2626'; msg.textContent='Internal notes are required for "Other" reason.'; return; }
+
+    msg.style.color = '#555'; msg.textContent = 'Processing…';
+    this.disabled = true;
+
+    try {
+      var r = await fetch('/api/admin/orders/' + orderId + '/refund/process', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json','X-Requested-With':'XMLHttpRequest'},
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          refund_amount: amount,
+          reason_code: reason,
+          reason_notes: notes,
+          settlement_reference: ref,
+          settlement_proof_url: proofUrl
+        })
+      });
+      var data = await r.json();
+      if (data.success) {
+        msg.style.color='#16a34a';
+        msg.textContent = '✅ ' + data.message;
+        setTimeout(function(){ location.reload(); }, 1600);
+      } else {
+        msg.style.color='#dc2626';
+        msg.textContent = '✗ ' + (data.message || 'Failed to process refund');
+        document.getElementById('refund-submit-btn').disabled = false;
+      }
+    } catch (e) {
+      msg.style.color='#dc2626';
+      msg.textContent = 'Network error';
+      document.getElementById('refund-submit-btn').disabled = false;
+    }
+  });
+});
 </script>
+
+<!-- ── Refund Modal ──────────────────────────────────────────────────────── -->
+<div class="modal fade" id="refundModal" tabindex="-1" aria-labelledby="refundModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content" style="border-radius:16px;overflow:hidden;">
+      <div class="modal-header" style="background:linear-gradient(135deg,#7c3aed,#5b21b6);color:#fff;border:none;">
+        <h5 class="modal-title" id="refundModalLabel">💰 Process Refund</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" style="padding:24px;">
+        <input type="hidden" id="refund-order-id">
+        <input type="hidden" id="refund-grand-total">
+        <input type="hidden" id="refund-proof-url">
+
+        <div class="mb-3">
+          <label style="font-weight:600;font-size:14px;display:block;margin-bottom:8px;">Refund Type</label>
+          <div style="display:flex;gap:16px;">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+              <input type="radio" name="refund-type-radio" id="refund-type-full" value="full">
+              <span style="font-size:14px;">Full Refund</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+              <input type="radio" name="refund-type-radio" id="refund-type-partial" value="partial">
+              <span style="font-size:14px;">Partial Refund</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="mb-3">
+          <label for="refund-amount" style="font-weight:600;font-size:14px;display:block;margin-bottom:4px;">Refund Amount (₹)</label>
+          <input type="number" id="refund-amount" min="0.01" step="0.01" placeholder="e.g. 500.00" style="width:100%;padding:9px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;">
+        </div>
+
+        <div class="mb-3">
+          <label for="refund-reason" style="font-weight:600;font-size:14px;display:block;margin-bottom:4px;">Reason</label>
+          <select id="refund-reason" style="width:100%;padding:9px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;">
+            <option value="">— Select reason —</option>
+            <option value="QUALITY_COMPLAINT">Quality Complaint</option>
+            <option value="WRONG_CAKE_DELIVERED">Wrong Cake Delivered</option>
+            <option value="DELAYED_DELIVERY">Delayed Delivery</option>
+            <option value="DAMAGED_CAKE">Damaged Cake</option>
+            <option value="CUSTOMER_COMPLAINT">Customer Complaint</option>
+            <option value="DUPLICATE_ORDER">Duplicate Order</option>
+            <option value="KITCHEN_ISSUE">Kitchen Issue</option>
+            <option value="STAFF_ISSUE">Staff Issue</option>
+            <option value="FRAUD_PREVENTION">Fraud Prevention</option>
+            <option value="ADMIN_ADJUSTMENT">Admin Adjustment</option>
+            <option value="OTHER">Other</option>
+          </select>
+        </div>
+
+        <div class="mb-3" id="refund-notes-group" style="display:none;">
+          <label for="refund-notes" style="font-weight:600;font-size:14px;display:block;margin-bottom:4px;">Internal Notes <span style="color:#dc2626;">*</span></label>
+          <textarea id="refund-notes" rows="3" placeholder="Required when reason is Other" style="width:100%;padding:9px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;resize:vertical;"></textarea>
+        </div>
+
+        <div class="mb-3">
+          <label for="refund-settlement-ref" style="font-weight:600;font-size:14px;display:block;margin-bottom:4px;">Settlement Reference <span style="color:#9ca3af;font-weight:400;">(optional)</span></label>
+          <input type="text" id="refund-settlement-ref" placeholder="UTR / transaction ID" style="width:100%;padding:9px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;">
+        </div>
+
+        <div class="mb-3">
+          <label style="font-weight:600;font-size:14px;display:block;margin-bottom:4px;">Settlement Proof <span style="color:#9ca3af;font-weight:400;">(optional — image or PDF, max 5 MB)</span></label>
+          <input type="file" id="refund-proof-file" accept="image/jpeg,image/png,image/webp,application/pdf" style="font-size:14px;">
+          <span id="refund-proof-filename" style="display:block;margin-top:4px;font-size:12px;color:#16a34a;"></span>
+        </div>
+
+        <div id="refund-modal-msg" style="font-size:13px;min-height:18px;"></div>
+      </div>
+      <div class="modal-footer" style="border:none;padding:16px 24px;background:#f9fafb;">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" id="refund-submit-btn" style="background:#7c3aed;color:#fff;border:none;padding:9px 20px;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer;">Process Refund</button>
+      </div>
+    </div>
+  </div>
+</div>
