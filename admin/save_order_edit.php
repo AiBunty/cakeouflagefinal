@@ -20,6 +20,20 @@ if ($id <= 0) {
     die('Invalid order');
 }
 
+$readLock = Database::getConnection()->prepare('SELECT order_status, payment_status FROM orders WHERE id = :id LIMIT 1');
+$readLock->execute([':id' => $id]);
+$lockRow = $readLock->fetch(\PDO::FETCH_ASSOC);
+if (!$lockRow) {
+    http_response_code(404);
+    die('Order not found');
+}
+
+$lockedPaymentStates = ['paid', 'credit', 'refund_pending', 'partially_refunded', 'refunded'];
+if (in_array((string)($lockRow['payment_status'] ?? ''), $lockedPaymentStates, true)) {
+    http_response_code(422);
+    die('Financial edit lock is active after payment confirmation. Use fulfillment, notes, or refund workflow.');
+}
+
 $payload = [
     'customer_phone' => (string)($_POST['customer_phone'] ?? ''),
     'admin_note' => (string)($_POST['admin_note'] ?? ''),
@@ -40,7 +54,7 @@ $result = (new OrderEditService())->apply(
     $adminId,
     [
         'admin_role' => (string)($_SESSION['admin_role'] ?? ''),
-        'admin_permissions' => isset($_SESSION['permissions']) && is_array($_SESSION['permissions']) ? $_SESSION['permissions'] : [],
+        'admin_permissions' => isset($_SESSION['admin_permissions']) && is_array($_SESSION['admin_permissions']) ? $_SESSION['admin_permissions'] : [],
         'ip_address' => (string)($_SERVER['REMOTE_ADDR'] ?? ''),
     ]
 );

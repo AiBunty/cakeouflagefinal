@@ -26,8 +26,12 @@
             <select name="payment_status">
               <option value="">All</option>
               <option value="pending">Pending</option>
+              <option value="under_review">Under Review</option>
               <option value="paid">Paid</option>
+              <option value="credit">Credit</option>
               <option value="failed">Failed</option>
+              <option value="rejected">Rejected</option>
+              <option value="partially_refunded">Partially Refunded</option>
               <option value="refunded">Refunded</option>
             </select>
           </label>
@@ -46,10 +50,13 @@
         <table class="admin-table" id="adminOrdersTable">
           <thead>
             <tr>
+              <th>Order ID</th>
               <th>Order</th>
               <th>Customer</th>
+              <th>Cake Names</th>
               <th>Fulfilment</th>
               <th>Amount</th>
+              <th>Coupon Discount</th>
               <th>Payment</th>
               <th>Status</th>
               <th>Actions</th>

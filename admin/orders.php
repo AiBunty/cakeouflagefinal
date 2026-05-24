@@ -39,6 +39,7 @@ $allowedPaymentStatuses = ['pending', 'under_review', 'paid', 'credit', 'refund_
 $allowedPaymentMethods = ['upi_manual', 'cod', 'gateway', 'credit'];
 $allowedFulfilmentModes = ['delivery', 'pickup', 'custom_delivery'];
 $allowedSourceChannels = ['online', 'manual'];
+ $allowedOrderSegments = ['operational', 'historical', 'all'];
 
 $q = trim((string)($_GET['q'] ?? ''));
 $dateFrom = trim((string)($_GET['date_from'] ?? ''));
@@ -48,11 +49,17 @@ $paymentStatus = trim((string)($_GET['payment_status'] ?? ''));
 $paymentMethod = trim((string)($_GET['payment_method'] ?? ''));
 $fulfilmentMode = trim((string)($_GET['fulfilment_mode'] ?? ''));
 $sourceChannel = trim((string)($_GET['source_channel'] ?? ''));
+$orderSegment = trim((string)($_GET['order_segment'] ?? 'operational'));
 $orderSource  = trim((string)($_GET['order_source'] ?? ''));
 $allowedOrderSources = ['retail', 'byoc_quote', 'manual'];
 if (!in_array($orderSource, $allowedOrderSources, true)) {
     $orderSource = '';
 }
+$ordersViewMode = trim((string)($_GET['orders_view'] ?? 'compact'));
+if (!in_array($ordersViewMode, ['compact', 'expanded'], true)) {
+  $ordersViewMode = 'compact';
+}
+$isCompactView = $ordersViewMode === 'compact';
 $couponMode = trim((string)($_GET['coupon_mode'] ?? ''));
 $couponCode = trim((string)($_GET['coupon_code'] ?? ''));
 $mobileSearch = trim((string)($_GET['mobile'] ?? ''));
@@ -79,6 +86,9 @@ if (!in_array($fulfilmentMode, $allowedFulfilmentModes, true)) {
 }
 if (!in_array($sourceChannel, $allowedSourceChannels, true)) {
     $sourceChannel = '';
+}
+if (!in_array($orderSegment, $allowedOrderSegments, true)) {
+  $orderSegment = 'operational';
 }
 if (!in_array($couponMode, ['', 'yes', 'no'], true)) {
     $couponMode = '';
@@ -162,6 +172,27 @@ if ($sourceChannel === 'online') {
 if ($sourceChannel === 'manual') {
     $conditions[] = 'o.user_id IS NULL';
 }
+
+$hasArchivedColumn = false;
+$archivedColumnRes = $conn->query("SHOW COLUMNS FROM orders LIKE 'is_archived'");
+if ($archivedColumnRes && $archivedColumnRes->fetch_assoc()) {
+    $hasArchivedColumn = true;
+}
+
+$operationalStatuses = ['pending_payment', 'payment_under_review', 'awaiting_confirmation', 'confirmed', 'preparing', 'ready_for_pickup', 'out_for_delivery'];
+$historicalStatuses = ['delivered', 'completed', 'cancelled', 'refunded', 'partially_refunded', 'fully_refunded', 'rejected'];
+if ($orderSegment === 'operational') {
+  $conditions[] = 'o.order_status IN ("pending_payment", "payment_under_review", "awaiting_confirmation", "confirmed", "preparing", "ready_for_pickup", "out_for_delivery")';
+  if ($hasArchivedColumn) {
+    $conditions[] = 'COALESCE(o.is_archived, 0) = 0';
+  }
+} elseif ($orderSegment === 'historical') {
+  if ($hasArchivedColumn) {
+    $conditions[] = '(o.order_status IN ("delivered", "completed", "cancelled", "refunded", "partially_refunded", "fully_refunded", "rejected") OR COALESCE(o.is_archived, 0) = 1)';
+  } else {
+    $conditions[] = 'o.order_status IN ("delivered", "completed", "cancelled", "refunded", "partially_refunded", "fully_refunded", "rejected")';
+  }
+}
 if ($amountMin !== null) {
     $conditions[] = 'o.grand_total >= ?';
     $types .= 'd';
@@ -204,6 +235,23 @@ if ($mobileSearch !== '') {
 
 $whereSql = implode(' AND ', $conditions);
 
+$priorityOrderSql = 'CASE
+  WHEN o.order_status = "pending_payment" THEN 10
+  WHEN o.order_status = "awaiting_confirmation" THEN 20
+  WHEN o.order_status = "confirmed" THEN 30
+  WHEN o.order_status = "preparing" THEN 40
+  WHEN o.order_status = "ready_for_pickup" THEN 45
+  WHEN o.order_status = "out_for_delivery" AND DATE(COALESCE(o.scheduled_slot, o.created_at)) = CURDATE() THEN 50
+  WHEN o.order_status = "out_for_delivery" THEN 60
+  WHEN o.order_status = "payment_under_review" THEN 70
+  WHEN o.order_status = "delivered" THEN 110
+  WHEN o.order_status = "completed" THEN 120
+  WHEN o.order_status = "cancelled" THEN 130
+  WHEN o.order_status IN ("refunded", "partially_refunded", "fully_refunded") THEN 140
+  WHEN o.order_status = "rejected" THEN 150
+  ELSE 999
+END';
+
 $countSql = 'SELECT COUNT(*) AS total_rows FROM orders o WHERE ' . $whereSql;
 $countStmt = $conn->prepare($countSql);
 if ($countStmt) {
@@ -225,7 +273,7 @@ if ($ordersPage > $ordersTotalPages) {
 }
 $ordersOffset = ($ordersPage - 1) * $orderPerPage;
 
-$listSql = 'SELECT o.* FROM orders o WHERE ' . $whereSql . ' ORDER BY o.id DESC LIMIT ? OFFSET ?';
+$listSql = 'SELECT o.* FROM orders o WHERE ' . $whereSql . ' ORDER BY ' . $priorityOrderSql . ' ASC, o.created_at DESC, o.id DESC LIMIT ? OFFSET ?';
 $listStmt = $conn->prepare($listSql);
 $orders = [];
 if ($listStmt) {
@@ -252,10 +300,13 @@ $filtersState = [
     'payment_method' => $paymentMethod,
     'fulfilment_mode' => $fulfilmentMode,
     'source_channel' => $sourceChannel,
+    'order_segment' => $orderSegment,
+    'order_source' => $orderSource,
     'amount_min' => $amountMinRaw,
     'amount_max' => $amountMaxRaw,
     'coupon_mode' => $couponMode,
     'coupon_code' => $couponCode,
+    'orders_view' => $ordersViewMode,
     'per_page' => (string)$orderPerPage,
     'page' => (string)$ordersPage,
 ];
@@ -284,6 +335,9 @@ $filtersState = [
   }
   if ($sourceChannel !== '') {
     $activeFilters[] = ['key' => 'source_channel', 'label' => 'Channel', 'value' => $sourceChannel];
+  }
+  if ($orderSegment !== 'operational') {
+    $activeFilters[] = ['key' => 'order_segment', 'label' => 'Order Segment', 'value' => $orderSegment];
   }
   if ($orderSource !== '') {
     $sourceLabelMap = ['retail' => 'Online/Retail', 'byoc_quote' => 'BYOC', 'manual' => 'Manual'];
@@ -315,6 +369,8 @@ $canOrderEdit = admin_has_permission('order_edit');
 $canOrderReject = admin_has_permission('order_reject');
 $canOrderCredit = admin_has_permission('order_credit');
 $canOrderRefund = admin_has_permission('order_refund') || admin_has_permission('can_approve_refund') || admin_has_permission('can_force_refund');
+$canOrderDelete = admin_has_permission('order_delete');
+$isSuperAdmin = admin_is_super_admin();
 $canCancelUnpaid = admin_has_permission('can_cancel_unpaid_orders') || admin_has_permission('order_reject') || admin_has_permission('order_refund');
 $stateManager = new \App\Services\OrderStateManager();
 $currentUri = htmlspecialchars((string)($_SERVER['REQUEST_URI'] ?? 'orders.php'), ENT_QUOTES, 'UTF-8');
@@ -322,6 +378,7 @@ $currentUri = htmlspecialchars((string)($_SERVER['REQUEST_URI'] ?? 'orders.php')
 $timelineByOrder = [];
 $refundSummaryByOrder = [];
 $orderItemsByOrder = [];
+$financeSnapshotByOrder = [];
 $retailActsAsManual = false;
 
 $orderSourceColumnRes = $conn->query("SHOW COLUMNS FROM orders LIKE 'order_source'");
@@ -349,7 +406,7 @@ if (!empty($orderIds)) {
     }
   }
 
-  $refundSql = 'SELECT order_id, COUNT(*) AS refund_count, COALESCE(SUM(CASE WHEN status = "processed" THEN COALESCE(approved_amount, requested_amount, 0) ELSE 0 END), 0) AS refund_total, MAX(CASE WHEN status = "processed" THEN COALESCE(processed_at, updated_at, created_at) ELSE NULL END) AS last_refunded_at FROM refund_transactions WHERE order_id IN (' . $in . ') GROUP BY order_id';
+  $refundSql = 'SELECT order_id, COALESCE(SUM(CASE WHEN status = "processed" THEN 1 ELSE 0 END), 0) AS refund_count, COALESCE(SUM(CASE WHEN status = "processed" THEN COALESCE(approved_amount, requested_amount, 0) ELSE 0 END), 0) AS refund_total, MAX(CASE WHEN status = "processed" THEN COALESCE(processed_at, updated_at, created_at) ELSE NULL END) AS last_refunded_at FROM refund_transactions WHERE order_id IN (' . $in . ') GROUP BY order_id';
   $refundRes = $conn->query($refundSql);
   while ($refundRes && ($rr = $refundRes->fetch_assoc())) {
     $oid = (int)($rr['order_id'] ?? 0);
@@ -375,6 +432,15 @@ if (!empty($orderIds)) {
   if (!empty($itemColumnMap['cake_message'])) {
     $itemColumns[] = 'cake_message';
   }
+  if (!empty($itemColumnMap['variant_snapshot'])) {
+    $itemColumns[] = 'variant_snapshot';
+  }
+  if (!empty($itemColumnMap['topper_name_snapshot'])) {
+    $itemColumns[] = 'topper_name_snapshot';
+  }
+  if (!empty($itemColumnMap['customisation_note'])) {
+    $itemColumns[] = 'customisation_note';
+  }
 
   $itemSql = 'SELECT ' . implode(', ', $itemColumns) . ' FROM order_items WHERE order_id IN (' . $in . ') ORDER BY order_id ASC, id ASC';
   $itemRes = $conn->query($itemSql);
@@ -388,6 +454,19 @@ if (!empty($orderIds)) {
     }
     $orderItemsByOrder[$oid][] = $item;
   }
+
+  try {
+    $pdoFinance = \App\Core\Database::getConnection();
+    $snapshotService = new \App\Services\OrderFinanceSnapshotService();
+    foreach ($orderIds as $oid) {
+      $snap = $snapshotService->buildSnapshot($pdoFinance, (int)$oid);
+      if (!empty($snap['ok'])) {
+        $financeSnapshotByOrder[(int)$oid] = $snap;
+      }
+    }
+  } catch (\Throwable $e) {
+    error_log('[orders.php] Finance snapshot build skipped: ' . $e->getMessage());
+  }
 }
 ?>
 <style>
@@ -396,6 +475,9 @@ if (!empty($orderIds)) {
 .o-shell__head h3 { margin:0; font-family:'DM Serif Display',Georgia,serif; font-weight:400; color:#80001F; font-size:1.35rem; }
 .o-shell__meta { font-size:.8rem; color:#8f7681; }
 .o-head-actions { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.o-view-switch { display:inline-flex; gap:6px; align-items:center; }
+.o-view-switch a { text-decoration:none; font-size:.73rem; padding:5px 9px; border-radius:999px; border:1px solid rgba(128,0,31,.2); color:#80001F; background:#fff; }
+.o-view-switch a.active { background:#80001F; color:#fff; border-color:#80001F; }
 .o-page-size { display:inline-flex; align-items:center; gap:8px; }
 .o-page-size select { border:1px solid rgba(128,0,31,.18); border-radius:10px; padding:8px 10px; font-size:.8rem; color:#4b343d; }
 
@@ -463,8 +545,30 @@ if (!empty($orderIds)) {
 .o-src-badge { display:inline-block; padding:2px 7px; border-radius:999px; font-size:.64rem; font-weight:700; letter-spacing:.04em; text-transform:uppercase; vertical-align:middle; }
 .o-src-badge--byoc { background:#ede9fe; color:#5b21b6; }
 .o-src-badge--manual { background:#dcfce7; color:#166534; }
+.o-src-badge--archived { background:#ffe4e6; color:#9f1239; }
 
 .o-card__actions { margin-top:10px; display:flex; flex-wrap:wrap; gap:8px; align-items:flex-start; }
+.o-card__details-toggle { background:#fff; color:#80001F; border:1px solid rgba(128,0,31,.3); }
+.o-card__details-toggle:hover { background:#fff6f8; }
+.o-segment-switch { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
+.o-segment-switch a { text-decoration:none; font-size:.74rem; padding:5px 9px; border-radius:999px; border:1px solid rgba(128,0,31,.2); color:#80001F; background:#fff; }
+.o-segment-switch a.active { background:#80001F; color:#fff; border-color:#80001F; }
+.o-ops-grid { margin-top:10px; display:grid; gap:8px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.o-card__details { display:block; }
+.o-shell--compact .o-card__details { display:none; }
+.o-shell--compact .o-card.o-card--expanded .o-card__details { display:block; }
+.o-ops-block { border:1px solid rgba(128,0,31,.1); border-radius:10px; background:#fff; padding:8px 10px; }
+.o-ops-label { font-size:.68rem; text-transform:uppercase; letter-spacing:.06em; color:#8f7681; font-weight:700; margin-bottom:3px; }
+.o-ops-value { font-size:.82rem; color:#3f2a33; line-height:1.35; }
+.o-items-inline { margin-top:10px; border:1px solid rgba(128,0,31,.12); border-radius:10px; background:#fffdfd; padding:10px 12px; }
+.o-items-inline h4 { margin:0 0 8px; color:#6f2940; font-size:.78rem; text-transform:uppercase; letter-spacing:.06em; }
+.o-item-inline-row { padding:6px 0; border-top:1px dashed rgba(128,0,31,.15); }
+.o-item-inline-row:first-of-type { border-top:none; padding-top:0; }
+.o-item-head { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.o-item-qty { font-weight:700; color:#6b102b; font-size:.78rem; }
+.o-item-name { font-weight:600; color:#2d1f25; font-size:.82rem; }
+.o-item-custom { margin-top:4px; display:flex; gap:6px; flex-wrap:wrap; }
+.o-item-chip { padding:2px 7px; border-radius:999px; font-size:.68rem; background:#fdf2f8; color:#9d174d; border:1px solid rgba(236,72,153,.18); }
 
 .o-inline-activity { margin-top:10px; border-radius:10px; border:1px solid transparent; padding:10px 36px 10px 12px; position:relative; font-size:.82rem; }
 .o-inline-activity--success { background:#ecfdf3; color:#166534; border-color:#bbf7d0; }
@@ -528,12 +632,33 @@ if (!empty($orderIds)) {
 .o-credit-box label { font-size:.76rem; color:#9d174d; display:grid; gap:4px; }
 .o-credit-box select { border:1px solid rgba(219,39,119,.25); border-radius:8px; padding:6px 8px; font-size:.8rem; }
 
+.o-destructive-warning { border:1px solid #fecdd3; background:#fff1f2; color:#9f1239; border-radius:10px; padding:10px; font-size:.78rem; line-height:1.35; }
+.o-destructive-warning.is-hidden { display:none; }
+
+.o-modal-overlay { position:fixed; inset:0; background:rgba(15,23,42,.45); z-index:9990; display:none; align-items:center; justify-content:center; padding:16px; }
+.o-modal-overlay.open { display:flex; }
+.o-modal { width:min(620px, 100%); background:#fff; border-radius:14px; border:1px solid rgba(128,0,31,.18); box-shadow:0 28px 50px rgba(15,23,42,.28); }
+.o-modal__head { padding:14px 16px; border-bottom:1px solid rgba(128,0,31,.12); }
+.o-modal__title { margin:0; font-size:1rem; color:#6f2940; }
+.o-modal__sub { margin-top:4px; font-size:.8rem; color:#7a5a66; }
+.o-modal__body { padding:14px 16px; display:grid; gap:10px; }
+.o-modal__row { display:grid; gap:6px; }
+.o-modal__row label { font-size:.76rem; text-transform:uppercase; letter-spacing:.06em; color:#7f1d1d; font-weight:700; }
+.o-modal__row input, .o-modal__row select, .o-modal__row textarea { border:1px solid rgba(128,0,31,.2); border-radius:9px; padding:8px 10px; font-size:.84rem; color:#2d1f25; font-family:inherit; }
+.o-modal__row textarea { min-height:80px; resize:vertical; }
+.o-modal__checks { display:grid; gap:8px; font-size:.82rem; color:#4b343d; }
+.o-modal__checks label { display:flex; gap:8px; align-items:flex-start; }
+.o-modal__checks input[type=checkbox] { margin-top:2px; accent-color:#9f1239; }
+.o-modal__foot { padding:12px 16px 14px; border-top:1px solid rgba(128,0,31,.12); display:flex; gap:8px; justify-content:flex-end; }
+.o-modal__status { font-size:.78rem; color:#6b7280; }
+
 @media (max-width: 1200px) {
   .o-filter-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 @media (max-width: 760px) {
   .o-filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .o-field--wide { grid-column: span 2; }
+  .o-ops-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 480px) {
   .o-filter-grid { grid-template-columns: 1fr; }
@@ -547,11 +672,15 @@ if (!empty($orderIds)) {
 }
 </style>
 
-<div class="o-shell">
+<div class="o-shell <?php echo $isCompactView ? 'o-shell--compact' : ''; ?>">
   <div class="o-shell__head">
     <h3>Orders</h3>
     <div class="o-head-actions">
       <div class="o-shell__meta"><?php echo (int)$ordersTotalRows; ?> orders found</div>
+      <div class="o-view-switch">
+        <a href="orders.php?<?php echo orders_query_string($filtersState, ['orders_view' => 'compact', 'page' => 1]); ?>" class="<?php echo $isCompactView ? 'active' : ''; ?>">Compact</a>
+        <a href="orders.php?<?php echo orders_query_string($filtersState, ['orders_view' => 'expanded', 'page' => 1]); ?>" class="<?php echo !$isCompactView ? 'active' : ''; ?>">Expanded</a>
+      </div>
       <form class="o-page-size" method="get">
         <?php foreach ($filtersState as $key => $value): ?>
           <?php if ($key !== 'per_page' && $key !== 'page' && $value !== ''): ?>
@@ -668,6 +797,11 @@ if (!empty($orderIds)) {
         <a href="orders.php?<?php echo orders_query_string($filtersState, ['date_from' => $last7Date, 'date_to' => $todayDate, 'page' => 1]); ?>">Last 7 Days</a>
         <a href="orders.php?<?php echo orders_query_string($filtersState, ['date_from' => $last30Date, 'date_to' => $todayDate, 'page' => 1]); ?>">Last 30 Days</a>
       </div>
+      <div class="o-segment-switch">
+        <a class="<?php echo $orderSegment === 'operational' ? 'active' : ''; ?>" href="orders.php?<?php echo orders_query_string($filtersState, ['order_segment' => 'operational', 'page' => 1]); ?>">Operational</a>
+        <a class="<?php echo $orderSegment === 'historical' ? 'active' : ''; ?>" href="orders.php?<?php echo orders_query_string($filtersState, ['order_segment' => 'historical', 'page' => 1]); ?>">Historical</a>
+        <a class="<?php echo $orderSegment === 'all' ? 'active' : ''; ?>" href="orders.php?<?php echo orders_query_string($filtersState, ['order_segment' => 'all', 'page' => 1]); ?>">All</a>
+      </div>
 
       <?php if ($activeFilters): ?>
       <div class="o-filter-chips">
@@ -729,11 +863,12 @@ foreach ($orders as $row):
   $oid = (int)$row['id'];
   $ostatus = (string)($row['order_status'] ?? 'pending');
   $pstatus = (string)($row['payment_status'] ?? 'pending');
+  $isArchived = $hasArchivedColumn && (int)($row['is_archived'] ?? 0) === 1;
   $orderSource = (string)($row['order_source'] ?? 'retail');
   $governance = $stateManager->getAllowedActions($ostatus, $pstatus);
   $canCancelAction = (bool)$governance['can_cancel'] && $canCancelUnpaid;
   $canRefundAction = (bool)$governance['can_refund'] && $canOrderRefund;
-  $canFinancialEdit = !(bool)$governance['is_financially_locked'];
+  $canFinancialEdit = !(bool)$governance['is_financially_locked'] && !$isArchived;
   $isManualOrder = $orderSource === 'manual' || ($retailActsAsManual && ($orderSource === 'retail' || $orderSource === ''));
   $isByocOrder = $orderSource === 'byoc_quote' || (int)($row['byoc_quote_id'] ?? 0) > 0;
   $canMutateItems = $canFinancialEdit
@@ -741,6 +876,24 @@ foreach ($orders as $row):
     && in_array($pstatus, ['pending', 'under_review', 'failed', 'rejected'], true)
     && in_array((string)($row['production_status'] ?? 'pending'), ['pending', 'not_required'], true);
   $orderItems = $orderItemsByOrder[$oid] ?? [];
+  $eventDate = '';
+  if (!empty($row['scheduled_slot'])) {
+    $eventDate = (string)$row['scheduled_slot'];
+  } elseif (!empty($row['scheduled_for'])) {
+    $eventDate = (string)$row['scheduled_for'];
+  }
+  $snapshot = $financeSnapshotByOrder[$oid] ?? null;
+  $advancePaid = round((float)($row['advance_amount'] ?? 0), 2);
+  $refundAmount = round((float)($row['refund_amount'] ?? $row['total_refunded'] ?? 0), 2);
+  $grossTotal = round((float)($row['grand_total'] ?? 0), 2);
+  $collectedTotal = round((float)($snapshot['collected_total'] ?? 0), 2);
+  $advanceReceived = round((float)($snapshot['advance_received'] ?? 0), 2);
+  $balanceDue = isset($snapshot['balance_due'])
+    ? round((float)$snapshot['balance_due'], 2)
+    : max(0.0, round($grossTotal - min($grossTotal, $advancePaid) - $refundAmount, 2));
+  $invoiceStatusHint = (string)($snapshot['invoice_status_hint'] ?? '');
+  $financialLastEvent = (string)($snapshot['financial_last_event'] ?? '');
+  $collectionStatus = strtolower(trim((string)($snapshot['collection_status'] ?? 'payment_pending')));
   $financeBadge = (string)($governance['finance_badge'] ?? 'Pending');
   $refundSummary = $refundSummaryByOrder[$oid] ?? ['count' => 0, 'total' => 0.0, 'last_refunded_at' => ''];
   $timelineEvents = $timelineByOrder[$oid] ?? [];
@@ -754,6 +907,9 @@ foreach ($orders as $row):
       <?php $srcClass = $orderSource === 'byoc_quote' ? 'byoc' : 'manual'; ?>
       <?php $srcLabel = $orderSource === 'byoc_quote' ? 'BYOC' : 'Manual'; ?>
       <span class="o-src-badge o-src-badge--<?php echo $srcClass; ?>"><?php echo $srcLabel; ?></span>
+    <?php endif; ?>
+    <?php if ($isArchived): ?>
+      <span class="o-src-badge o-src-badge--archived">Archived</span>
     <?php endif; ?>
 
     <div class="o-card__cust">
@@ -807,29 +963,97 @@ foreach ($orders as $row):
     <?php endif; ?>
   </div>
 
+  <div class="o-card__details">
+  <div class="o-ops-grid">
+    <div class="o-ops-block">
+      <div class="o-ops-label">Contact</div>
+      <div class="o-ops-value"><?php echo htmlspecialchars((string)($row['customer_phone'] ?? '-'), ENT_QUOTES, 'UTF-8'); ?></div>
+      <div class="o-ops-value"><?php echo htmlspecialchars((string)($row['customer_email'] ?? '-'), ENT_QUOTES, 'UTF-8'); ?></div>
+    </div>
+    <div class="o-ops-block">
+      <div class="o-ops-label">Fulfillment & Slot</div>
+      <div class="o-ops-value"><?php echo htmlspecialchars((string)($row['fulfilment_mode'] ?? '-'), ENT_QUOTES, 'UTF-8'); ?></div>
+      <div class="o-ops-value"><?php echo htmlspecialchars((string)($row['scheduled_slot_label'] ?? ($eventDate !== '' ? $eventDate : '-')), ENT_QUOTES, 'UTF-8'); ?></div>
+    </div>
+    <div class="o-ops-block">
+      <div class="o-ops-label">Finance Snapshot</div>
+      <?php $isFullyPaid = in_array($pstatus, ['paid', 'partially_refunded', 'refunded'], true) || $collectionStatus === 'fully_paid'; ?>
+      <?php $showVerifiedAdvance = $collectionStatus === 'advance_paid' && $advanceReceived > 0; ?>
+      <?php if ($isFullyPaid): ?>
+        <div class="o-ops-value">Collected: Rs <?php echo number_format(max($collectedTotal, $grossTotal - $refundAmount), 2); ?></div>
+      <?php elseif ($showVerifiedAdvance): ?>
+        <div class="o-ops-value">Advance: Rs <?php echo number_format(max($advanceReceived, 0), 2); ?></div>
+      <?php else: ?>
+        <div class="o-ops-value">Advance: Rs <?php echo number_format(0, 2); ?></div>
+      <?php endif; ?>
+      <div class="o-ops-value">Balance Due: Rs <?php echo number_format($balanceDue, 2); ?></div>
+      <div class="o-ops-value">Refund Status: <?php echo htmlspecialchars((string)($row['refund_status'] ?? 'none'), ENT_QUOTES, 'UTF-8'); ?></div>
+      <?php if ($financialLastEvent !== '' || $invoiceStatusHint !== ''): ?>
+        <div class="o-ops-value">Txn Link: <?php echo htmlspecialchars($financialLastEvent !== '' ? $financialLastEvent : $invoiceStatusHint, ENT_QUOTES, 'UTF-8'); ?></div>
+      <?php endif; ?>
+    </div>
+    <div class="o-ops-block">
+      <div class="o-ops-label">Order Source</div>
+      <div class="o-ops-value"><?php echo htmlspecialchars((string)($row['order_source'] ?? 'retail'), ENT_QUOTES, 'UTF-8'); ?></div>
+      <div class="o-ops-value">Mode: <?php echo htmlspecialchars((string)($row['order_mode'] ?? '-'), ENT_QUOTES, 'UTF-8'); ?></div>
+    </div>
+    <div class="o-ops-block">
+      <div class="o-ops-label">Event Date</div>
+      <div class="o-ops-value"><?php echo htmlspecialchars($eventDate !== '' ? $eventDate : '-', ENT_QUOTES, 'UTF-8'); ?></div>
+      <div class="o-ops-value">Created: <?php echo htmlspecialchars((string)($row['created_at'] ?? '-'), ENT_QUOTES, 'UTF-8'); ?></div>
+    </div>
+    <div class="o-ops-block">
+      <div class="o-ops-label">Payment & Fulfillment</div>
+      <div class="o-ops-value">Payment: <?php echo htmlspecialchars((string)($row['payment_status'] ?? '-'), ENT_QUOTES, 'UTF-8'); ?> (<?php echo htmlspecialchars((string)($row['payment_method'] ?? '-'), ENT_QUOTES, 'UTF-8'); ?>)</div>
+      <div class="o-ops-value">Status: <?php echo htmlspecialchars((string)($row['order_status'] ?? '-'), ENT_QUOTES, 'UTF-8'); ?></div>
+    </div>
+  </div>
+
+  <div class="o-items-inline">
+    <h4>Ordered Products & Customization</h4>
+    <?php if (!empty($orderItems)): ?>
+      <?php foreach ($orderItems as $item): ?>
+        <div class="o-item-inline-row">
+          <div class="o-item-head">
+            <span class="o-item-qty"><?php echo (int)($item['quantity'] ?? 1); ?>x</span>
+            <span class="o-item-name"><?php echo htmlspecialchars((string)($item['product_name_snapshot'] ?? 'Item'), ENT_QUOTES, 'UTF-8'); ?></span>
+          </div>
+          <div class="o-item-custom">
+            <?php if (!empty($item['variant_snapshot'])): ?><span class="o-item-chip"><?php echo htmlspecialchars((string)$item['variant_snapshot'], ENT_QUOTES, 'UTF-8'); ?></span><?php endif; ?>
+            <?php if (!empty($item['cake_message'])): ?><span class="o-item-chip"><?php echo htmlspecialchars((string)$item['cake_message'], ENT_QUOTES, 'UTF-8'); ?></span><?php endif; ?>
+            <?php if (!empty($item['topper_name_snapshot'])): ?><span class="o-item-chip">Topper: <?php echo htmlspecialchars((string)$item['topper_name_snapshot'], ENT_QUOTES, 'UTF-8'); ?></span><?php endif; ?>
+            <?php if (!empty($item['customisation_note'])): ?><span class="o-item-chip"><?php echo htmlspecialchars((string)$item['customisation_note'], ENT_QUOTES, 'UTF-8'); ?></span><?php endif; ?>
+          </div>
+        </div>
+      <?php endforeach; ?>
+    <?php else: ?>
+      <div class="o-ops-value">No item snapshot available.</div>
+    <?php endif; ?>
+  </div>
+  </div>
+
   <div class="o-card__actions">
-    <?php if ((bool)$governance['can_confirm_payment'] && $canOrderEdit): ?>
-      <form method="POST" action="update_order_status.php" class="o-confirm-box" onsubmit="return confirm('Confirm payment and approve this order?')">
-        <input type="hidden" name="order_id" value="<?php echo $oid; ?>">
-        <input type="hidden" name="status" value="confirmed">
-        <input type="hidden" name="redirect_to" value="<?php echo $currentUri; ?>">
+    <?php if ($isCompactView): ?>
+      <button type="button" class="btn btn--sm o-card__details-toggle" onclick="toggleCardDetails(this)">Details</button>
+    <?php endif; ?>
+    <?php if ((bool)$governance['can_confirm_payment'] && $canOrderEdit && !$isArchived): ?>
+      <form method="POST" action="#" class="o-confirm-box js-confirm-payment-form" data-order-id="<?php echo $oid; ?>" data-grand-total="<?php echo htmlspecialchars(number_format((float)($row['grand_total'] ?? 0), 2, '.', ''), ENT_QUOTES, 'UTF-8'); ?>">
         <label>
           Payment Mode
           <select name="payment_method">
             <option value="upi_manual">UPI / Bank</option>
-            <option value="cod">Cash</option>
-            <?php if ($canOrderCredit): ?><option value="credit">Credit (collect later)</option><?php endif; ?>
+            <option value="gateway">Gateway</option>
           </select>
         </label>
-        <div class="o-checks">
-          <label><input type="checkbox" name="send_invoice_email" value="1" checked> Send bill to customer email</label>
-          <label><input type="checkbox" name="print_invoice" value="1"> Open print bill after confirm</label>
-        </div>
+        <label>
+          Amount Received
+          <input type="number" name="received_amount" min="0.01" step="0.01" value="<?php echo htmlspecialchars(number_format((float)($row['grand_total'] ?? 0), 2, '.', ''), ENT_QUOTES, 'UTF-8'); ?>" required>
+        </label>
         <button type="submit" class="btn btn--green btn--sm">Confirm Payment</button>
       </form>
     <?php endif; ?>
 
-    <?php if ($canCancelAction): ?>
+    <?php if ($canCancelAction && !$isArchived): ?>
       <form method="POST" action="update_order_status.php" onsubmit="return confirm('Reject this order?')">
         <input type="hidden" name="order_id" value="<?php echo $oid; ?>">
         <input type="hidden" name="status" value="cancelled">
@@ -838,7 +1062,7 @@ foreach ($orders as $row):
       </form>
     <?php endif; ?>
 
-    <?php if ((bool)$governance['can_mark_preparing'] && $canOrderEdit): ?>
+    <?php if ((bool)$governance['can_mark_preparing'] && $canOrderEdit && !$isArchived): ?>
       <form method="POST" action="update_order_status.php" onsubmit="return confirm('Mark this order as preparing?')">
         <input type="hidden" name="order_id" value="<?php echo $oid; ?>">
         <input type="hidden" name="status" value="preparing">
@@ -847,29 +1071,49 @@ foreach ($orders as $row):
       </form>
     <?php endif; ?>
 
-    <?php if ((bool)$governance['can_mark_delivered'] && $canOrderEdit): ?>
-      <form method="POST" action="update_order_status.php" onsubmit="return confirm('Mark this order as delivered?')">
+    <?php if ((bool)$governance['can_mark_delivered'] && $canOrderEdit && !$isArchived): ?>
+      <form method="POST" action="update_order_status.php" onsubmit="return confirm('Mark this order as delivered and complete it?')">
         <input type="hidden" name="order_id" value="<?php echo $oid; ?>">
         <input type="hidden" name="status" value="delivered">
         <input type="hidden" name="redirect_to" value="<?php echo $currentUri; ?>">
-        <button type="submit" class="btn btn--sm" style="background:#7c3aed;">Mark Delivered</button>
+        <button type="submit" class="btn btn--sm" style="background:#7c3aed;">Mark Delivered (Complete)</button>
       </form>
     <?php endif; ?>
 
-    <?php if ((bool)$governance['can_mark_completed'] && $canOrderEdit): ?>
-      <form method="POST" action="update_order_status.php" onsubmit="return confirm('Close this delivered order as completed?')">
-        <input type="hidden" name="order_id" value="<?php echo $oid; ?>">
-        <input type="hidden" name="status" value="completed">
-        <input type="hidden" name="redirect_to" value="<?php echo $currentUri; ?>">
-        <button type="submit" class="btn btn--sm" style="background:#0f766e;">Mark Completed</button>
-      </form>
-    <?php endif; ?>
-
-    <?php if ($canRefundAction): ?>
+    <?php if ($canRefundAction && !$isArchived): ?>
       <a href="refunds.php?order_id=<?php echo $oid; ?>" class="btn btn--sm" style="background:#a21caf;">Refund</a>
     <?php endif; ?>
 
-    <?php if ($pstatus === 'credit' && $canOrderCredit && $canFinancialEdit): ?>
+    <?php if ($canOrderDelete): ?>
+      <?php if (!$isArchived): ?>
+        <button
+          type="button"
+          class="btn btn--outline btn--sm js-destructive-trigger"
+          data-action="archive"
+          data-order-id="<?php echo $oid; ?>"
+          data-order-number="<?php echo htmlspecialchars((string)$row['order_number'], ENT_QUOTES, 'UTF-8'); ?>"
+        >Archive</button>
+      <?php else: ?>
+        <button
+          type="button"
+          class="btn btn--outline btn--sm js-destructive-trigger"
+          data-action="restore"
+          data-order-id="<?php echo $oid; ?>"
+          data-order-number="<?php echo htmlspecialchars((string)$row['order_number'], ENT_QUOTES, 'UTF-8'); ?>"
+        >Restore</button>
+      <?php endif; ?>
+      <?php if ($isSuperAdmin): ?>
+        <button
+          type="button"
+          class="btn btn--red btn--sm js-destructive-trigger"
+          data-action="force_purge"
+          data-order-id="<?php echo $oid; ?>"
+          data-order-number="<?php echo htmlspecialchars((string)$row['order_number'], ENT_QUOTES, 'UTF-8'); ?>"
+        >Delete Entry</button>
+      <?php endif; ?>
+    <?php endif; ?>
+
+    <?php if ($pstatus === 'credit' && $canOrderCredit && $canFinancialEdit && !$isArchived): ?>
     <div class="o-credit-box">
       <form method="POST" action="collect_credit.php" onsubmit="return confirm('Mark credit as collected?')">
         <input type="hidden" name="order_id" value="<?php echo $oid; ?>">
@@ -926,7 +1170,7 @@ foreach ($orders as $row):
     </div>
   <?php endif; ?>
 
-  <?php if ($canOrderEdit): ?>
+  <?php if ($canOrderEdit && !$isArchived): ?>
   <div class="o-edit-panel" id="<?php echo $editId; ?>">
     <form method="POST" action="save_order_edit.php" class="js-order-edit-form" data-order-id="<?php echo $oid; ?>" data-order-number="<?php echo htmlspecialchars((string)$row['order_number'], ENT_QUOTES, 'UTF-8'); ?>">
       <input type="hidden" name="order_id" value="<?php echo $oid; ?>">
@@ -1059,6 +1303,61 @@ foreach ($orders as $row):
   </div>
 </div>
 
+<?php if ($canOrderDelete): ?>
+<div class="o-modal-overlay" id="destructiveModalOverlay" aria-hidden="true">
+  <div class="o-modal" role="dialog" aria-modal="true" aria-labelledby="destructiveModalTitle">
+    <div class="o-modal__head">
+      <h4 class="o-modal__title" id="destructiveModalTitle">Destructive Order Action</h4>
+      <div class="o-modal__sub" id="destructiveModalSub">Validate reason, impact, and authorization before continuing.</div>
+    </div>
+    <form id="destructiveActionForm">
+      <div class="o-modal__body">
+        <input type="hidden" name="order_id" id="destructive_order_id" value="">
+        <input type="hidden" name="action" id="destructive_action" value="archive">
+        <input type="hidden" name="final_confirm" value="1">
+
+        <div class="o-modal__row">
+          <label for="destructive_reason_code">Reason Code</label>
+          <select id="destructive_reason_code" name="reason_code" required>
+            <option value="">Select a reason</option>
+            <option value="duplicate_order">Duplicate Order</option>
+            <option value="fraudulent_order">Fraudulent Order</option>
+            <option value="customer_request">Customer Request</option>
+            <option value="test_order">Test Order</option>
+            <option value="compliance_removal">Compliance Removal</option>
+            <option value="data_correction">Data Correction</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+
+        <div class="o-modal__row">
+          <label for="destructive_reason_notes">Reason Notes</label>
+          <textarea id="destructive_reason_notes" name="reason_notes" maxlength="2000" placeholder="Describe the action context for audit and recovery."></textarea>
+        </div>
+
+        <div class="o-destructive-warning is-hidden" id="destructiveFinancialWarning"></div>
+
+        <div class="o-modal__row">
+          <label for="destructive_delete_password">Delete Password</label>
+          <input id="destructive_delete_password" type="password" name="delete_password" autocomplete="off" required>
+        </div>
+
+        <div class="o-modal__checks">
+          <label><input type="checkbox" id="confirm_financial_purge" name="confirm_financial_purge" value="1"> I acknowledge financial and audit impact if this action purges linked records.</label>
+          <label><input type="checkbox" id="destructive_final_confirm" required> I understand this action is operationally destructive and should only be used with approval.</label>
+        </div>
+
+        <div class="o-modal__status" id="destructiveStatus">Impact preview will be loaded automatically.</div>
+      </div>
+      <div class="o-modal__foot">
+        <button type="button" class="btn btn--outline btn--sm" id="destructiveCancelBtn">Cancel</button>
+        <button type="submit" class="btn btn--red btn--sm" id="destructiveSubmitBtn">Execute Action</button>
+      </div>
+    </form>
+  </div>
+</div>
+<?php endif; ?>
+
 <script>
 function toggleEdit(id) {
   var panel = document.getElementById(id);
@@ -1068,6 +1367,13 @@ function toggleEdit(id) {
 function toggleTimeline(id) {
   var panel = document.getElementById(id);
   if (panel) panel.classList.toggle('open');
+}
+
+function toggleCardDetails(trigger) {
+  var card = trigger ? trigger.closest('.o-card') : null;
+  if (!card) return;
+  card.classList.toggle('o-card--expanded');
+  trigger.textContent = card.classList.contains('o-card--expanded') ? 'Hide Details' : 'Details';
 }
 
 function normaliseNum(value) {
@@ -1193,6 +1499,15 @@ function renderChangePreview(form) {
   return changes.length;
 }
 
+function setDestructiveStatus(text, isError) {
+  var statusNode = document.getElementById('destructiveStatus');
+  if (!statusNode) {
+    return;
+  }
+  statusNode.textContent = text;
+  statusNode.style.color = isError ? '#9f1239' : '#6b7280';
+}
+
 document.addEventListener('DOMContentLoaded', function() {
   document.querySelectorAll('.o-inline-activity').forEach(function(node) {
     var close = node.querySelector('.o-inline-activity__close');
@@ -1262,6 +1577,252 @@ document.addEventListener('DOMContentLoaded', function() {
         alert('Preview generated. Review the Change Preview box, then click Save Changes again.');
         return;
       }
+    });
+  });
+
+  var modalOverlay = document.getElementById('destructiveModalOverlay');
+  if (modalOverlay) {
+    var destructiveForm = document.getElementById('destructiveActionForm');
+    var destructiveOrderId = document.getElementById('destructive_order_id');
+    var destructiveAction = document.getElementById('destructive_action');
+    var destructiveTitle = document.getElementById('destructiveModalTitle');
+    var destructiveSub = document.getElementById('destructiveModalSub');
+    var destructiveSubmitBtn = document.getElementById('destructiveSubmitBtn');
+    var destructiveWarning = document.getElementById('destructiveFinancialWarning');
+    var confirmFinancial = document.getElementById('confirm_financial_purge');
+    var finalConfirm = document.getElementById('destructive_final_confirm');
+    var reasonCode = document.getElementById('destructive_reason_code');
+    var reasonNotes = document.getElementById('destructive_reason_notes');
+    var deletePassword = document.getElementById('destructive_delete_password');
+
+    function closeModal() {
+      modalOverlay.classList.remove('open');
+      modalOverlay.setAttribute('aria-hidden', 'true');
+    }
+
+    function openModalFor(button) {
+      var action = String(button.getAttribute('data-action') || 'archive');
+      var orderId = String(button.getAttribute('data-order-id') || '0');
+      var orderNumber = String(button.getAttribute('data-order-number') || orderId);
+
+      destructiveOrderId.value = orderId;
+      destructiveAction.value = action;
+      reasonCode.value = '';
+      reasonNotes.value = '';
+      deletePassword.value = '';
+      confirmFinancial.checked = false;
+      finalConfirm.checked = false;
+      confirmFinancial.disabled = action !== 'force_purge';
+      destructiveWarning.classList.add('is-hidden');
+      destructiveWarning.textContent = '';
+
+      var titleMap = {
+        archive: 'Archive Order #' + orderNumber,
+        restore: 'Restore Archived Order #' + orderNumber,
+        force_purge: 'Delete Entry #' + orderNumber
+      };
+      var submitMap = {
+        archive: 'Archive Order',
+        restore: 'Restore Order',
+        force_purge: 'Delete Entry'
+      };
+
+      destructiveTitle.textContent = titleMap[action] || 'Destructive Order Action';
+      destructiveSub.textContent = action === 'force_purge'
+        ? 'This can permanently remove order records and linked financial history.'
+        : 'This action is audited and requires password verification.';
+      destructiveSubmitBtn.textContent = submitMap[action] || 'Execute Action';
+      setDestructiveStatus('Checking financial impact and dependencies...', false);
+
+      modalOverlay.classList.add('open');
+      modalOverlay.setAttribute('aria-hidden', 'false');
+
+      var previewBody = new URLSearchParams();
+      previewBody.set('action', 'preview');
+      previewBody.set('order_id', orderId);
+
+      fetch('api/order-destructive-action.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'
+        },
+        body: previewBody.toString()
+      })
+        .then(function(response) { return response.json(); })
+        .then(function(payload) {
+          if (!payload || !payload.success) {
+            setDestructiveStatus(payload && payload.message ? payload.message : 'Preview check failed.', true);
+            return;
+          }
+          var hasFinancial = Boolean(payload.has_financial_entries);
+          if (hasFinancial) {
+            destructiveWarning.classList.remove('is-hidden');
+            destructiveWarning.textContent = String(payload.financial_message || 'Financial records are linked to this order. Review impact before continuing.');
+            if (action === 'force_purge') {
+              confirmFinancial.required = true;
+            }
+          } else {
+            confirmFinancial.required = false;
+          }
+          setDestructiveStatus(hasFinancial ? 'Financial links detected. Additional acknowledgement is required for delete entry.' : 'No linked financial entries detected.', false);
+        })
+        .catch(function() {
+          setDestructiveStatus('Could not load impact preview. You can still proceed with explicit confirmation.', true);
+        });
+    }
+
+    document.querySelectorAll('.js-destructive-trigger').forEach(function(button) {
+      button.addEventListener('click', function() {
+        openModalFor(button);
+      });
+    });
+
+    var cancelButton = document.getElementById('destructiveCancelBtn');
+    if (cancelButton) {
+      cancelButton.addEventListener('click', function() {
+        closeModal();
+      });
+    }
+
+    modalOverlay.addEventListener('click', function(event) {
+      if (event.target === modalOverlay) {
+        closeModal();
+      }
+    });
+
+    destructiveForm.addEventListener('submit', function(event) {
+      event.preventDefault();
+      if (!finalConfirm.checked) {
+        setDestructiveStatus('Final confirmation is required.', true);
+        return;
+      }
+
+      var action = destructiveAction.value;
+      if (action === 'force_purge' && !confirmFinancial.checked) {
+        setDestructiveStatus('Financial impact acknowledgement is required for delete entry.', true);
+        return;
+      }
+
+      if (String(reasonCode.value || '').trim() === '') {
+        setDestructiveStatus('Please choose a reason code.', true);
+        return;
+      }
+
+      if (String(deletePassword.value || '').trim() === '') {
+        setDestructiveStatus('Delete password is required.', true);
+        return;
+      }
+
+      var formBody = new URLSearchParams();
+      formBody.set('action', action);
+      formBody.set('order_id', destructiveOrderId.value);
+      formBody.set('reason_code', reasonCode.value);
+      formBody.set('reason_notes', reasonNotes.value);
+      formBody.set('delete_password', deletePassword.value);
+      formBody.set('final_confirm', '1');
+      if (confirmFinancial.checked) {
+        formBody.set('confirm_financial_purge', '1');
+      }
+
+      destructiveSubmitBtn.disabled = true;
+      setDestructiveStatus('Executing action...', false);
+
+      fetch('api/order-destructive-action.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'
+        },
+        body: formBody.toString()
+      })
+        .then(function(response) { return response.json(); })
+        .then(function(payload) {
+          if (!payload || !payload.success) {
+            setDestructiveStatus(payload && payload.message ? payload.message : 'Destructive action failed.', true);
+            destructiveSubmitBtn.disabled = false;
+            return;
+          }
+
+          var query = new URLSearchParams(window.location.search || '');
+          query.set('action_order_id', destructiveOrderId.value);
+          query.set('action_level', 'success');
+          query.set('action_message', payload.message || 'Destructive action completed successfully.');
+          window.location.search = query.toString();
+        })
+        .catch(function() {
+          setDestructiveStatus('Network error while executing action.', true);
+          destructiveSubmitBtn.disabled = false;
+        });
+    });
+  }
+
+  document.querySelectorAll('.js-confirm-payment-form').forEach(function(form) {
+    form.addEventListener('submit', function(event) {
+      event.preventDefault();
+
+      var orderId = parseInt(String(form.getAttribute('data-order-id') || '0'), 10);
+      if (!orderId) {
+        alert('Invalid order ID for confirmation.');
+        return;
+      }
+
+      var expectedAmount = parseFloat(String(form.getAttribute('data-grand-total') || '0'));
+      var paymentMethodEl = form.querySelector('select[name="payment_method"]');
+      var receivedAmountEl = form.querySelector('input[name="received_amount"]');
+      var paymentMethod = paymentMethodEl ? String(paymentMethodEl.value || 'upi_manual') : 'upi_manual';
+      var receivedAmount = receivedAmountEl ? parseFloat(String(receivedAmountEl.value || '0')) : 0;
+      if (!isFinite(receivedAmount) || receivedAmount <= 0) {
+        alert('Please enter a valid received amount.');
+        return;
+      }
+
+      var shortfall = Math.max(0, +(expectedAmount - receivedAmount).toFixed(2));
+      var discountReason = '';
+      var managerOverride = false;
+      if (shortfall > 0) {
+        discountReason = prompt('Shortfall will be adjusted as discount. Enter reason:', 'On-call approved adjustment') || '';
+        if (!confirm('Apply discount ₹' + shortfall.toFixed(2) + ' and confirm payment?')) {
+          return;
+        }
+        var ratio = expectedAmount > 0 ? (shortfall / expectedAmount) : 0;
+        if (ratio > 0.05) {
+          managerOverride = confirm('Discount exceeds 5%. Confirm manager override?');
+        }
+      } else if (!confirm('Confirm payment and approve this order?')) {
+        return;
+      }
+
+      var submitBtn = form.querySelector('button[type="submit"]');
+      if (submitBtn) {
+        submitBtn.disabled = true;
+      }
+
+      fetch('/api/admin/orders/' + orderId + '/confirm-payment', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest'
+        },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          payment_method: paymentMethod,
+          received_amount: receivedAmount,
+          discount_reason: discountReason,
+          manager_override: managerOverride
+        })
+      })
+        .then(function(response) { return response.json(); })
+        .then(function(payload) {
+          if (!payload || !payload.success) {
+            throw new Error(payload && payload.message ? payload.message : 'Payment confirmation failed.');
+          }
+          window.location.reload();
+        })
+        .catch(function(error) {
+          alert(error.message || 'Payment confirmation failed.');
+          if (submitBtn) {
+            submitBtn.disabled = false;
+          }
+        });
     });
   });
 });

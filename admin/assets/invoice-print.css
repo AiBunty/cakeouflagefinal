@@ -1,0 +1,379 @@
+@page {
+  size: A4 portrait;
+  margin: 8mm;
+}
+
+:root {
+  --ink: #111111;
+  --muted: #5b5b5b;
+  --line: #d2d2d2;
+  --chip-bg: #f4f4f4;
+  --chip-border: #d6d6d6;
+  --accent: #111111;
+  --ok: #166534;
+  --warn: #9a3412;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  color: var(--ink);
+  font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+.invoice-engine {
+  margin: 0;
+  padding: 0;
+}
+
+.invoice-sheet {
+  display: flex;
+  flex-direction: column;
+}
+
+.invoice-sheet + .invoice-sheet {
+  page-break-before: always;
+  break-before: page;
+}
+
+/* Half-page mode: both copies on one A4, ≤4 items */
+.invoice-sheet--half {
+  height: calc(297mm - 16mm);
+}
+
+.invoice-sheet--half .invoice-copy {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Full-page mode: one copy per A4, ≥6 items */
+.invoice-sheet--full {
+  height: calc(297mm - 16mm);
+  page-break-inside: avoid;
+}
+
+.invoice-sheet--full .invoice-copy {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: visible;
+}
+
+.invoice-copy {
+  display: flex;
+  flex-direction: column;
+  padding: 4.2mm 3.8mm;
+  border: 1px solid var(--line);
+}
+
+.invoice-separator {
+  border-top: 1px dashed #7b7b7b;
+  margin: 2.3mm 0;
+}
+
+.copy-topline {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 10px;
+  margin-bottom: 2mm;
+}
+
+.copy-label {
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.copy-page {
+  color: var(--muted);
+}
+
+.invoice-header {
+  display: grid;
+  grid-template-columns: 80px 1fr 170px;
+  gap: 8px;
+  padding-bottom: 2.2mm;
+  border-bottom: 1px solid var(--line);
+}
+
+.brand-logo {
+  width: 72px;
+  max-height: 42px;
+  object-fit: contain;
+  object-position: left center;
+}
+
+.brand-name {
+  font-weight: 700;
+  font-size: 13px;
+  margin-bottom: 2px;
+}
+
+.brand-meta,
+.brand-address,
+.invoice-meta,
+.customer-meta,
+.finance-table td,
+.invoice-footer,
+.item-note,
+.continued-note {
+  color: var(--muted);
+}
+
+.invoice-meta {
+  text-align: right;
+  font-size: 10px;
+}
+
+.meta-line strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 3px;
+  justify-content: flex-end;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--chip-border);
+  background: var(--chip-bg);
+  border-radius: 999px;
+  padding: 1px 7px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--ink);
+}
+
+.tag--ok {
+  color: var(--ok);
+  border-color: #b7e3c7;
+  background: #eefbf2;
+}
+
+.tag--warn {
+  color: var(--warn);
+  border-color: #f6cfb6;
+  background: #fff5ed;
+}
+
+.invoice-customer {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 2.4mm;
+  margin-bottom: 2.1mm;
+}
+
+.customer-block {
+  border: 1px solid var(--line);
+  padding: 5px 7px;
+  min-height: 28px;
+}
+
+.block-title {
+  margin: 0 0 3px;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.customer-name {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.invoice-items {
+  border: 1px solid var(--line);
+  margin-bottom: 2mm;
+}
+
+.items-head {
+  display: grid;
+  grid-template-columns: 1fr 130px 92px;
+  gap: 8px;
+  padding: 4px 7px;
+  border-bottom: 1px solid var(--line);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 700;
+  color: var(--muted);
+  background: #fafafa;
+}
+
+.item-block {
+  padding: 3px 7px;
+  border-bottom: 1px dashed #dddddd;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.item-block:last-child {
+  border-bottom: 0;
+}
+
+.item-line1 {
+  display: grid;
+  grid-template-columns: 1fr 130px 92px;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.item-name {
+  font-weight: 600;
+}
+
+.item-rate {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.item-amount {
+  text-align: right;
+  white-space: nowrap;
+  font-weight: 700;
+}
+
+.item-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 3px;
+  max-height: 16px;
+  overflow: hidden;
+}
+
+.item-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 220px;
+  border: 1px solid var(--chip-border);
+  border-radius: 999px;
+  padding: 1px 7px;
+  background: var(--chip-bg);
+  font-size: 9px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.item-note {
+  margin-top: 3px;
+  font-size: 9px;
+  max-height: 12px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.invoice-summary {
+  margin-top: auto;
+  display: grid;
+  grid-template-columns: 1fr 195px;
+  gap: 8px;
+  align-items: end;
+}
+
+.continued-note {
+  border: 1px dashed #b4b4b4;
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 10px;
+}
+
+.finance-table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid var(--line);
+  font-size: 10px;
+}
+
+.finance-table td {
+  border-bottom: 1px solid #ececec;
+  padding: 4px 6px;
+}
+
+.finance-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.finance-key {
+  width: 58%;
+}
+
+.finance-value {
+  text-align: right;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.finance-row--total .finance-key,
+.finance-row--total .finance-value {
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.finance-row--balance .finance-key,
+.finance-row--balance .finance-value {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.invoice-footer {
+  margin-top: 2mm;
+  border-top: 1px solid var(--line);
+  padding-top: 4px;
+  font-size: 9px;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.footer-left,
+.footer-right {
+  display: grid;
+  gap: 2px;
+}
+
+.footer-right {
+  text-align: right;
+}
+
+@media print {
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+
+@media screen {
+  body {
+    background: #f6f6f6;
+    padding: 10px;
+  }
+
+  .invoice-sheet--half,
+  .invoice-sheet--full {
+    width: 210mm;
+    margin: 0 auto 10px;
+    background: #ffffff;
+    box-shadow: 0 2px 18px rgba(0, 0, 0, 0.08);
+  }
+}

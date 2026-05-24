@@ -1,0 +1,380 @@
+<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Invoice UAT-LAYOUT-5</title><style>@page {
+  size: A4 portrait;
+  margin: 8mm;
+}
+
+:root {
+  --ink: #111111;
+  --muted: #5b5b5b;
+  --line: #d2d2d2;
+  --chip-bg: #f4f4f4;
+  --chip-border: #d6d6d6;
+  --accent: #111111;
+  --ok: #166534;
+  --warn: #9a3412;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  color: var(--ink);
+  font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+.invoice-engine {
+  margin: 0;
+  padding: 0;
+}
+
+.invoice-sheet {
+  display: flex;
+  flex-direction: column;
+}
+
+.invoice-sheet + .invoice-sheet {
+  page-break-before: always;
+  break-before: page;
+}
+
+/* Half-page mode: both copies on one A4, ≤4 items */
+.invoice-sheet--half {
+  height: calc(297mm - 16mm);
+}
+
+.invoice-sheet--half .invoice-copy {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Full-page mode: one copy per A4, ≥6 items */
+.invoice-sheet--full {
+  height: calc(297mm - 16mm);
+  page-break-inside: avoid;
+}
+
+.invoice-sheet--full .invoice-copy {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: visible;
+}
+
+.invoice-copy {
+  display: flex;
+  flex-direction: column;
+  padding: 4.2mm 3.8mm;
+  border: 1px solid var(--line);
+}
+
+.invoice-separator {
+  border-top: 1px dashed #7b7b7b;
+  margin: 2.3mm 0;
+}
+
+.copy-topline {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 10px;
+  margin-bottom: 2mm;
+}
+
+.copy-label {
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.copy-page {
+  color: var(--muted);
+}
+
+.invoice-header {
+  display: grid;
+  grid-template-columns: 80px 1fr 170px;
+  gap: 8px;
+  padding-bottom: 2.2mm;
+  border-bottom: 1px solid var(--line);
+}
+
+.brand-logo {
+  width: 72px;
+  max-height: 42px;
+  object-fit: contain;
+  object-position: left center;
+}
+
+.brand-name {
+  font-weight: 700;
+  font-size: 13px;
+  margin-bottom: 2px;
+}
+
+.brand-meta,
+.brand-address,
+.invoice-meta,
+.customer-meta,
+.finance-table td,
+.invoice-footer,
+.item-note,
+.continued-note {
+  color: var(--muted);
+}
+
+.invoice-meta {
+  text-align: right;
+  font-size: 10px;
+}
+
+.meta-line strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 3px;
+  justify-content: flex-end;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--chip-border);
+  background: var(--chip-bg);
+  border-radius: 999px;
+  padding: 1px 7px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--ink);
+}
+
+.tag--ok {
+  color: var(--ok);
+  border-color: #b7e3c7;
+  background: #eefbf2;
+}
+
+.tag--warn {
+  color: var(--warn);
+  border-color: #f6cfb6;
+  background: #fff5ed;
+}
+
+.invoice-customer {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 2.4mm;
+  margin-bottom: 2.1mm;
+}
+
+.customer-block {
+  border: 1px solid var(--line);
+  padding: 5px 7px;
+  min-height: 28px;
+}
+
+.block-title {
+  margin: 0 0 3px;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.customer-name {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.invoice-items {
+  border: 1px solid var(--line);
+  margin-bottom: 2mm;
+}
+
+.items-head {
+  display: grid;
+  grid-template-columns: 1fr 130px 92px;
+  gap: 8px;
+  padding: 4px 7px;
+  border-bottom: 1px solid var(--line);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 700;
+  color: var(--muted);
+  background: #fafafa;
+}
+
+.item-block {
+  padding: 3px 7px;
+  border-bottom: 1px dashed #dddddd;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.item-block:last-child {
+  border-bottom: 0;
+}
+
+.item-line1 {
+  display: grid;
+  grid-template-columns: 1fr 130px 92px;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.item-name {
+  font-weight: 600;
+}
+
+.item-rate {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.item-amount {
+  text-align: right;
+  white-space: nowrap;
+  font-weight: 700;
+}
+
+.item-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 3px;
+  max-height: 16px;
+  overflow: hidden;
+}
+
+.item-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 220px;
+  border: 1px solid var(--chip-border);
+  border-radius: 999px;
+  padding: 1px 7px;
+  background: var(--chip-bg);
+  font-size: 9px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.item-note {
+  margin-top: 3px;
+  font-size: 9px;
+  max-height: 12px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.invoice-summary {
+  margin-top: auto;
+  display: grid;
+  grid-template-columns: 1fr 195px;
+  gap: 8px;
+  align-items: end;
+}
+
+.continued-note {
+  border: 1px dashed #b4b4b4;
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 10px;
+}
+
+.finance-table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid var(--line);
+  font-size: 10px;
+}
+
+.finance-table td {
+  border-bottom: 1px solid #ececec;
+  padding: 4px 6px;
+}
+
+.finance-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.finance-key {
+  width: 58%;
+}
+
+.finance-value {
+  text-align: right;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.finance-row--total .finance-key,
+.finance-row--total .finance-value {
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.finance-row--balance .finance-key,
+.finance-row--balance .finance-value {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.invoice-footer {
+  margin-top: 2mm;
+  border-top: 1px solid var(--line);
+  padding-top: 4px;
+  font-size: 9px;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.footer-left,
+.footer-right {
+  display: grid;
+  gap: 2px;
+}
+
+.footer-right {
+  text-align: right;
+}
+
+@media print {
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+
+@media screen {
+  body {
+    background: #f6f6f6;
+    padding: 10px;
+  }
+
+  .invoice-sheet--half,
+  .invoice-sheet--full {
+    width: 210mm;
+    margin: 0 auto 10px;
+    background: #ffffff;
+    box-shadow: 0 2px 18px rgba(0, 0, 0, 0.08);
+  }
+}
+</style></head><body><main class="invoice-engine"><section class="invoice-sheet invoice-sheet--full"><article class="invoice-copy"><div class="copy-topline"><div class="copy-label">ORIGINAL COPY</div><div class="copy-page">Page 1 of 1</div></div><header class="invoice-header"><div><img class="brand-logo" src="/client/assets/images/mainlogo.svg" alt="Cakeouflage UAT Studio"></div><div><div class="brand-name">Cakeouflage UAT Studio</div><div class="brand-address">21 Testing Avenue<br>Proof Artifact Block<br>Bengaluru, Karnataka<br>PIN: 560001</div><div class="brand-meta">Phone: +91 90000 00000 | Email: uat@cakeouflage.test</div><div class="brand-meta">GST: 29ABCDE1234F1Z5</div></div><div class="invoice-meta"><div class="meta-line"><strong>Invoice:</strong> UAT-LAYOUT-5</div><div class="meta-line"><strong>Order Date:</strong> 27 May 2026, 10:30 AM</div><div class="meta-line"><strong>Payment:</strong> UPI / Bank</div><div class="meta-line"><strong>Status:</strong> PAID</div><div class="meta-line"><strong>Collection Due:</strong> 28 May 2026</div><div class="tag-row"><span class="tag tag--ok">PAID</span><span class="tag">DELIVERY</span></div></div></header><section class="invoice-customer"><div class="customer-block"><h4 class="block-title">Bill To</h4><div class="customer-name">Fixture Customer 5</div><div class="customer-meta">Phone: 9999999905</div><div class="customer-meta">Email: fixture5@cakeouflage.test</div><div class="customer-meta"><div>Fixture Tower, Sector 9</div><div>Layout Validation Lane</div><div>Bengaluru, Karnataka</div><div>PIN: 560001</div></div></div><div class="customer-block"><h4 class="block-title">Fulfilment</h4><div class="customer-meta">Mode: DELIVERY</div><div class="customer-meta">Order Status: CONFIRMED</div><div class="customer-meta">Collection: FULLY_PAID</div><div class="customer-meta">Settlement Ref: UAT-PRINT-5</div></div></section><section class="invoice-items"><div class="items-head"><div>Item Description</div><div style="text-align:right">Rate</div><div style="text-align:right">Amount</div></div><div class="item-block"><div class="item-line1"><div class="item-name">Celebration Signature Cake Layer 1 with Extended Decorative Title x1</div><div class="item-rate">Rs 900.00</div><div class="item-amount">Rs 900.00</div></div><div class="item-chips"><span class="item-chip">Variant: 1.5 kg Eggless Chocolate Truffle with Custom Accent Finish Batch 1</span><span class="item-chip">Weight: 1.5 kg</span><span class="item-chip">Flavour: Eggless</span><span class="item-chip">Message: Happy Celebration 1 - keep the message centered and readable</span><span class="item-chip">Topper: Premium Acrylic Topper Style 1 (+Rs 99.00)</span></div><div class="item-note">Note: Use dense border piping, fresh flowers on one edge, and preserve the long custom note for overflow layout validation on item 1.</div></div><div class="item-block"><div class="item-line1"><div class="item-name">Celebration Signature Cake Layer 2 with Extended Decorative Title x1</div><div class="item-rate">Rs 925.00</div><div class="item-amount">Rs 925.00</div></div><div class="item-chips"><span class="item-chip">Variant: 1.5 kg Eggless Chocolate Truffle with Custom Accent Finish Batch 2</span><span class="item-chip">Weight: 1.5 kg</span><span class="item-chip">Flavour: Eggless</span><span class="item-chip">Message: Happy Celebration 2 - keep the message centered and readable</span><span class="item-chip">Topper: Premium Acrylic Topper Style 2 (+Rs 99.00)</span></div><div class="item-note">Note: Use dense border piping, fresh flowers on one edge, and preserve the long custom note for overflow layout validation on item 2.</div></div><div class="item-block"><div class="item-line1"><div class="item-name">Celebration Signature Cake Layer 3 with Extended Decorative Title x1</div><div class="item-rate">Rs 950.00</div><div class="item-amount">Rs 950.00</div></div><div class="item-chips"><span class="item-chip">Variant: 1.5 kg Eggless Chocolate Truffle with Custom Accent Finish Batch 3</span><span class="item-chip">Weight: 1.5 kg</span><span class="item-chip">Flavour: Eggless</span><span class="item-chip">Message: Happy Celebration 3 - keep the message centered and readable</span><span class="item-chip">Topper: Premium Acrylic Topper Style 3 (+Rs 99.00)</span></div><div class="item-note">Note: Use dense border piping, fresh flowers on one edge, and preserve the long custom note for overflow layout validation on item 3.</div></div><div class="item-block"><div class="item-line1"><div class="item-name">Celebration Signature Cake Layer 4 with Extended Decorative Title x1</div><div class="item-rate">Rs 975.00</div><div class="item-amount">Rs 975.00</div></div><div class="item-chips"><span class="item-chip">Variant: 1.5 kg Eggless Chocolate Truffle with Custom Accent Finish Batch 4</span><span class="item-chip">Weight: 1.5 kg</span><span class="item-chip">Flavour: Eggless</span><span class="item-chip">Message: Happy Celebration 4 - keep the message centered and readable</span><span class="item-chip">Topper: Premium Acrylic Topper Style 4 (+Rs 99.00)</span></div><div class="item-note">Note: Use dense border piping, fresh flowers on one edge, and preserve the long custom note for overflow layout validation on item 4.</div></div><div class="item-block"><div class="item-line1"><div class="item-name">Celebration Signature Cake Layer 5 with Extended Decorative Title x1</div><div class="item-rate">Rs 1,000.00</div><div class="item-amount">Rs 1,000.00</div></div><div class="item-chips"><span class="item-chip">Variant: 1.5 kg Eggless Chocolate Truffle with Custom Accent Finish Batch 5</span><span class="item-chip">Weight: 1.5 kg</span><span class="item-chip">Flavour: Eggless</span><span class="item-chip">Message: Happy Celebration 5 - keep the message centered and readable</span><span class="item-chip">Topper: Premium Acrylic Topper Style 5 (+Rs 99.00)</span></div><div class="item-note">Note: Use dense border piping, fresh flowers on one edge, and preserve the long custom note for overflow layout validation on item 5.</div></div></section><section class="invoice-summary"><div class="continued-note">Final page. Totals and balance summary are shown for this invoice.</div><table class="finance-table"><tr class=""><td class="finance-key">Subtotal</td><td class="finance-value">Rs 4,750.00</td></tr><tr class=""><td class="finance-key">Less Coupon Discount</td><td class="finance-value">- Rs 150.00</td></tr><tr class=""><td class="finance-key">Less Advance</td><td class="finance-value">- Rs 0.00</td></tr><tr class=""><td class="finance-key">Tax</td><td class="finance-value">Rs 0.00</td></tr><tr class=""><td class="finance-key">Delivery</td><td class="finance-value">Rs 120.00</td></tr><tr class="finance-row--total"><td class="finance-key">Total Amount</td><td class="finance-value">Rs 4,720.00</td></tr><tr class=""><td class="finance-key">Net Collected</td><td class="finance-value">Rs 4,720.00</td></tr><tr class="finance-row--balance"><td class="finance-key">Balance Due</td><td class="finance-value">Rs 0.00</td></tr></table></section><footer class="invoice-footer"><div class="footer-left"><div>Thank you for choosing Cakeouflage UAT Studio.</div><div>This is a system generated invoice and does not require signature.</div></div><div class="footer-right">Generated: 24 May 2026, 12:09 PM<br>QR: Manual verification at counter</div></footer></article></section><section class="invoice-sheet invoice-sheet--full"><article class="invoice-copy"><div class="copy-topline"><div class="copy-label">DUPLICATE COPY</div><div class="copy-page">Page 1 of 1</div></div><header class="invoice-header"><div><img class="brand-logo" src="/client/assets/images/mainlogo.svg" alt="Cakeouflage UAT Studio"></div><div><div class="brand-name">Cakeouflage UAT Studio</div><div class="brand-address">21 Testing Avenue<br>Proof Artifact Block<br>Bengaluru, Karnataka<br>PIN: 560001</div><div class="brand-meta">Phone: +91 90000 00000 | Email: uat@cakeouflage.test</div><div class="brand-meta">GST: 29ABCDE1234F1Z5</div></div><div class="invoice-meta"><div class="meta-line"><strong>Invoice:</strong> UAT-LAYOUT-5</div><div class="meta-line"><strong>Order Date:</strong> 27 May 2026, 10:30 AM</div><div class="meta-line"><strong>Payment:</strong> UPI / Bank</div><div class="meta-line"><strong>Status:</strong> PAID</div><div class="meta-line"><strong>Collection Due:</strong> 28 May 2026</div><div class="tag-row"><span class="tag tag--ok">PAID</span><span class="tag">DELIVERY</span></div></div></header><section class="invoice-customer"><div class="customer-block"><h4 class="block-title">Bill To</h4><div class="customer-name">Fixture Customer 5</div><div class="customer-meta">Phone: 9999999905</div><div class="customer-meta">Email: fixture5@cakeouflage.test</div><div class="customer-meta"><div>Fixture Tower, Sector 9</div><div>Layout Validation Lane</div><div>Bengaluru, Karnataka</div><div>PIN: 560001</div></div></div><div class="customer-block"><h4 class="block-title">Fulfilment</h4><div class="customer-meta">Mode: DELIVERY</div><div class="customer-meta">Order Status: CONFIRMED</div><div class="customer-meta">Collection: FULLY_PAID</div><div class="customer-meta">Settlement Ref: UAT-PRINT-5</div></div></section><section class="invoice-items"><div class="items-head"><div>Item Description</div><div style="text-align:right">Rate</div><div style="text-align:right">Amount</div></div><div class="item-block"><div class="item-line1"><div class="item-name">Celebration Signature Cake Layer 1 with Extended Decorative Title x1</div><div class="item-rate">Rs 900.00</div><div class="item-amount">Rs 900.00</div></div><div class="item-chips"><span class="item-chip">Variant: 1.5 kg Eggless Chocolate Truffle with Custom Accent Finish Batch 1</span><span class="item-chip">Weight: 1.5 kg</span><span class="item-chip">Flavour: Eggless</span><span class="item-chip">Message: Happy Celebration 1 - keep the message centered and readable</span><span class="item-chip">Topper: Premium Acrylic Topper Style 1 (+Rs 99.00)</span></div><div class="item-note">Note: Use dense border piping, fresh flowers on one edge, and preserve the long custom note for overflow layout validation on item 1.</div></div><div class="item-block"><div class="item-line1"><div class="item-name">Celebration Signature Cake Layer 2 with Extended Decorative Title x1</div><div class="item-rate">Rs 925.00</div><div class="item-amount">Rs 925.00</div></div><div class="item-chips"><span class="item-chip">Variant: 1.5 kg Eggless Chocolate Truffle with Custom Accent Finish Batch 2</span><span class="item-chip">Weight: 1.5 kg</span><span class="item-chip">Flavour: Eggless</span><span class="item-chip">Message: Happy Celebration 2 - keep the message centered and readable</span><span class="item-chip">Topper: Premium Acrylic Topper Style 2 (+Rs 99.00)</span></div><div class="item-note">Note: Use dense border piping, fresh flowers on one edge, and preserve the long custom note for overflow layout validation on item 2.</div></div><div class="item-block"><div class="item-line1"><div class="item-name">Celebration Signature Cake Layer 3 with Extended Decorative Title x1</div><div class="item-rate">Rs 950.00</div><div class="item-amount">Rs 950.00</div></div><div class="item-chips"><span class="item-chip">Variant: 1.5 kg Eggless Chocolate Truffle with Custom Accent Finish Batch 3</span><span class="item-chip">Weight: 1.5 kg</span><span class="item-chip">Flavour: Eggless</span><span class="item-chip">Message: Happy Celebration 3 - keep the message centered and readable</span><span class="item-chip">Topper: Premium Acrylic Topper Style 3 (+Rs 99.00)</span></div><div class="item-note">Note: Use dense border piping, fresh flowers on one edge, and preserve the long custom note for overflow layout validation on item 3.</div></div><div class="item-block"><div class="item-line1"><div class="item-name">Celebration Signature Cake Layer 4 with Extended Decorative Title x1</div><div class="item-rate">Rs 975.00</div><div class="item-amount">Rs 975.00</div></div><div class="item-chips"><span class="item-chip">Variant: 1.5 kg Eggless Chocolate Truffle with Custom Accent Finish Batch 4</span><span class="item-chip">Weight: 1.5 kg</span><span class="item-chip">Flavour: Eggless</span><span class="item-chip">Message: Happy Celebration 4 - keep the message centered and readable</span><span class="item-chip">Topper: Premium Acrylic Topper Style 4 (+Rs 99.00)</span></div><div class="item-note">Note: Use dense border piping, fresh flowers on one edge, and preserve the long custom note for overflow layout validation on item 4.</div></div><div class="item-block"><div class="item-line1"><div class="item-name">Celebration Signature Cake Layer 5 with Extended Decorative Title x1</div><div class="item-rate">Rs 1,000.00</div><div class="item-amount">Rs 1,000.00</div></div><div class="item-chips"><span class="item-chip">Variant: 1.5 kg Eggless Chocolate Truffle with Custom Accent Finish Batch 5</span><span class="item-chip">Weight: 1.5 kg</span><span class="item-chip">Flavour: Eggless</span><span class="item-chip">Message: Happy Celebration 5 - keep the message centered and readable</span><span class="item-chip">Topper: Premium Acrylic Topper Style 5 (+Rs 99.00)</span></div><div class="item-note">Note: Use dense border piping, fresh flowers on one edge, and preserve the long custom note for overflow layout validation on item 5.</div></div></section><section class="invoice-summary"><div class="continued-note">Final page. Totals and balance summary are shown for this invoice.</div><table class="finance-table"><tr class=""><td class="finance-key">Subtotal</td><td class="finance-value">Rs 4,750.00</td></tr><tr class=""><td class="finance-key">Less Coupon Discount</td><td class="finance-value">- Rs 150.00</td></tr><tr class=""><td class="finance-key">Less Advance</td><td class="finance-value">- Rs 0.00</td></tr><tr class=""><td class="finance-key">Tax</td><td class="finance-value">Rs 0.00</td></tr><tr class=""><td class="finance-key">Delivery</td><td class="finance-value">Rs 120.00</td></tr><tr class="finance-row--total"><td class="finance-key">Total Amount</td><td class="finance-value">Rs 4,720.00</td></tr><tr class=""><td class="finance-key">Net Collected</td><td class="finance-value">Rs 4,720.00</td></tr><tr class="finance-row--balance"><td class="finance-key">Balance Due</td><td class="finance-value">Rs 0.00</td></tr></table></section><footer class="invoice-footer"><div class="footer-left"><div>Thank you for choosing Cakeouflage UAT Studio.</div><div>This is a system generated invoice and does not require signature.</div></div><div class="footer-right">Generated: 24 May 2026, 12:09 PM<br>QR: Manual verification at counter</div></footer></article></section></main></body></html>

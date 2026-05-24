@@ -1332,7 +1332,7 @@ document.addEventListener("DOMContentLoaded", () => {
         "completed",
         "cancelled",
       ];
-      const allowedPaymentStatuses = ["pending", "paid", "failed", "refunded"];
+      const allowedPaymentStatuses = ["pending", "under_review", "paid", "credit", "failed", "rejected", "partially_refunded", "refunded"];
 
       const buildQuery = () => {
         const params = new URLSearchParams();
@@ -1461,7 +1461,7 @@ document.addEventListener("DOMContentLoaded", () => {
         exportLink.setAttribute("href", `/api/admin/orders/export?${query}`);
 
         if (!items.length) {
-          tableBody.innerHTML = '<tr><td colspan="7">No orders found.</td></tr>';
+          tableBody.innerHTML = '<tr><td colspan="10">No orders found.</td></tr>';
           return;
         }
 
@@ -1469,6 +1469,7 @@ document.addEventListener("DOMContentLoaded", () => {
           .map(
             (item) => `
               <tr data-id="${item.id}">
+                <td>${item.id}</td>
                 <td>
                   <strong>${item.order_number}</strong>
                   <div class="text-muted">${item.created_at}</div>
@@ -1479,11 +1480,18 @@ document.addEventListener("DOMContentLoaded", () => {
                   <div class="text-muted">${item.customer_phone}</div>
                 </td>
                 <td>
+                  <div>${item.cake_names || "-"}</div>
+                </td>
+                <td>
                   <div>${item.fulfilment_mode}</div>
                   <div class="text-muted">${item.scheduled_slot_label || "-"}</div>
                   <div class="text-muted">${item.delivery_postal_code || "-"}</div>
                 </td>
                 <td>${utils.formatInr(item.grand_total || 0)}</td>
+                <td>
+                  <div>${item.coupon_info || "-"}</div>
+                  <div class="text-muted">${utils.formatInr(item.coupon_discount_total || item.discount_total || 0)}</div>
+                </td>
                 <td>${renderStatusSelect("payment", item.payment_status)}</td>
                 <td>${renderStatusSelect("order", item.order_status)}</td>
                 <td>

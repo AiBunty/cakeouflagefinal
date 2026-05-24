@@ -1,0 +1,10 @@
+{
+    "run_at": "2026-05-24T15:15:55+05:30",
+    "marker": "AUTO-MEDIA-GUARD-20260524151553-7ca5a5",
+    "product_id": 258,
+    "status_code": 403,
+    "response_message": "Invalid CSRF token",
+    "slot_count_after_attempt": 2,
+    "path_attempted": "/uploads/media/guard-seed-3.webp",
+    "ok": false
+}

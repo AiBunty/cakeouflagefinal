@@ -124,6 +124,7 @@ final class App
             ['method' => 'POST', 'path' => '/api/webhooks/bank-alerts', 'handler' => [$api, 'bankAlertsWebhookIngest']],
             ['method' => 'GET', 'path' => '/api/orders', 'handler' => [$api, 'ordersList']],
             ['method' => 'GET', 'path' => '/api/orders/:id', 'handler' => [$api, 'orderDetail']],
+            ['method' => 'GET', 'path' => '/api/orders/:id/invoice', 'handler' => [$api, 'orderInvoiceDownload']],
             ['method' => 'POST', 'path' => '/api/orders/:id/utr', 'handler' => [$api, 'submitOrderUtr']],
             ['method' => 'GET', 'path' => '/api/wishlist', 'handler' => [$api, 'wishlistList']],
             ['method' => 'POST', 'path' => '/api/wishlist/items', 'handler' => [$api, 'wishlistAddItem']],

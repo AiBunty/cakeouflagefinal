@@ -70,7 +70,7 @@ if ($id <= 0 || !in_array($status, $allowed, true)) {
 }
 
 // Check if order exists
-$checkOrder = $conn->query('SELECT id, order_number, payment_status, payment_method, grand_total, COALESCE(refund_amount, 0) AS refund_amount FROM orders WHERE id = ' . (int)$id . ' LIMIT 1');
+$checkOrder = $conn->query('SELECT id, order_number, payment_status, payment_method, payment_confirmed_at, grand_total, COALESCE(refund_amount, 0) AS refund_amount FROM orders WHERE id = ' . (int)$id . ' LIMIT 1');
 $orderBefore = $checkOrder ? $checkOrder->fetch_assoc() : null;
 if (!$orderBefore) {
     http_response_code(404);
@@ -78,6 +78,22 @@ if (!$orderBefore) {
     exit;
 }
 $existingPaymentStatusBefore = (string)($orderBefore['payment_status'] ?? '');
+$paymentConfirmedAtBefore = (string)($orderBefore['payment_confirmed_at'] ?? '');
+
+$paymentLockedStates = ['paid', 'credit', 'refund_pending', 'partially_refunded', 'refunded'];
+$fulfillmentAllowedStates = ['preparing', 'ready_for_pickup', 'out_for_delivery', 'delivered', 'completed', 'partially_refunded', 'fully_refunded'];
+$isPaymentLocked = in_array($existingPaymentStatusBefore, $paymentLockedStates, true) || $paymentConfirmedAtBefore !== '';
+if ($isPaymentLocked && !in_array($status, $fulfillmentAllowedStates, true) && $status !== 'confirmed') {
+    http_response_code(422);
+    echo 'Payment-confirmed orders are financially locked. Use fulfillment or refund workflow only.';
+    exit;
+}
+
+if ($isPaymentLocked && $status === 'confirmed') {
+    http_response_code(422);
+    echo 'Order is already financially confirmed and cannot be reconfirmed.';
+    exit;
+}
 
 // Cancel-on-paid guard with explicit finance-safe messaging.
 if ($status === 'cancelled') {
@@ -143,6 +159,9 @@ try {
         echo htmlspecialchars($smResult['message'], ENT_QUOTES, 'UTF-8');
         exit;
     }
+
+    // State manager canonicalizes delivered -> completed.
+    $status = (string)($smResult['new_status'] ?? $status);
 } catch (\Throwable $smErr) {
     error_log('[update_order_status][state_machine] ' . $smErr->getMessage());
     http_response_code(500);
@@ -275,6 +294,27 @@ if ($status === 'confirmed') {
                 if (!$postResult['success']) {
                     error_log('[update_order_status][fte] ' . $postResult['message']);
                 }
+
+                try {
+                    $receiptService = new \App\Services\PaymentReceiptService();
+                    $receiptResult = $receiptService->issueAdvanceReceipt($id, [
+                        'source_event' => 'legacy_order_status_confirmation',
+                        'source_reference' => 'legacy-order-status:' . $id . ':' . (string)($financialRow['payment_method'] ?? $paymentMethod) . ':' . (string)($financialRow['payment_confirmed_at'] ?? ''),
+                        'payment_method' => (string)($financialRow['payment_method'] ?? $paymentMethod),
+                        'payment_status' => (string)($financialRow['payment_status'] ?? 'paid'),
+                        'issued_by_admin_id' => $adminId,
+                        'financial_transaction_id' => isset($postResult['transaction_id']) ? (int)$postResult['transaction_id'] : null,
+                        'metadata' => [
+                            'channel' => 'admin_orders_status',
+                            'trigger' => 'legacy_status_confirmed',
+                        ],
+                    ]);
+                    if (!$receiptResult['success'] && !in_array($receiptResult['message'], ['Receipt not allowed after full payment', 'No advance amount available for receipt', 'Payment receipt schema is not ready', 'Receipt not required when partial payment is disabled'], true)) {
+                        error_log('[update_order_status][receipt] ' . $receiptResult['message']);
+                    }
+                } catch (\Throwable $receiptErr) {
+                    error_log('[update_order_status][receipt] ' . $receiptErr->getMessage());
+                }
             }
         }
 
@@ -320,7 +360,7 @@ if ($status === 'confirmed') {
 } elseif ($status === 'delivered') {
     $actionMessage = 'Order marked as delivered.';
 } elseif ($status === 'completed') {
-    $actionMessage = 'Order closed and completed.';
+    $actionMessage = 'Order marked delivered and completed.';
 } elseif ($status === 'cancelled') {
     $actionMessage = 'Order cancelled successfully.';
 }

@@ -9,6 +9,52 @@ require_permission_for_current_admin_page();
 require_once __DIR__ . '/includes/db.php';
 require_once __DIR__ . '/includes/image_helpers.php';
 require_once __DIR__ . '/../app/Services/UnifiedMediaService.php';
+
+$defaultProductImage = \App\Services\ProductImageService::placeholderForCategory(null);
+
+function add_product_stmt_bind(mysqli_stmt $stmt, string $types, array &$params): bool
+{
+    if ($types === '' || !$params) {
+        return true;
+    }
+
+    $refs = [];
+    foreach ($params as $k => $v) {
+        $refs[$k] = &$params[$k];
+    }
+
+    return $stmt->bind_param($types, ...$refs);
+}
+
+function add_product_column_exists(mysqli $conn, string $table, string $column): bool
+{
+    $sql = 'SELECT COUNT(*) AS c FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?';
+    $stmt = safePrepare($conn, $sql);
+    $stmt->bind_param('ss', $table, $column);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    $row = $res ? $res->fetch_assoc() : null;
+    return (int)($row['c'] ?? 0) > 0;
+}
+
+function add_product_enum_values(mysqli $conn, string $table, string $column, array $fallback): array
+{
+    $sql = 'SELECT COLUMN_TYPE FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ? LIMIT 1';
+    $stmt = safePrepare($conn, $sql);
+    $stmt->bind_param('ss', $table, $column);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    $row = $res ? $res->fetch_assoc() : null;
+    $type = (string)($row['COLUMN_TYPE'] ?? '');
+    if ($type === '' || stripos($type, 'enum(') !== 0) {
+        return $fallback;
+    }
+    if (!preg_match_all("/'([^']+)'/", $type, $m) || empty($m[1])) {
+        return $fallback;
+    }
+    $vals = array_values(array_unique(array_map('strval', $m[1])));
+    return $vals !== [] ? $vals : $fallback;
+}
 // =========================
 // BACKEND LOGIC
 // =========================
@@ -106,7 +152,7 @@ while (true) {
     // =========================
 
     // Default to the branded fallback; replaced below if a valid file is uploaded.
-    $db_image_path = '/assets/defaults/default-product-image.webp';
+    $db_image_path = $defaultProductImage;
 
     if (!empty($_FILES['image']['name']) && (int)($_FILES['image']['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
         $imgResult  = \App\Services\UnifiedMediaService::upload(
@@ -146,30 +192,59 @@ while (true) {
         }
     }
 
+    if ($db_image2_path !== NULL && trim($db_image2_path) === trim($db_image_path)) {
+        $db_image2_path = NULL;
+    }
+
     // =========================
     // INSERT QUERY
     // =========================
 $is_chef_special = isset($_POST['is_chef_special']) ? 1 : 0;
-$dietary_tag     = in_array($_POST['dietary_tag'] ?? '', ['regular','eggless','vegan','sugar_free','healthy'], true) ? $_POST['dietary_tag'] : 'regular';
+$allowedDietary  = add_product_enum_values($conn, 'products', 'dietary_tag', ['regular','eggless','vegan','sugar_free']);
+$dietary_tag     = in_array($_POST['dietary_tag'] ?? '', $allowedDietary, true) ? (string)$_POST['dietary_tag'] : (in_array('regular', $allowedDietary, true) ? 'regular' : (string)($allowedDietary[0] ?? 'regular'));
 $is_veg          = (isset($_POST['is_veg']) && $_POST['is_veg'] === '0') ? 0 : 1;
 $topper_enabled  = isset($_POST['topper_enabled']) ? 1 : 0;
 $note_enabled    = isset($_POST['note_enabled']) ? 1 : 0;
 $base_price_str  = (string)(float)$base_price;
 
-    $insertStmt = safePrepare($conn,
-        'INSERT INTO products
-        (name, slug, sku, starting_price, collection_category_id, subcategory_id, child_category_id,
-         featured_image, short_description, is_chef_special, dietary_tag, is_veg, topper_enabled, note_enabled, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())'
-    );
-    $insertStmt->bind_param(
-        'ssssiiissisiii',
-        $name, $slug, $sku, $base_price_str,
+    $insertColumns = [
+        'name', 'slug', 'sku', 'starting_price', 'base_price',
+        'collection_category_id', 'subcategory_id', 'child_category_id',
+        'featured_image', 'short_description', 'long_description', 'is_chef_special'
+    ];
+    $insertTypes = 'sssssiiisssi';
+    $insertParams = [
+        $name, $slug, $sku, $base_price_str, $base_price_str,
         $collection_id, $subcategory_id, $child_id,
-        $db_image_path, $description,
-        $is_chef_special, $dietary_tag,
-        $is_veg, $topper_enabled, $note_enabled
-    );
+        $db_image_path, $description, $description, $is_chef_special,
+    ];
+
+    if (add_product_column_exists($conn, 'products', 'dietary_tag')) {
+        $insertColumns[] = 'dietary_tag';
+        $insertTypes .= 's';
+        $insertParams[] = $dietary_tag;
+    }
+    if (add_product_column_exists($conn, 'products', 'is_veg')) {
+        $insertColumns[] = 'is_veg';
+        $insertTypes .= 'i';
+        $insertParams[] = $is_veg;
+    }
+    if (add_product_column_exists($conn, 'products', 'topper_enabled')) {
+        $insertColumns[] = 'topper_enabled';
+        $insertTypes .= 'i';
+        $insertParams[] = $topper_enabled;
+    }
+    if (add_product_column_exists($conn, 'products', 'note_enabled')) {
+        $insertColumns[] = 'note_enabled';
+        $insertTypes .= 'i';
+        $insertParams[] = $note_enabled;
+    }
+
+    $insertColumns[] = 'created_at';
+    $placeholderSql = implode(', ', array_fill(0, count($insertColumns) - 1, '?')) . ', NOW()';
+    $insertSql = 'INSERT INTO products (' . implode(', ', $insertColumns) . ') VALUES (' . $placeholderSql . ')';
+    $insertStmt = safePrepare($conn, $insertSql);
+    add_product_stmt_bind($insertStmt, $insertTypes, $insertParams);
 
     if ($insertStmt->execute()) {
    $product_id = $conn->insert_id;
@@ -408,7 +483,7 @@ require_once __DIR__ . '/layout.php';
 <div class="form-group">
 <label>Image 1</label>
 <input class="form-control" type="file" name="image" id="productImageInput" accept="image/*">
-<img id="productImagePreview" class="image-preview" src="/assets/defaults/default-product-image.webp" alt="Product preview" style="display:block;" onerror="this.onerror=null;this.src='/assets/defaults/default-product-image.png';">
+<img id="productImagePreview" class="image-preview" src="<?php echo htmlspecialchars($defaultProductImage, ENT_QUOTES, 'UTF-8'); ?>" alt="Product preview" style="display:block;" onerror="this.onerror=null;this.src='<?php echo htmlspecialchars($defaultProductImage, ENT_QUOTES, 'UTF-8'); ?>';">
 </div>
 
 <div class="form-group">
@@ -462,7 +537,7 @@ require_once __DIR__ . '/layout.php';
         productImageInput.addEventListener('change', function () {
             const file = this.files && this.files[0];
             if (!file) {
-                productImagePreview.src = '/assets/defaults/default-product-image.webp';
+                productImagePreview.src = <?php echo json_encode($defaultProductImage, JSON_UNESCAPED_SLASHES); ?>;
                 productImagePreview.style.display = 'block';
                 return;
             }

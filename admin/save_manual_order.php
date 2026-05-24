@@ -256,12 +256,18 @@ if (!in_array($orderStatus, $allowedOrderStatus, true)) {
     $orderStatus = 'confirmed';
 }
 
-$allowedPaymentStatus = ['pending', 'paid', 'failed', 'refunded', 'credit', 'partial'];
-    if (!in_array($paymentStatus, $allowedPaymentStatus, true)) {
+$allowedPaymentStatus = ['pending', 'paid', 'failed', 'refunded', 'credit'];
+if (!in_array($paymentStatus, $allowedPaymentStatus, true)) {
     $paymentStatus = 'paid';
 }
 
-$allowedPaymentMethods = ['upi_manual', 'cod', 'gateway', 'credit'];
+$isPaymentConfirmed = $paymentStatus === 'paid';
+// Business rule: until payment is confirmed, manual advance should not be treated as collected.
+if (!$isPaymentConfirmed && $paymentStatus !== 'credit') {
+    $advanceAmount = 0.0;
+}
+
+$allowedPaymentMethods = ['upi_manual', 'gateway', 'credit'];
 if (!in_array($paymentMethod, $allowedPaymentMethods, true)) {
     $paymentMethod = 'upi_manual';
 }
@@ -405,11 +411,23 @@ try {
         $scheduledSlotLabel = $slotFormLabel;
     }
 
-    $orderInsert = $conn->prepare('INSERT INTO orders (order_number, user_id, customer_name, customer_email, customer_phone, customer_phone_e164, fulfilment_mode, order_status, payment_status, payment_method, payment_confirmed_at, payment_confirmed_by_admin_id, scheduled_slot, scheduled_slot_label, billing_address_line1, billing_address_line2, billing_city, billing_state, billing_postal_code, delivery_maps_link, advance_amount, subtotal, discount_total, tax_total, grand_total, admin_note, order_mode, requires_kitchen_production, production_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)');
-    $confirmedAt = in_array($paymentStatus, ['paid', 'confirmed'], true) ? date('Y-m-d H:i:s') : null;
-    $confirmedBy = (in_array($paymentStatus, ['paid', 'confirmed'], true) && !empty($_SESSION['admin'])) ? (int)$_SESSION['admin'] : null;
+    $recognizedAmount = max(0.0, round($grandTotal, 2));
+    $advanceCollectedAmount = ($paymentStatus !== 'credit' && $isPaymentConfirmed)
+        ? max(0.0, round(min($advanceAmount, $grandTotal), 2))
+        : 0.0;
+    $netCollectedAmount = $isPaymentConfirmed && $paymentStatus !== 'credit'
+        ? $recognizedAmount
+        : $advanceCollectedAmount;
+    $balanceDueAmount = max(0.0, round($recognizedAmount - $netCollectedAmount, 2));
+    $collectionStatus = $balanceDueAmount <= 0.01 && $netCollectedAmount > 0
+        ? 'fully_paid'
+        : ($netCollectedAmount > 0 ? 'advance_paid' : 'payment_pending');
+
+    $orderInsert = $conn->prepare('INSERT INTO orders (order_number, user_id, customer_name, customer_email, customer_phone, customer_phone_e164, fulfilment_mode, order_status, payment_status, payment_method, payment_confirmed_at, payment_confirmed_by_admin_id, scheduled_slot, scheduled_slot_label, billing_address_line1, billing_address_line2, billing_city, billing_state, billing_postal_code, delivery_maps_link, advance_amount, advance_received_amount, net_collected_amount, balance_due_amount, collection_status, subtotal, discount_total, tax_total, grand_total, admin_note, order_mode, requires_kitchen_production, production_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)');
+    $confirmedAt = $isPaymentConfirmed ? date('Y-m-d H:i:s') : null;
+    $confirmedBy = ($isPaymentConfirmed && !empty($_SESSION['admin'])) ? (int)$_SESSION['admin'] : null;
     $advanceForDb = $advanceAmount > 0 ? $advanceAmount : null;
-    $orderInsert->bind_param('sisssssssssissssssssddddssis', $orderNumber, $userId, $customerName, $customerEmail, $customerPhone, $customerPhoneE164, $fulfilmentMode, $orderStatus, $paymentStatus, $paymentMethod, $confirmedAt, $confirmedBy, $scheduledSlotForDb, $scheduledSlotLabel, $billingAddressLine1, $billingAddressLine2, $billingCity, $billingState, $billingPostalCode, $deliveryMapsLink, $advanceForDb, $amount, $discountTotal, $grandTotal, $finalNote, $orderMode, $requiresKitchenProduction, $productionStatus);
+    $orderInsert->bind_param('sisssssssssissssssssddddsdddssis', $orderNumber, $userId, $customerName, $customerEmail, $customerPhone, $customerPhoneE164, $fulfilmentMode, $orderStatus, $paymentStatus, $paymentMethod, $confirmedAt, $confirmedBy, $scheduledSlotForDb, $scheduledSlotLabel, $billingAddressLine1, $billingAddressLine2, $billingCity, $billingState, $billingPostalCode, $deliveryMapsLink, $advanceForDb, $advanceCollectedAmount, $netCollectedAmount, $balanceDueAmount, $collectionStatus, $amount, $discountTotal, $grandTotal, $finalNote, $orderMode, $requiresKitchenProduction, $productionStatus);
     $orderInsert->execute();
     $orderId = (int)$conn->insert_id;
 
@@ -450,9 +468,6 @@ try {
     $adminIdForFinancial = isset($_SESSION['admin']) ? (int)$_SESSION['admin'] : 0;
     $adminNameForFinancial = isset($_SESSION['admin_name']) ? (string)$_SESSION['admin_name'] : 'Admin';
     $financialEngine = new \App\Services\FinancialTransactionEngine();
-    $recognizedAmount = max(0.0, round($grandTotal, 2));
-    $advanceCollectedAmount = max(0.0, round(min($advanceAmount, $grandTotal), 2));
-
     if ($recognizedAmount > 0 && $paymentStatus === 'credit') {
         $postResult = $financialEngine->recordCreditSaleRecognized([
             'order_id' => $orderId,
@@ -483,24 +498,6 @@ try {
         ]);
         if (!$postResult['success']) {
             error_log('[save_manual_order][fte-paid] ' . $postResult['message']);
-        }
-    }
-
-    if ($advanceCollectedAmount > 0 && in_array($paymentStatus, ['pending', 'partial'], true)) {
-        $postResult = $financialEngine->recordAdvanceCollected([
-            'order_id' => $orderId,
-            'order_number' => $orderNumber,
-            'amount' => $advanceCollectedAmount,
-            'payment_method' => $paymentMethod,
-            'payment_status' => $paymentStatus,
-            'source_reference' => 'admin/save_manual_order.php',
-            'idempotency_key' => 'manual-order-advance:' . $orderId,
-            'admin_id' => $adminIdForFinancial,
-            'admin_name' => $adminNameForFinancial,
-            'narration' => 'Advance collected on manual order creation',
-        ]);
-        if (!$postResult['success']) {
-            error_log('[save_manual_order][fte-advance] ' . $postResult['message']);
         }
     }
 

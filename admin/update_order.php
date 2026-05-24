@@ -43,14 +43,31 @@ if ($status === 'cancelled') {
 try {
     $adminId = isset($_SESSION['admin']) ? (int)$_SESSION['admin'] : 0;
     $adminName = isset($_SESSION['admin_name']) ? (string)$_SESSION['admin_name'] : 'Admin';
-    $existingRead = $conn->prepare('SELECT payment_status FROM orders WHERE id = ? LIMIT 1');
+    $existingRead = $conn->prepare('SELECT order_status, payment_status, payment_confirmed_at FROM orders WHERE id = ? LIMIT 1');
     $existingPaymentStatus = '';
+    $paymentConfirmedAt = '';
     if ($existingRead) {
         $existingRead->bind_param('i', $id);
         $existingRead->execute();
         $existingRow = $existingRead->get_result()->fetch_assoc();
         $existingPaymentStatus = (string)($existingRow['payment_status'] ?? '');
+        $paymentConfirmedAt = (string)($existingRow['payment_confirmed_at'] ?? '');
         $existingRead->close();
+    }
+
+    $paymentLockedStates = ['paid', 'credit', 'refund_pending', 'partially_refunded', 'refunded'];
+    $fulfillmentAllowedStates = ['preparing', 'ready_for_pickup', 'out_for_delivery', 'completed'];
+    $isPaymentLocked = in_array($existingPaymentStatus, $paymentLockedStates, true) || $paymentConfirmedAt !== '';
+    if ($isPaymentLocked && !in_array($status, $fulfillmentAllowedStates, true)) {
+        http_response_code(422);
+        echo 'Payment-confirmed orders are financially locked. Only fulfillment progression is allowed.';
+        exit;
+    }
+
+    if ($isPaymentLocked && $status === 'confirmed') {
+        http_response_code(422);
+        echo 'Order is already financially confirmed and cannot be reconfirmed.';
+        exit;
     }
 
     $statusUpdated = false;

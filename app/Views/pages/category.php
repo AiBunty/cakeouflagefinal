@@ -298,7 +298,7 @@ foreach ($activeFlags as $flag => $enabled) {
                      src="<?= htmlspecialchars($thumb, ENT_QUOTES, 'UTF-8') ?>"
                      alt="<?= htmlspecialchars($name, ENT_QUOTES, 'UTF-8') ?>"
                      loading="lazy" width="400" height="400"
-                     onerror="this.onerror=null;this.src='/assets/defaults/default-product-image.webp';" />
+                     onerror="this.onerror=null;this.src='/public/assets/defaults/default-product-image.webp';" />
                 <?php if (!empty($product['is_bestseller'])): ?>
                   <span class="product-card__badge product-card__badge--bestseller">Bestseller</span>
                 <?php elseif (!empty($product['is_featured'])): ?>

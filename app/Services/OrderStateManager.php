@@ -143,6 +143,9 @@ final class OrderStateManager
                 ];
             }
 
+            // Delivered is treated as a complete lifecycle close from this point onward.
+            $persistedStatus = $newStatus === 'delivered' ? 'completed' : $newStatus;
+
             // Fulfilment routing constraints
             if ($fulfilmentMode === 'pickup' && $newStatus === 'out_for_delivery') {
                 $pdo->rollBack();
@@ -196,7 +199,7 @@ final class OrderStateManager
             $updateStmt = $pdo->prepare(
                 'UPDATE orders SET order_status = :status, updated_at = NOW() WHERE id = :id'
             );
-            $updateStmt->execute(['status' => $newStatus, 'id' => $orderId]);
+            $updateStmt->execute(['status' => $persistedStatus, 'id' => $orderId]);
 
             // Immutable history
             $histStmt = $pdo->prepare(
@@ -210,7 +213,7 @@ final class OrderStateManager
             $histStmt->execute([
                 'order_id'        => $orderId,
                 'previous_status' => $previousStatus !== '' ? $previousStatus : null,
-                'new_status'      => $newStatus,
+                'new_status'      => $persistedStatus,
                 'admin_id'        => $adminId > 0 ? $adminId : null,
                 'admin_role'      => $adminRole  !== '' ? $adminRole  : null,
                 'ip_address'      => $ipAddress  !== '' ? $ipAddress  : null,
@@ -224,7 +227,7 @@ final class OrderStateManager
                 'order_id' => $orderId,
                 'action_type' => 'status_transition',
                 'previous_status' => $previousStatus,
-                'new_status' => $newStatus,
+                'new_status' => $persistedStatus,
                 'payment_status' => $currentPayment,
                 'admin_id' => $adminId,
                 'admin_role' => $adminRole,
@@ -237,8 +240,9 @@ final class OrderStateManager
 
             return [
                 'success'         => true,
-                'message'         => 'Order status updated to ' . $newStatus,
+                'message'         => 'Order status updated to ' . $persistedStatus,
                 'previous_status' => $previousStatus,
+                'new_status'      => $persistedStatus,
             ];
 
         } catch (PDOException $e) {
@@ -300,7 +304,8 @@ final class OrderStateManager
             'can_refund' => $canRefund,
             'can_mark_preparing' => in_array('preparing', $this->getAllowedTransitions($orderStatus), true),
             'can_mark_delivered' => in_array('delivered', $this->getAllowedTransitions($orderStatus), true),
-            'can_mark_completed' => in_array('completed', $this->getAllowedTransitions($orderStatus), true),
+            // Completed is no longer a standalone action in UI; delivered now closes as completed.
+            'can_mark_completed' => false,
             'is_refund_final' => $refundFinal,
             'is_financially_locked' => $refundFinal,
             'finance_badge' => $this->financeBadge($orderStatus, $paymentStatus),

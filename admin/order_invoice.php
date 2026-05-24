@@ -20,15 +20,16 @@ if (!$order) {
 }
 
 $autoPrint = isset($_GET['auto_print']) && (string)$_GET['auto_print'] === '1';
-$isPaymentConfirmed = (string)($order['payment_status'] ?? '') === 'paid';
+$isPaymentConfirmed = invoice_is_fully_paid($order);
+$isAdvanceReceiptEligible = payment_receipt_is_eligible($order);
 
 $statusMessage = '';
 $statusType = 'info';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_invoice_email'])) {
-    if ((string)($order['payment_status'] ?? '') !== 'paid') {
+  if (!$isPaymentConfirmed) {
         $statusType = 'error';
-        $statusMessage = 'Invoice email is allowed only after payment is confirmed as paid.';
+    $statusMessage = 'Invoice email is allowed only after full payment is received and verified.';
     } else {
         $html = invoice_render_html($order);
         $queued = invoice_queue_email($conn, $order, $html);
@@ -122,6 +123,9 @@ require_once __DIR__ . '/layout.php';
 <div class="invoice-shell">
   <div class="invoice-actions">
     <a class="invoice-btn ghost" href="order_details.php?id=<?= (int)$orderId ?>">Back to Order</a>
+    <?php if (!$isPaymentConfirmed && $isAdvanceReceiptEligible): ?>
+      <a class="invoice-btn ghost" href="payment_receipt.php?id=<?= (int)$orderId ?>">Open Payment Receipt</a>
+    <?php endif; ?>
     <button class="invoice-btn <?= $isPaymentConfirmed ? '' : 'is-disabled' ?>" type="button" id="printInvoiceBtn" <?= $isPaymentConfirmed ? '' : 'disabled title="Invoice unlocks only after payment is confirmed."' ?>>Print Invoice</button>
     <form method="post" style="margin:0">
       <input type="hidden" name="order_id" value="<?= (int)$orderId ?>">
@@ -130,7 +134,7 @@ require_once __DIR__ . '/layout.php';
   </div>
 
   <?php if (!$isPaymentConfirmed): ?>
-    <div class="invoice-note error">Payment is not confirmed yet. Invoice preview and print are locked until payment status is marked Paid.</div>
+    <div class="invoice-note error">Invoice is locked. It will be generated only after full payment is received and verified.</div>
   <?php endif; ?>
 
   <?php if ($statusMessage !== ''): ?>

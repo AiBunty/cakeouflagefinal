@@ -1,0 +1,26 @@
+{
+    "run_id": "20260524_134607",
+    "started_at": "2026-05-24T13:46:07+05:30",
+    "flows": [],
+    "module_order": [
+        "order_creation",
+        "item_save",
+        "toppings_save",
+        "custom_notes_save",
+        "slot_save",
+        "advance_save",
+        "payment_status",
+        "invoice_generation",
+        "crm_push",
+        "email_trigger",
+        "ledger_entry",
+        "sales_register",
+        "cash_bank_impact",
+        "refund_flow",
+        "order_status_lifecycle",
+        "order_visibility",
+        "customization_visibility"
+    ],
+    "error": "SQLSTATE[42S22]: Column not found: 1054 Unknown column 'previous_status' in 'field list'",
+    "failed_at": "2026-05-24T13:46:07+05:30"
+}

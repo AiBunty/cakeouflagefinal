@@ -13,8 +13,8 @@ return [
      * Primary fallback for any product without an uploaded image.
      * Served as WebP (modern browsers) with PNG as <noscript> / onerror fallback.
      */
-    'default_product_image'     => '/assets/defaults/default-product-image.webp',
-    'default_product_image_png' => '/assets/defaults/default-product-image.png',
+    'default_product_image'     => '/public/assets/defaults/default-product-image.webp',
+    'default_product_image_png' => '/public/assets/defaults/default-product-image.png',
     'default_product_image_alt' => 'Cakeouflage Signature Cake',
 
     /*

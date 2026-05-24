@@ -1,0 +1,19 @@
+{
+    "run_at": "2026-05-24T15:13:29+05:30",
+    "uploaded_fixture": {
+        "id": 1,
+        "slug": "belgian-velvet-hazelnut-gateau-01",
+        "db_featured_image": "/public/uploads/originals/products/sample-image-1_20260524141909_bd49dd07.png",
+        "api_featured_image": "/public/uploads/originals/products/sample-image-1_20260524141909_bd49dd07.png",
+        "api_image": "/public/uploads/originals/products/sample-image-1_20260524141909_bd49dd07.png",
+        "ok": true
+    },
+    "default_fixture": {
+        "id": 2,
+        "slug": "belgian-velvet-hazelnut-gateau-02",
+        "seeded_default_path": "/assets/defaults/default-product-image.webp",
+        "api_featured_image": "/assets/defaults/default-product-image.webp",
+        "ok": true
+    },
+    "overall_ok": true
+}

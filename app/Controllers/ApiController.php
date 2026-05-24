@@ -1516,18 +1516,7 @@ if (!isset($_SESSION['user_id']) || empty($_SESSION['otp_verified'])) {
         $deliveryMapsLink = trim((string)($input['delivery_maps_link'] ?? ''));
         $deliveryDate = trim((string)($input['delivery_date'] ?? ''));
         $slotId = (int)($input['slot_id'] ?? 0);
-        $paymentType = trim((string)($input['payment_type'] ?? 'full'));
-        if (!in_array($paymentType, ['full', 'advance_50'], true)) { $paymentType = 'full'; }
-
-        if ($paymentType === 'advance_50') {
-            $allowPartial = $this->getSettingValue($pdo, 'allow_partial_payment');
-            if ($allowPartial === '0') {
-                Response::json(['success' => false, 'message' => 'Partial payment is not available at this time.'], 400);
-                return;
-            }
-        }
-
-        $paymentStatus = $paymentType === 'advance_50' ? 'partial' : 'pending';
+        $paymentStatus = 'pending';
 
         $scheduledSlot = null;
         $scheduledSlotLabel = null;
@@ -1660,7 +1649,8 @@ if (!isset($_SESSION['user_id']) || empty($_SESSION['otp_verified'])) {
             $pdo->beginTransaction();
 
 $grandTotal = max(0, (float)($cart['subtotal'] ?? 0) - (float)($cart['discount_total'] ?? 0));
-            $advanceAmount = $paymentType === 'advance_50' ? round($grandTotal * 0.5, 2) : null;
+            $advanceAmount = null;
+            $orderStatus = 'pending_payment';
 
 $orderStmt = $pdo->prepare('
 INSERT INTO orders (
@@ -1672,7 +1662,7 @@ INSERT INTO orders (
     order_mode, requires_kitchen_production, production_status
 ) VALUES (
     :order_number, :user_id, :customer_name, :customer_email, :customer_phone, :customer_phone_e164,
-    :fulfilment_mode, "pending", :payment_status, :payment_method,
+    :fulfilment_mode, :order_status, :payment_status, :payment_method,
     :scheduled_slot, :scheduled_slot_label,
     :postal_code, :delivery_street, :delivery_maps_link, :distance_km, :delivery_fee,
     :subtotal, :discount_total, 0, :grand_total, :advance_amount,
@@ -1687,6 +1677,7 @@ $orderStmt->execute([
     'customer_phone' => $customerPhone,
     'customer_phone_e164' => $customerPhoneE164,
     'fulfilment_mode' => $fulfilmentMode,
+    'order_status' => $orderStatus,
     'payment_method' => $paymentMethod,
     'payment_status' => $paymentStatus,
     'scheduled_slot' => $scheduledSlot,
@@ -1868,11 +1859,29 @@ $orderStmt->execute([
                 o.order_status,
                 o.payment_status,
                 o.fulfilment_mode,
+                o.discount_total,
                 o.grand_total,
                 o.created_at,
-                COUNT(oi.id) AS item_count
+                COUNT(oi.id) AS item_count,
+                COALESCE(
+                    GROUP_CONCAT(
+                        CONCAT(oi.product_name_snapshot, " x ", oi.quantity)
+                        ORDER BY oi.id ASC SEPARATOR ", "
+                    ),
+                    ""
+                ) AS cake_names,
+                COALESCE(coupon_summary.coupon_info, "") AS coupon_info
              FROM orders o
              LEFT JOIN order_items oi ON oi.order_id = o.id
+             LEFT JOIN (
+                SELECT order_id,
+                       GROUP_CONCAT(
+                           CONCAT(code_snapshot, " (₹", FORMAT(discount_total, 2), ")")
+                           ORDER BY id ASC SEPARATOR ", "
+                       ) AS coupon_info
+                FROM coupon_redemptions
+                GROUP BY order_id
+             ) coupon_summary ON coupon_summary.order_id = o.id
              WHERE o.user_id = :user_id
              GROUP BY o.id
              ORDER BY o.created_at DESC'
@@ -1882,7 +1891,14 @@ $orderStmt->execute([
         Response::json([
             'success' => true,
             'message' => 'ok',
-            'data' => ['items' => $stmt->fetchAll(PDO::FETCH_ASSOC)],
+            'data' => [
+                'items' => array_map(static function (array $row): array {
+                    $paymentStatus = strtolower(trim((string)($row['payment_status'] ?? 'pending')));
+                    $row['can_download_invoice'] = $paymentStatus === 'paid';
+                    $row['invoice_download_url'] = '/api/orders/' . (int)($row['id'] ?? 0) . '/invoice';
+                    return $row;
+                }, $stmt->fetchAll(PDO::FETCH_ASSOC)),
+            ],
         ]);
     }
 
@@ -1974,8 +1990,120 @@ AND user_id = :user_id
                 'items' => $items,
                 'timeline' => $timeline,
                 'utr_submission' => $utrSubmission,
+                'can_download_invoice' => strtolower(trim((string)($order['payment_status'] ?? 'pending'))) === 'paid',
+                'invoice_download_url' => '/api/orders/' . (int)$order['id'] . '/invoice',
             ],
         ]);
+    }
+
+    public function orderInvoiceDownload(string $id): void
+    {
+        $pdo = self::db(); if (!$pdo) return;
+        $user = $this->getAuthenticatedCustomer($pdo);
+        if (!$user) {
+            return;
+        }
+
+        $stmt = $pdo->prepare(
+            'SELECT
+                id,
+                order_number,
+                customer_name,
+                customer_email,
+                customer_phone,
+                payment_status,
+                payment_method,
+                fulfilment_mode,
+                subtotal,
+                discount_total,
+                tax_total,
+                grand_total,
+                created_at
+             FROM orders
+             WHERE (id = :id OR order_number = :order_number)
+               AND user_id = :user_id
+             LIMIT 1'
+        );
+        $stmt->execute([
+            'id' => is_numeric($id) ? (int)$id : 0,
+            'order_number' => $id,
+            'user_id' => (int)$user['id'],
+        ]);
+        $order = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$order) {
+            Response::json(['success' => false, 'message' => 'Order not found'], 404);
+            return;
+        }
+
+        $paymentStatus = strtolower(trim((string)($order['payment_status'] ?? 'pending')));
+        if ($paymentStatus !== 'paid') {
+            Response::json(['success' => false, 'message' => 'Invoice is available only after payment confirmation'], 409);
+            return;
+        }
+
+        $itemsStmt = $pdo->prepare(
+            'SELECT product_name_snapshot, variant_snapshot, quantity, unit_price, line_total
+             FROM order_items
+             WHERE order_id = :order_id
+             ORDER BY id ASC'
+        );
+        $itemsStmt->execute(['order_id' => (int)$order['id']]);
+        $items = $itemsStmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $esc = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+        $money = static fn($value): string => 'Rs ' . number_format((float)$value, 2);
+
+        $itemRows = '';
+        foreach ($items as $item) {
+            $name = $esc($item['product_name_snapshot'] ?? 'Item');
+            $variant = trim((string)($item['variant_snapshot'] ?? ''));
+            if ($variant !== '') {
+                $name .= ' (' . $esc($variant) . ')';
+            }
+            $qty = (int)($item['quantity'] ?? 1);
+            $unit = $money((float)($item['unit_price'] ?? 0));
+            $line = $money((float)($item['line_total'] ?? 0));
+            $itemRows .= '<tr>'
+                . '<td style="padding:8px;border:1px solid #ddd;">' . $name . '</td>'
+                . '<td style="padding:8px;border:1px solid #ddd;text-align:center;">' . $qty . '</td>'
+                . '<td style="padding:8px;border:1px solid #ddd;text-align:right;">' . $unit . '</td>'
+                . '<td style="padding:8px;border:1px solid #ddd;text-align:right;">' . $line . '</td>'
+                . '</tr>';
+        }
+
+        $invoiceNo = 'INV-' . $esc($order['order_number'] ?? 'ORDER');
+        $createdAt = $esc($order['created_at'] ?? '');
+        $customerName = $esc($order['customer_name'] ?? 'Customer');
+        $customerPhone = $esc($order['customer_phone'] ?? '');
+        $customerEmail = $esc($order['customer_email'] ?? '');
+        $orderNo = $esc($order['order_number'] ?? '');
+
+        $html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>' . $invoiceNo . '</title></head>'
+            . '<body style="font-family:Arial,sans-serif;color:#222;max-width:900px;margin:20px auto;padding:16px;">'
+            . '<h1 style="margin:0 0 4px;">Cakeouflage Invoice</h1>'
+            . '<p style="margin:0 0 16px;color:#666;">Invoice No: ' . $invoiceNo . ' | Date: ' . $createdAt . '</p>'
+            . '<p style="margin:0 0 4px;"><strong>Order:</strong> ' . $orderNo . '</p>'
+            . '<p style="margin:0 0 4px;"><strong>Customer:</strong> ' . $customerName . '</p>'
+            . '<p style="margin:0 0 4px;"><strong>Phone:</strong> ' . $customerPhone . '</p>'
+            . '<p style="margin:0 0 16px;"><strong>Email:</strong> ' . $customerEmail . '</p>'
+            . '<table style="width:100%;border-collapse:collapse;margin-bottom:16px;">'
+            . '<thead><tr>'
+            . '<th style="padding:8px;border:1px solid #ddd;text-align:left;">Item</th>'
+            . '<th style="padding:8px;border:1px solid #ddd;">Qty</th>'
+            . '<th style="padding:8px;border:1px solid #ddd;text-align:right;">Unit Price</th>'
+            . '<th style="padding:8px;border:1px solid #ddd;text-align:right;">Line Total</th>'
+            . '</tr></thead><tbody>' . $itemRows . '</tbody></table>'
+            . '<div style="max-width:340px;margin-left:auto;">'
+            . '<p style="margin:4px 0;display:flex;justify-content:space-between;"><span>Subtotal</span><strong>' . $money((float)($order['subtotal'] ?? 0)) . '</strong></p>'
+            . '<p style="margin:4px 0;display:flex;justify-content:space-between;"><span>Coupon Discount</span><strong>' . $money((float)($order['discount_total'] ?? 0)) . '</strong></p>'
+            . '<p style="margin:4px 0;display:flex;justify-content:space-between;"><span>Tax</span><strong>' . $money((float)($order['tax_total'] ?? 0)) . '</strong></p>'
+            . '<p style="margin:8px 0 0;display:flex;justify-content:space-between;font-size:18px;"><span>Total</span><strong>' . $money((float)($order['grand_total'] ?? 0)) . '</strong></p>'
+            . '</div>'
+            . '</body></html>';
+
+        header('Content-Type: text/html; charset=UTF-8');
+        header('Content-Disposition: attachment; filename="invoice-' . preg_replace('/[^A-Za-z0-9\-_]/', '', (string)($order['order_number'] ?? 'order')) . '.html"');
+        echo $html;
     }
 
     public function submitOrderUtr(string $id): void
@@ -2991,10 +3119,7 @@ AND user_id = :user_id
             $fulfillmentType  = in_array($input['fulfillment_type'] ?? '', ['delivery', 'pickup'], true)
                 ? $input['fulfillment_type'] : 'delivery';
             $slotId           = max((int)($input['slot_id'] ?? 0), 0);
-            $paymentType = trim((string)($input['payment_type'] ?? 'advance_50'));
-            if (!in_array($paymentType, ['full', 'advance_50'], true)) {
-                $paymentType = 'advance_50';
-            }
+            $paymentType = 'full';
             if ($fulfillmentType === 'delivery' && $deliveryStreet === '') {
                 $pdo->rollBack();
                 Response::json(['success' => false, 'message' => 'Delivery street address is required.'], 422);
@@ -3105,7 +3230,7 @@ AND user_id = :user_id
                     :customer_email,
                     :customer_phone,
                     :fulfilment_mode,
-                    "pending",
+                    :order_status,
                     :payment_status,
                     "upi_manual",
                     :scheduled_slot,
@@ -3129,14 +3254,16 @@ AND user_id = :user_id
                 )'
             );
             $fulfilmentMode = $fulfillmentType === 'pickup' ? 'pickup' : 'custom_delivery';
-            $advanceAmount = $paymentType === 'full' ? $grandTotal : round($grandTotal * 0.5, 2);
-            $paymentStatus = 'pending'; // always pending until payment is confirmed
+            $advanceAmount = null;
+            $paymentStatus = 'pending';
+            $orderStatus = 'pending_payment';
             $insertOrder->execute([
                 'order_number' => $orderNumber,
                 'customer_name' => $customerName,
                 'customer_email' => $customerEmail,
                 'customer_phone' => $customerPhone,
                 'fulfilment_mode' => $fulfilmentMode,
+                'order_status' => $orderStatus,
                 'scheduled_slot' => !empty($meta['event_date']) ? $meta['event_date'] . ' 10:00:00' : null,
                 'scheduled_slot_label' => !empty($meta['event_date']) ? 'Event Date: ' . $meta['event_date'] : null,
                 'delivery_postal_code' => $deliveryPincode ?: null,
@@ -3237,7 +3364,7 @@ AND user_id = :user_id
             try {
                 $confirmationUrl = '/order-confirmation/' . $orderNumber . '?t=' . urlencode($token);
                 $currency = '₹';
-                $remainingBalance = max(0, $quoteAmount - $advanceAmount);
+                $remainingBalance = max(0, $quoteAmount);
                 $deliveryAddress = trim($deliveryStreet . ($deliveryPincode !== '' ? ', ' . $deliveryPincode : ''));
                 $emailContext = [
                     'order_number'     => $orderNumber,
@@ -3245,7 +3372,7 @@ AND user_id = :user_id
                     'customer_email'   => $customerEmail,
                     'customer_phone'   => $customerPhone,
                     'grand_total'      => number_format($quoteAmount, 2),
-                    'advance_amount'   => number_format($advanceAmount, 2),
+                    'advance_amount'   => number_format(0, 2),
                     'remaining_balance' => number_format($remainingBalance, 2),
                     'payment_status'   => $paymentStatus,
                     'currency'         => $currency,

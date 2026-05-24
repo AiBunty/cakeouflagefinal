@@ -26,5 +26,7 @@ function get_business_settings(mysqli $conn): array
         'email_logo_url' => get_business_setting($conn, 'email_logo_url'),
         'navbar_logo_url' => get_business_setting($conn, 'navbar_logo_url'),
         'footer_logo_url' => get_business_setting($conn, 'footer_logo_url'),
+        'invoice_duplicate_copy' => get_business_setting($conn, 'invoice_duplicate_copy', 'on'),
+        'allow_partial_payment' => get_business_setting($conn, 'allow_partial_payment', '0'),
     );
 }

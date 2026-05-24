@@ -124,9 +124,23 @@ final class UnifiedMediaService
         $optimizedRelDir = '/public/uploads/optimized/' . $bucket;
         $thumbRelDir = '/public/uploads/thumbnails/' . $bucket;
 
-        self::ensureDir($root . $originalRelDir);
-        self::ensureDir($root . $optimizedRelDir);
-        self::ensureDir($root . $thumbRelDir);
+        $originalDirAbs = $root . $originalRelDir;
+        $optimizedDirAbs = $root . $optimizedRelDir;
+        $thumbDirAbs = $root . $thumbRelDir;
+
+        self::ensureDir($originalDirAbs);
+        self::ensureDir($optimizedDirAbs);
+        self::ensureDir($thumbDirAbs);
+
+        if (!is_dir($originalDirAbs) || !is_writable($originalDirAbs)) {
+            self::log('FAIL', [
+                'error' => 'Upload destination is not writable',
+                'dir' => $originalDirAbs,
+                'exists' => is_dir($originalDirAbs) ? '1' : '0',
+                'writable' => is_writable($originalDirAbs) ? '1' : '0',
+            ]);
+            return $failure('Upload directory is not writable.');
+        }
 
         $originalRelPath = $originalRelDir . '/' . $base . '.' . $ext;
         $originalAbsPath = $root . str_replace('/', DIRECTORY_SEPARATOR, $originalRelPath);
@@ -142,6 +156,16 @@ final class UnifiedMediaService
             }
         } else {
             if (!move_uploaded_file($tmpName, $originalAbsPath)) {
+                $last = error_get_last();
+                self::log('FAIL', [
+                    'error' => 'move_uploaded_file failed',
+                    'tmp' => $tmpName,
+                    'tmp_readable' => is_readable($tmpName) ? '1' : '0',
+                    'dest' => $originalAbsPath,
+                    'dest_dir' => (string)dirname($originalAbsPath),
+                    'dest_dir_writable' => is_writable(dirname($originalAbsPath)) ? '1' : '0',
+                    'php_last_error' => is_array($last) ? (string)($last['message'] ?? '') : '',
+                ]);
                 return $failure('Could not move uploaded file to storage.');
             }
         }
@@ -258,6 +282,21 @@ final class UnifiedMediaService
         string $optimizedPath,
         int $adminId
     ): int {
+        if (!class_exists(Database::class)) {
+            $databasePath = dirname(__DIR__, 2) . '/app/Core/Database.php';
+            if (is_file($databasePath)) {
+                require_once $databasePath;
+            }
+        }
+
+        if (!class_exists(Database::class)) {
+            self::log('WARN', [
+                'message' => 'Queue enqueue skipped because Database class is unavailable',
+                'original' => $originalPath,
+            ]);
+            return 0;
+        }
+
         try {
             $pdo = Database::getConnection();
         } catch (Throwable $e) {
@@ -387,6 +426,9 @@ final class UnifiedMediaService
         }
 
         $line = '[' . date('Y-m-d H:i:s') . '] ' . $level . ' ' . implode(' ', $pairs) . PHP_EOL;
-        @file_put_contents($logFile, $line, FILE_APPEND);
+        $written = @file_put_contents($logFile, $line, FILE_APPEND);
+        if ($written === false) {
+            error_log('[UnifiedMediaService] log write failed path=' . $logFile . ' line=' . trim($line));
+        }
     }
 }

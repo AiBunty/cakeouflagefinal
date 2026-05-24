@@ -71,9 +71,28 @@ if ($paymentStatus === 'credit') {
     $paymentMethod = 'credit';
 }
 
+$adminId = isset($_SESSION['admin']) ? (int)$_SESSION['admin'] : 0;
+$adminName = isset($_SESSION['admin_name']) ? (string)$_SESSION['admin_name'] : 'Admin';
+$existingPaymentStatus = '';
+$existingGrandTotal = 0.0;
+$existingRefundAmount = 0.0;
+
+$existingRead = $conn->prepare('SELECT payment_status, grand_total, COALESCE(refund_amount, 0) AS refund_amount FROM orders WHERE id = ? LIMIT 1');
+if ($existingRead) {
+    $existingRead->bind_param('i', $orderId);
+    $existingRead->execute();
+    $existingRow = $existingRead->get_result()->fetch_assoc();
+    $existingRead->close();
+    if ($existingRow) {
+        $existingPaymentStatus = (string)($existingRow['payment_status'] ?? '');
+        $existingGrandTotal = (float)($existingRow['grand_total'] ?? 0);
+        $existingRefundAmount = (float)($existingRow['refund_amount'] ?? 0);
+    }
+}
+
 if ($paymentStatus === 'paid') {
     $confirmedAt = date('Y-m-d H:i:s');
-    $confirmedBy = isset($_SESSION['admin']) ? (int)$_SESSION['admin'] : null;
+    $confirmedBy = $adminId > 0 ? $adminId : null;
     $stmt = $conn->prepare('UPDATE orders SET payment_method = ?, payment_status = ?, payment_confirmed_at = ?, payment_confirmed_by_admin_id = ?, updated_at = NOW() WHERE id = ? LIMIT 1');
     $stmt->bind_param('sssii', $paymentMethod, $paymentStatus, $confirmedAt, $confirmedBy, $orderId);
     $stmt->execute();
@@ -82,6 +101,98 @@ if ($paymentStatus === 'paid') {
     $stmt = $conn->prepare('UPDATE orders SET payment_method = ?, payment_status = ?, payment_confirmed_at = NULL, payment_confirmed_by_admin_id = NULL, updated_at = NOW() WHERE id = ? LIMIT 1');
     $stmt->bind_param('ssi', $paymentMethod, $paymentStatus, $orderId);
     $stmt->execute();
+}
+
+$readStmt = $conn->prepare('SELECT payment_status, payment_method, payment_confirmed_at, grand_total, COALESCE(refund_amount, 0) AS refund_amount, order_number FROM orders WHERE id = ? LIMIT 1');
+if ($readStmt) {
+    $readStmt->bind_param('i', $orderId);
+    $readStmt->execute();
+    $row = $readStmt->get_result()->fetch_assoc();
+    $readStmt->close();
+
+    if ($row && (string)$row['payment_status'] === 'credit' && $existingPaymentStatus !== 'credit') {
+        $engine = new \App\Services\FinancialTransactionEngine();
+        $recognizedAmount = max(0.0, round((float)($row['grand_total'] ?? $existingGrandTotal) - (float)($row['refund_amount'] ?? $existingRefundAmount), 2));
+        $confirmedAt = (string)($row['payment_confirmed_at'] ?? '');
+        $postResult = $engine->recordCreditSaleRecognized([
+            'order_id' => $orderId,
+            'order_number' => (string)($row['order_number'] ?? ''),
+            'amount' => $recognizedAmount,
+            'payment_status' => (string)$row['payment_status'],
+            'source_reference' => 'admin/update_order_payment.php',
+            'idempotency_key' => 'legacy-payment-credit:' . $orderId . ':' . $confirmedAt,
+            'admin_id' => $adminId,
+            'admin_name' => $adminName,
+            'narration' => 'Credit sale recognized via legacy payment update',
+        ]);
+        if (!$postResult['success']) {
+            error_log('[update_order_payment][fte-credit] ' . $postResult['message']);
+        }
+    }
+
+    if ($row && (string)$row['payment_status'] === 'paid' && $existingPaymentStatus !== 'paid' && (string)$row['payment_method'] !== 'credit') {
+        $engine = new \App\Services\FinancialTransactionEngine();
+        $recognizedAmount = max(0.0, round((float)($row['grand_total'] ?? $existingGrandTotal) - (float)($row['refund_amount'] ?? $existingRefundAmount), 2));
+        $confirmedAt = (string)($row['payment_confirmed_at'] ?? '');
+        if ($existingPaymentStatus === 'credit') {
+            $postResult = $engine->recordBalanceSettled([
+                'order_id' => $orderId,
+                'order_number' => (string)($row['order_number'] ?? ''),
+                'amount' => $recognizedAmount,
+                'payment_method' => (string)$row['payment_method'],
+                'source_reference' => 'admin/update_order_payment.php',
+                'idempotency_key' => 'legacy-payment-balance:' . $orderId . ':' . (string)$row['payment_method'] . ':' . $confirmedAt,
+                'admin_id' => $adminId,
+                'admin_name' => $adminName,
+                'narration' => 'Credit balance settled via legacy payment update',
+            ]);
+        } else {
+            $postResult = $engine->recordPaymentReceived([
+                'order_id' => $orderId,
+                'order_number' => (string)($row['order_number'] ?? ''),
+                'amount' => $recognizedAmount,
+                'payment_method' => (string)$row['payment_method'],
+                'payment_status' => (string)$row['payment_status'],
+                'source_reference' => 'admin/update_order_payment.php',
+                'idempotency_key' => 'legacy-payment-confirmed:' . $orderId . ':' . (string)$row['payment_method'] . ':' . $confirmedAt,
+                'admin_id' => $adminId,
+                'admin_name' => $adminName,
+                'narration' => 'Payment received via legacy payment update',
+            ]);
+        }
+
+        if (!$postResult['success']) {
+            error_log('[update_order_payment][fte] ' . $postResult['message']);
+        }
+
+        try {
+            $receiptService = new \App\Services\PaymentReceiptService();
+            $receiptResult = $receiptService->issueAdvanceReceipt($orderId, [
+                'source_event' => 'legacy_payment_update',
+                'source_reference' => 'legacy-payment-update:' . $orderId . ':' . (string)$row['payment_method'] . ':' . $confirmedAt,
+                'payment_method' => (string)$row['payment_method'],
+                'payment_status' => (string)$row['payment_status'],
+                'issued_by_admin_id' => $adminId,
+                'financial_transaction_id' => isset($postResult['transaction_id']) ? (int)$postResult['transaction_id'] : null,
+                'metadata' => [
+                    'channel' => 'legacy_payment_update',
+                    'trigger' => 'manual_payment_confirmation',
+                ],
+            ]);
+            if (!$receiptResult['success'] && !in_array($receiptResult['message'], ['Receipt not allowed after full payment', 'No advance amount available for receipt', 'Payment receipt schema is not ready', 'Receipt not required when partial payment is disabled'], true)) {
+                error_log('[update_order_payment][receipt] ' . $receiptResult['message']);
+            }
+        } catch (\Throwable $receiptErr) {
+            error_log('[update_order_payment][receipt] ' . $receiptErr->getMessage());
+        }
+    }
+
+    try {
+        $snapshotService = new \App\Services\OrderFinanceSnapshotService();
+        $snapshotService->syncOrderFinancialColumns(\App\Core\Database::getConnection(), $orderId);
+    } catch (\Throwable $syncErr) {
+        error_log('[update_order_payment][finance-sync] ' . $syncErr->getMessage());
+    }
 }
 
 $target = 'orders.php';

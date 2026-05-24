@@ -973,37 +973,60 @@ final class AdminApiController
         $limit = min(200, max(10, (int)($_GET['limit'] ?? 60)));
 
         $sql = 'SELECT
-                    id,
-                    order_number,
-                    customer_name,
-                    customer_email,
-                    customer_phone,
-                    fulfilment_mode,
-                    order_status,
-                    payment_status,
-                    payment_method,
-                    scheduled_slot_label,
-                    delivery_postal_code,
-                    grand_total,
-                    created_at
-                FROM orders
+                    o.id,
+                    o.order_number,
+                    o.customer_name,
+                    o.customer_email,
+                    o.customer_phone,
+                    o.fulfilment_mode,
+                    o.order_status,
+                    o.payment_status,
+                    o.payment_method,
+                    o.scheduled_slot_label,
+                    o.delivery_postal_code,
+                    o.grand_total,
+                    o.discount_total,
+                    COALESCE(oi_summary.cake_names, "") AS cake_names,
+                    COALESCE(coupon_summary.coupon_info, "") AS coupon_info,
+                    COALESCE(coupon_summary.coupon_discount_total, 0) AS coupon_discount_total,
+                    o.created_at
+                FROM orders o
+                LEFT JOIN (
+                    SELECT order_id,
+                           GROUP_CONCAT(
+                               CONCAT(product_name_snapshot, " x ", quantity)
+                               ORDER BY id ASC SEPARATOR ", "
+                           ) AS cake_names
+                    FROM order_items
+                    GROUP BY order_id
+                ) oi_summary ON oi_summary.order_id = o.id
+                LEFT JOIN (
+                    SELECT order_id,
+                           GROUP_CONCAT(
+                               CONCAT(code_snapshot, " (₹", FORMAT(discount_total, 2), ")")
+                               ORDER BY id ASC SEPARATOR ", "
+                           ) AS coupon_info,
+                           SUM(discount_total) AS coupon_discount_total
+                    FROM coupon_redemptions
+                    GROUP BY order_id
+                ) coupon_summary ON coupon_summary.order_id = o.id
                 WHERE 1=1';
         $params = [];
 
         if ($q !== '') {
-            $sql .= ' AND (order_number LIKE :q OR customer_name LIKE :q OR customer_email LIKE :q OR customer_phone LIKE :q)';
+            $sql .= ' AND (o.order_number LIKE :q OR o.customer_name LIKE :q OR o.customer_email LIKE :q OR o.customer_phone LIKE :q)';
             $params['q'] = '%' . $q . '%';
         }
         if ($orderStatus !== '') {
-            $sql .= ' AND order_status = :order_status';
+            $sql .= ' AND o.order_status = :order_status';
             $params['order_status'] = $orderStatus;
         }
         if ($paymentStatus !== '') {
-            $sql .= ' AND payment_status = :payment_status';
+            $sql .= ' AND o.payment_status = :payment_status';
             $params['payment_status'] = $paymentStatus;
         }
 
-        $sql .= ' ORDER BY created_at DESC LIMIT :limit';
+        $sql .= ' ORDER BY o.created_at DESC LIMIT :limit';
 
         $stmt = $pdo->prepare($sql);
         foreach ($params as $key => $value) {
@@ -1292,6 +1315,8 @@ final class AdminApiController
         $adminId = $this->requireAdminId();
         if ($adminId === null) { return; }
 
+        $input = $this->readJsonInput();
+
         $orderId = (int)($this->routeParams['id'] ?? 0);
         if ($orderId <= 0) {
             Response::json(['success' => false, 'message' => 'Invalid order ID'], 422);
@@ -1319,6 +1344,58 @@ final class AdminApiController
             return;
         }
 
+        $chargeableAmount = max(0.0, round((float)($order['grand_total'] ?? 0) - (float)($order['refund_amount'] ?? 0), 2));
+        if ($chargeableAmount <= 0.0) {
+            Response::json(['success' => false, 'message' => 'Order chargeable amount must be greater than zero.'], 422);
+            return;
+        }
+
+        $rawReceived = $input['received_amount'] ?? null;
+        $receivedAmount = $rawReceived === null ? $chargeableAmount : round((float)$rawReceived, 2);
+        if ($receivedAmount <= 0) {
+            Response::json(['success' => false, 'message' => 'Received amount must be greater than zero.'], 422);
+            return;
+        }
+        if ($receivedAmount - $chargeableAmount > 0.01) {
+            Response::json(['success' => false, 'message' => 'Received amount cannot exceed order payable amount.'], 422);
+            return;
+        }
+
+        $discountAmount = max(0.0, round($chargeableAmount - $receivedAmount, 2));
+        $discountRatio = $chargeableAmount > 0 ? ($discountAmount / $chargeableAmount) : 0.0;
+        $managerOverride = !empty($input['manager_override']);
+        $adminRole = strtolower(trim((string)($_SESSION['admin_role'] ?? '')));
+        $adminPermissions = isset($_SESSION['admin_permissions']) && is_array($_SESSION['admin_permissions'])
+            ? array_map(static fn($v): string => (string)$v, $_SESSION['admin_permissions'])
+            : [];
+        $hasDiscountOverridePermission = $adminRole === 'super_admin'
+            || in_array('business_settings', $adminPermissions, true)
+            || in_array('order_credit', $adminPermissions, true);
+
+        if ($discountRatio > 0.05 && !($managerOverride && $hasDiscountOverridePermission)) {
+            Response::json([
+                'success' => false,
+                'message' => 'Shortfall discount above 5% requires manager override.',
+            ], 422);
+            return;
+        }
+
+        $discountReason = trim((string)($input['discount_reason'] ?? ''));
+        if ($discountAmount > 0 && $discountReason === '') {
+            $discountReason = 'Auto-adjusted shortfall at payment confirmation';
+        }
+
+        $effectivePaymentMethod = strtolower(trim((string)($input['payment_method'] ?? ($order['payment_method'] ?? 'upi_manual'))));
+        if (!in_array($effectivePaymentMethod, ['upi_manual', 'gateway', 'credit'], true)) {
+            Response::json(['success' => false, 'message' => 'Invalid payment method for confirmation.'], 422);
+            return;
+        }
+
+        if ($effectivePaymentMethod === 'credit') {
+            Response::json(['success' => false, 'message' => 'Credit confirmations must use the credit workflow.'], 422);
+            return;
+        }
+
         $pdo->beginTransaction();
         try {
             // 1. Confirm slot reservation (checks capacity inside transaction)
@@ -1335,27 +1412,44 @@ final class AdminApiController
             }
 
             // 2. Mark payment confirmed + order confirmed
+            $paymentNoteSuffix = '';
+            if ($discountAmount > 0) {
+                $paymentNoteSuffix = "\n[Discount Applied] ₹" . number_format($discountAmount, 2, '.', '') . ' - ' . $discountReason;
+            }
+
             $pdo->prepare(
                 'UPDATE orders SET
                     payment_status = "paid",
+                    payment_method = :payment_method,
                     payment_confirmed_at = NOW(),
-                    order_status = CASE WHEN order_status = "pending" THEN "confirmed" ELSE order_status END
+                    payment_confirmed_by_admin_id = :admin_id,
+                    discount_total = ROUND(COALESCE(discount_total, 0) + :discount_amount, 2),
+                    grand_total = :final_grand_total,
+                    admin_note = CONCAT(COALESCE(admin_note, ""), :payment_note_suffix),
+                    order_status = CASE WHEN order_status IN ("pending", "pending_payment", "payment_under_review") THEN "confirmed" ELSE order_status END
                  WHERE id = :id'
-            )->execute(['id' => $orderId]);
+            )->execute([
+                'id' => $orderId,
+                'payment_method' => $effectivePaymentMethod,
+                'admin_id' => $adminId,
+                'discount_amount' => $discountAmount,
+                'final_grand_total' => $receivedAmount,
+                'payment_note_suffix' => $paymentNoteSuffix,
+            ]);
 
-            $recognizedAmount = max(0.0, round((float)($order['grand_total'] ?? 0) - (float)($order['refund_amount'] ?? 0), 2));
+            $recognizedAmount = $receivedAmount;
             if ($recognizedAmount > 0) {
                 $engine = new \App\Services\FinancialTransactionEngine();
-                $adminName = (string)($this->session['admin_name'] ?? 'Admin');
+                $adminName = (string)($_SESSION['admin_name'] ?? 'Admin');
 
                 if ((string)($order['payment_status'] ?? '') === 'credit') {
                     $postResult = $engine->recordBalanceSettled([
                         'order_id' => $orderId,
                         'order_number' => (string)($order['order_number'] ?? ''),
                         'amount' => $recognizedAmount,
-                        'payment_method' => (string)($order['payment_method'] ?? 'upi_manual'),
+                        'payment_method' => $effectivePaymentMethod,
                         'source_reference' => 'AdminApiController::ordersConfirmPayment',
-                        'idempotency_key' => 'admin-api-confirm-payment-balance:' . $orderId,
+                        'idempotency_key' => 'admin-api-confirm-payment-balance:' . $orderId . ':' . number_format($recognizedAmount, 2, '.', ''),
                         'admin_id' => $adminId,
                         'admin_name' => $adminName,
                         'narration' => 'Credit balance settled via admin API confirm payment',
@@ -1365,18 +1459,50 @@ final class AdminApiController
                         'order_id' => $orderId,
                         'order_number' => (string)($order['order_number'] ?? ''),
                         'amount' => $recognizedAmount,
-                        'payment_method' => (string)($order['payment_method'] ?? 'upi_manual'),
+                        'payment_method' => $effectivePaymentMethod,
                         'payment_status' => 'paid',
                         'source_reference' => 'AdminApiController::ordersConfirmPayment',
-                        'idempotency_key' => 'admin-api-confirm-payment:' . $orderId,
+                        'idempotency_key' => 'admin-api-confirm-payment:' . $orderId . ':' . number_format($recognizedAmount, 2, '.', ''),
                         'admin_id' => $adminId,
                         'admin_name' => $adminName,
-                        'narration' => 'Payment received via admin API confirm payment',
+                        'narration' => $discountAmount > 0
+                            ? ('Payment received via admin API confirm payment. Discount adjusted: ₹' . number_format($discountAmount, 2, '.', ''))
+                            : 'Payment received via admin API confirm payment',
                     ]);
                 }
 
                 if (!$postResult['success']) {
                     error_log('[ordersConfirmPayment][fte] ' . $postResult['message']);
+                }
+
+                try {
+                    $receiptService = new \App\Services\PaymentReceiptService($pdo);
+                    $receiptResult = $receiptService->issueAdvanceReceipt($orderId, [
+                        'source_event' => 'admin_api_confirm_payment',
+                        'source_reference' => 'admin-api-confirm-payment:' . $orderId . ':' . number_format($recognizedAmount, 2, '.', ''),
+                        'amount' => $recognizedAmount,
+                        'balance_due' => 0,
+                        'payment_method' => $effectivePaymentMethod,
+                        'payment_status' => 'paid',
+                        'issued_by_admin_id' => $adminId,
+                        'financial_transaction_id' => isset($postResult['transaction_id']) ? (int)$postResult['transaction_id'] : null,
+                        'metadata' => [
+                            'channel' => 'admin_api',
+                            'trigger' => 'confirm_payment',
+                        ],
+                    ]);
+                    if (!$receiptResult['success'] && !in_array($receiptResult['message'], ['No advance amount available for receipt', 'Payment receipt schema is not ready'], true)) {
+                        error_log('[ordersConfirmPayment][receipt] ' . $receiptResult['message']);
+                    }
+                } catch (\Throwable $receiptErr) {
+                    error_log('[ordersConfirmPayment][receipt] ' . $receiptErr->getMessage());
+                }
+
+                try {
+                    $snapshotService = new \App\Services\OrderFinanceSnapshotService();
+                    $snapshotService->syncOrderFinancialColumns($pdo, $orderId);
+                } catch (\Throwable $syncErr) {
+                    error_log('[ordersConfirmPayment][finance-sync] ' . $syncErr->getMessage());
                 }
             }
 
@@ -1384,6 +1510,10 @@ final class AdminApiController
 
             $this->logAdminAction($pdo, $adminId, 'confirm_payment', 'orders', $orderId, [
                 'slot_result' => $slotResult['message'] ?? '',
+                'received_amount' => $receivedAmount,
+                'discount_amount' => $discountAmount,
+                'discount_reason' => $discountReason,
+                'manager_override' => $managerOverride,
             ]);
 
             // 3. Queue automation (non-fatal)
@@ -1396,8 +1526,15 @@ final class AdminApiController
 
             Response::json([
                 'success' => true,
-                'message' => 'Payment confirmed. Slot reserved. Customer will be notified.',
+                'message' => $discountAmount > 0
+                    ? ('Payment confirmed with discount adjustment of ₹' . number_format($discountAmount, 2, '.', '') . '. Slot reserved.')
+                    : 'Payment confirmed. Slot reserved. Customer will be notified.',
                 'slot'    => $slotResult,
+                'data' => [
+                    'received_amount' => $receivedAmount,
+                    'discount_amount' => $discountAmount,
+                    'discount_reason' => $discountReason,
+                ],
             ]);
 
         } catch (\Throwable $e) {
@@ -1486,40 +1623,63 @@ final class AdminApiController
         $paymentStatus = trim((string)($_GET['payment_status'] ?? ''));
 
         $sql = 'SELECT
-                    order_number,
-                    customer_name,
-                    customer_email,
-                    customer_phone,
-                    fulfilment_mode,
-                    order_status,
-                    payment_status,
-                    payment_method,
-                    scheduled_slot_label,
-                    delivery_postal_code,
-                    delivery_fee,
-                    subtotal,
-                    discount_total,
-                    tax_total,
-                    grand_total,
-                    created_at
-                FROM orders
+                    o.id,
+                    o.order_number,
+                    o.customer_name,
+                    o.customer_email,
+                    o.customer_phone,
+                    COALESCE(oi_summary.cake_names, "") AS cake_names,
+                    o.fulfilment_mode,
+                    o.order_status,
+                    o.payment_status,
+                    o.payment_method,
+                    o.scheduled_slot_label,
+                    o.delivery_postal_code,
+                    o.delivery_fee,
+                    o.subtotal,
+                    o.discount_total,
+                    o.tax_total,
+                    o.grand_total,
+                    COALESCE(coupon_summary.coupon_info, "") AS coupon_info,
+                    COALESCE(coupon_summary.coupon_discount_total, 0) AS coupon_discount_total,
+                    o.created_at
+                FROM orders o
+                LEFT JOIN (
+                    SELECT order_id,
+                           GROUP_CONCAT(
+                               CONCAT(product_name_snapshot, " x ", quantity)
+                               ORDER BY id ASC SEPARATOR ", "
+                           ) AS cake_names
+                    FROM order_items
+                    GROUP BY order_id
+                ) oi_summary ON oi_summary.order_id = o.id
+                LEFT JOIN (
+                    SELECT order_id,
+                           GROUP_CONCAT(
+                               CONCAT(code_snapshot, " (₹", FORMAT(discount_total, 2), ")")
+                               ORDER BY id ASC SEPARATOR ", "
+                           ) AS coupon_info,
+                           SUM(discount_total) AS coupon_discount_total
+                    FROM coupon_redemptions
+                    GROUP BY order_id
+                ) coupon_summary ON coupon_summary.order_id = o.id
                 WHERE 1=1';
         $params = [];
 
         if ($q !== '') {
-            $sql .= ' AND (order_number LIKE :q OR customer_name LIKE :q OR customer_email LIKE :q OR customer_phone LIKE :q)';
+            $sql .= ' AND (o.order_number LIKE :q OR o.customer_name LIKE :q OR o.customer_email LIKE :q OR o.customer_phone LIKE :q)';
             $params['q'] = '%' . $q . '%';
         }
         if ($orderStatus !== '') {
-            $sql .= ' AND order_status = :order_status';
+            $sql .= ' AND o.order_status = :order_status';
             $params['order_status'] = $orderStatus;
         }
         if ($paymentStatus !== '') {
-            $sql .= ' AND payment_status = :payment_status';
+            $sql .= ' AND o.payment_status = :payment_status';
             $params['payment_status'] = $paymentStatus;
         }
 
-        $sql .= ' ORDER BY created_at DESC LIMIT 5000';
+        $sql .= ' ORDER BY o.created_at DESC LIMIT 5000';
         $stmt = $pdo->prepare($sql);
         foreach ($params as $key => $value) {
             $stmt->bindValue(':' . $key, $value);
@@ -1527,10 +1687,10 @@ final class AdminApiController
         $stmt->execute();
 
         $headers = [
-            'order_number', 'customer_name', 'customer_email', 'customer_phone',
+            'id', 'order_number', 'customer_name', 'customer_email', 'customer_phone', 'cake_names',
             'fulfilment_mode', 'order_status', 'payment_status', 'payment_method',
             'scheduled_slot_label', 'delivery_postal_code', 'delivery_fee',
-            'subtotal', 'discount_total', 'tax_total', 'grand_total', 'created_at',
+            'subtotal', 'discount_total', 'tax_total', 'grand_total', 'coupon_info', 'coupon_discount_total', 'created_at',
         ];
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
         ExcelService::export(
@@ -1571,9 +1731,10 @@ final class AdminApiController
 
         $pdo = self::db(); if (!$pdo) return;
 
-        $existsStmt = $pdo->prepare('SELECT id FROM products WHERE id = :id AND deleted_at IS NULL LIMIT 1');
+        $existsStmt = $pdo->prepare('SELECT id, featured_image FROM products WHERE id = :id AND deleted_at IS NULL LIMIT 1');
         $existsStmt->execute(['id' => $productId]);
-        if (!$existsStmt->fetchColumn()) {
+        $product = $existsStmt->fetch(PDO::FETCH_ASSOC);
+        if (!$product) {
             Response::json(['success' => false, 'message' => 'Product not found'], 404);
             return;
         }
@@ -1584,7 +1745,43 @@ final class AdminApiController
             return;
         }
 
-        $oldFeaturedImage = (string)($product['featured_image'] ?? '');
+        $oldFeaturedImage = trim((string)($product['featured_image'] ?? ''));
+
+        if ($mode === 'gallery') {
+            $secondaryExistsStmt = $pdo->prepare(
+                'SELECT id, image_url
+                 FROM product_images
+                 WHERE product_id = :product_id AND sort_order = 1
+                 ORDER BY id ASC
+                 LIMIT 1'
+            );
+            $secondaryExistsStmt->execute(['product_id' => $productId]);
+            $secondary = $secondaryExistsStmt->fetch(PDO::FETCH_ASSOC);
+
+            if ($secondary) {
+                if ((string)($secondary['image_url'] ?? '') === $path) {
+                    Response::json(['success' => true, 'message' => 'Media attached to product']);
+                    return;
+                }
+
+                Response::json([
+                    'success' => false,
+                    'message' => 'Only two images are allowed per product (featured + one secondary). Remove or replace image 2 first.'
+                ], 422);
+                return;
+            }
+
+            $slotCountStmt = $pdo->prepare('SELECT COUNT(*) FROM product_images WHERE product_id = :product_id');
+            $slotCountStmt->execute(['product_id' => $productId]);
+            $slotCount = (int)$slotCountStmt->fetchColumn();
+            if ($slotCount >= 2) {
+                Response::json([
+                    'success' => false,
+                    'message' => 'Only two images are allowed per product (featured + one secondary).'
+                ], 422);
+                return;
+            }
+        }
 
         try {
             $pdo->beginTransaction();
@@ -1613,14 +1810,12 @@ final class AdminApiController
                 $imgExists = $pdo->prepare('SELECT id FROM product_images WHERE product_id = :product_id AND image_url = :image_url LIMIT 1');
                 $imgExists->execute(['product_id' => $productId, 'image_url' => $path]);
                 if (!$imgExists->fetchColumn()) {
-                    $maxSortStmt = $pdo->prepare('SELECT COALESCE(MAX(sort_order), 0) FROM product_images WHERE product_id = :product_id');
-                    $maxSortStmt->execute(['product_id' => $productId]);
-                    $nextSort = (int)$maxSortStmt->fetchColumn() + 1;
-
                     $insertImg = $pdo->prepare('INSERT INTO product_images (product_id, image_url, alt_text, sort_order) VALUES (:product_id, :image_url, :alt_text, :sort_order)');
-                    $insertImg->execute(['product_id' => $productId, 'image_url' => $path, 'alt_text' => $altText, 'sort_order' => $nextSort]);
+                    $insertImg->execute(['product_id' => $productId, 'image_url' => $path, 'alt_text' => $altText, 'sort_order' => 1]);
                 }
             }
+
+            $this->enforceProductImageSlotLimit($pdo, $productId);
 
             $pdo->commit();
         } catch (Throwable $e) {
@@ -1660,7 +1855,8 @@ final class AdminApiController
             'SELECT id, image_url, alt_text, sort_order, created_at
              FROM product_images
              WHERE product_id = :product_id
-             ORDER BY sort_order ASC, id ASC'
+               ORDER BY sort_order ASC, id ASC
+               LIMIT 2'
         );
         $stmt->execute(['product_id' => $productId]);
 
@@ -1785,6 +1981,10 @@ final class AdminApiController
 
         if (count($normalizedIds) < 1) {
             Response::json(['success' => false, 'message' => 'ordered_ids has no valid image IDs'], 422);
+            return;
+        }
+        if (count($normalizedIds) > 2) {
+            Response::json(['success' => false, 'message' => 'Only two images are allowed per product'], 422);
             return;
         }
 
@@ -2411,7 +2611,7 @@ final class AdminApiController
             return;
         }
 
-        $allowedLogoTypes = ['email_logo_url', 'navbar_logo_url', 'footer_logo_url'];
+        $allowedLogoTypes = ['email_logo_url', 'navbar_logo_url', 'footer_logo_url', 'default_product_image_url'];
         $logoType = trim((string)($_POST['logo_type'] ?? ''));
         if (!in_array($logoType, $allowedLogoTypes, true)) {
             Response::json(['success' => false, 'message' => 'Invalid logo_type. Must be one of: ' . implode(', ', $allowedLogoTypes)], 422);
@@ -3453,7 +3653,7 @@ final class AdminApiController
                 }
             }
 
-            $invoiceStmt = $pdo->prepare('SELECT id, invoice_status, grand_total FROM invoices WHERE order_id = :order_id LIMIT 1');
+            $invoiceStmt = $pdo->prepare('SELECT id, invoice_status, grand_total, paid_amount FROM invoices WHERE order_id = :order_id LIMIT 1');
             $invoiceStmt->execute(['order_id' => $orderId]);
             $invoice = $invoiceStmt->fetch(PDO::FETCH_ASSOC) ?: null;
 
@@ -3463,6 +3663,7 @@ final class AdminApiController
                 if ($amount <= 0) {
                     $amount = round((float)$invoice['grand_total'], 2);
                 }
+                $amount = round($amount, 2);
 
                 $paymentInsert = $pdo->prepare(
                     'INSERT INTO payments (invoice_id, payment_method, payment_status, amount, payment_reference, note, verified_by_admin_id, verified_at)
@@ -3470,7 +3671,7 @@ final class AdminApiController
                 );
                 $paymentInsert->execute([
                     'invoice_id' => $invoiceId,
-                    'amount' => round($amount, 2),
+                    'amount' => $amount,
                     'payment_reference' => $this->nullableString((string)($alert['parsed_utr'] ?? '')),
                     'note' => $this->nullableString($note !== '' ? $note : 'Verified from bank alert queue'),
                     'verified_by_admin_id' => $adminId,
@@ -3478,17 +3679,52 @@ final class AdminApiController
                 $paymentId = (int)$pdo->lastInsertId();
 
                 $invoiceStatus = (string)($invoice['invoice_status'] ?? 'pending_payment');
-                if ($invoiceStatus !== 'paid') {
-                    $invoiceUpdate = $pdo->prepare('UPDATE invoices SET paid_amount = grand_total, balance_due = 0, invoice_status = "paid", updated_at = NOW() WHERE id = :id');
-                    $invoiceUpdate->execute(['id' => $invoiceId]);
+                $invoiceGrandTotal = (float)($invoice['grand_total'] ?? 0);
+                $currentPaidAmount = (float)($invoice['paid_amount'] ?? 0);
+                $nextPaidAmount = min($invoiceGrandTotal, round($currentPaidAmount + $amount, 2));
+                $nextBalanceDue = max(0.0, round($invoiceGrandTotal - $nextPaidAmount, 2));
+                $nextInvoiceStatus = $nextBalanceDue <= 0.01 ? 'paid' : 'part_paid';
+                if ($invoiceStatus !== $nextInvoiceStatus || abs($nextPaidAmount - $currentPaidAmount) > 0.009) {
+                    $invoiceUpdate = $pdo->prepare('UPDATE invoices SET paid_amount = :paid_amount, balance_due = :balance_due, invoice_status = :invoice_status, updated_at = NOW() WHERE id = :id');
+                    $invoiceUpdate->execute([
+                        'paid_amount' => $nextPaidAmount,
+                        'balance_due' => $nextBalanceDue,
+                        'invoice_status' => $nextInvoiceStatus,
+                        'id' => $invoiceId,
+                    ]);
 
-                    $hist = $pdo->prepare('INSERT INTO payment_status_history (invoice_id, from_status, to_status, changed_by_admin_id, note) VALUES (:invoice_id, :from_status, "paid", :admin_id, :note)');
+                    $hist = $pdo->prepare('INSERT INTO payment_status_history (invoice_id, from_status, to_status, changed_by_admin_id, note) VALUES (:invoice_id, :from_status, :to_status, :admin_id, :note)');
                     $hist->execute([
                         'invoice_id' => $invoiceId,
                         'from_status' => $invoiceStatus,
+                        'to_status' => $nextInvoiceStatus,
                         'admin_id' => $adminId,
                         'note' => 'Bank alert confirmed manually',
                     ]);
+                }
+
+                try {
+                    $receiptService = new \App\Services\PaymentReceiptService($pdo);
+                    $receiptResult = $receiptService->issueAdvanceReceipt($orderId, [
+                        'source_event' => 'bank_alert_confirmation',
+                        'source_reference' => 'bank-alert-confirm:' . $alertId,
+                        'payment_method' => (string)($order['payment_method'] ?? 'upi_manual'),
+                        'payment_status' => (string)($order['payment_status'] ?? 'paid'),
+                        'issued_by_admin_id' => $adminId,
+                        'payment_id' => $paymentId,
+                        'financial_transaction_id' => isset($postResult['transaction_id']) ? (int)$postResult['transaction_id'] : null,
+                        'amount' => $amount,
+                        'metadata' => [
+                            'channel' => 'bank_alerts',
+                            'trigger' => 'bank_alert_confirmation',
+                            'alert_id' => $alertId,
+                        ],
+                    ]);
+                    if (!$receiptResult['success'] && !in_array($receiptResult['message'], ['Receipt not allowed after full payment', 'No advance amount available for receipt', 'Payment receipt schema is not ready', 'Receipt not required when partial payment is disabled'], true)) {
+                        error_log('[bankAlertsConfirm][receipt] ' . $receiptResult['message']);
+                    }
+                } catch (\Throwable $receiptErr) {
+                    error_log('[bankAlertsConfirm][receipt] ' . $receiptErr->getMessage());
                 }
 
                 $alertUpdate = $pdo->prepare(
@@ -6171,6 +6407,37 @@ final class AdminApiController
         }
     }
 
+    private function enforceProductImageSlotLimit(PDO $pdo, int $productId): void
+    {
+        $stmt = $pdo->prepare(
+            'SELECT id
+             FROM product_images
+             WHERE product_id = :product_id
+             ORDER BY sort_order ASC, id ASC'
+        );
+        $stmt->execute(['product_id' => $productId]);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $keepIds = [];
+        foreach ($rows as $index => $row) {
+            $id = (int)($row['id'] ?? 0);
+            if ($id > 0 && $index < 2) {
+                $keepIds[] = $id;
+            }
+        }
+
+        foreach ($rows as $row) {
+            $id = (int)($row['id'] ?? 0);
+            if ($id <= 0 || in_array($id, $keepIds, true)) {
+                continue;
+            }
+            $deleteStmt = $pdo->prepare('DELETE FROM product_images WHERE id = :id');
+            $deleteStmt->execute(['id' => $id]);
+        }
+
+        $this->normalizeProductImageOrder($pdo, $productId);
+    }
+
     private function toBinaryFlag(mixed $value): int
     {
         $normalized = filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
@@ -6213,9 +6480,6 @@ final class AdminApiController
             'refunded'           => [],
             'failed'             => ['pending', 'paid'],
             'rejected'           => ['pending'],
-            'refunded'     => [],
-            'credit'       => ['refunded'],
-            'partial'      => ['confirmed', 'paid', 'refunded'],
         ];
 
         return in_array($to, $map[$from] ?? [], true);

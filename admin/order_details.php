@@ -3,9 +3,11 @@
 
 
 $pageTitle = "Order Details";
+require_once __DIR__ . '/../app/bootstrap.php';
 require_once __DIR__ . '/layout.php';
 
 require_once __DIR__ . '/includes/db.php';
+require_once __DIR__ . '/includes/invoice_helpers.php';
 $order_id = intval($_GET['id'] ?? 0);
 $returnTo = trim((string)($_GET['return_to'] ?? ''));
 $backHref = 'orders.php';
@@ -26,7 +28,19 @@ $canRefund      = admin_has_permission('can_approve_refund') || admin_has_permis
 
 // 🔥 ORDER FETCH
 $order = $conn->query("SELECT * FROM orders WHERE id=$order_id")->fetch_assoc();
-$canGenerateInvoice = is_array($order) && (string)($order['payment_status'] ?? '') === 'paid';
+$canGenerateInvoice = is_array($order) && invoice_is_fully_paid($order);
+$canOpenReceipt = is_array($order) && payment_receipt_is_eligible($order);
+$receiptHistory = [];
+$latestReceipt = null;
+if (is_array($order) && (int)($order['id'] ?? 0) > 0) {
+  try {
+    $paymentReceiptService = new \App\Services\PaymentReceiptService();
+    $receiptHistory = $paymentReceiptService->getReceiptHistoryForOrder((int)$order['id']);
+    $latestReceipt = $receiptHistory[0] ?? null;
+  } catch (\Throwable $receiptErr) {
+    error_log('[order_details][receipt-history] ' . $receiptErr->getMessage());
+  }
+}
 
 // 🔥 ITEMS FETCH (IMPORTANT: table name check kar)
 $items = $conn->query("SELECT * FROM order_items WHERE order_id=$order_id");
@@ -134,6 +148,9 @@ function getStatus($s){
     <?php else: ?>
       <span class="btn-back" style="background:#9ca3af; cursor:not-allowed; opacity:.65;" title="Invoice unlocks only after payment is confirmed.">🧾 Invoice</span>
     <?php endif; ?>
+    <?php if ($canOpenReceipt || is_array($latestReceipt)): ?>
+      <a href="payment_receipt.php?id=<?php echo (int)$order['id']; ?>" class="btn-back" style="background:#5b1f3a; color:#fff;">🧾 Payment Receipt</a>
+    <?php endif; ?>
     <a href="<?= htmlspecialchars($backHref, ENT_QUOTES, 'UTF-8') ?>" class="btn-back">← Back</a>
   </div>
 </div>
@@ -208,7 +225,31 @@ function getStatus($s){
   </div>
   <script>
   function adminConfirmPayment(orderId) {
-    if (!confirm('Confirm payment and officially reserve the slot for this order?')) return;
+    var grossText = '<?php echo htmlspecialchars((string)number_format((float)($order['grand_total'] ?? 0), 2, '.', ''), ENT_QUOTES, 'UTF-8'); ?>';
+    var defaultReceived = String(grossText || '0.00');
+    var receivedInput = prompt('Enter amount received (full payment):', defaultReceived);
+    if (receivedInput === null) return;
+    var receivedAmount = parseFloat(String(receivedInput).trim());
+    if (!isFinite(receivedAmount) || receivedAmount <= 0) {
+      alert('Please enter a valid received amount.');
+      return;
+    }
+
+    var expectedAmount = parseFloat(defaultReceived);
+    var shortfall = Math.max(0, +(expectedAmount - receivedAmount).toFixed(2));
+    var discountReason = '';
+    var managerOverride = false;
+    if (shortfall > 0) {
+      discountReason = prompt('Shortfall will be adjusted as discount. Enter reason:', 'On-call approved adjustment') || '';
+      if (!confirm('Apply discount ₹' + shortfall.toFixed(2) + ' and confirm payment?')) return;
+      var ratio = expectedAmount > 0 ? (shortfall / expectedAmount) : 0;
+      if (ratio > 0.05) {
+        managerOverride = confirm('Discount exceeds 5%. Confirm manager override?');
+      }
+    } else if (!confirm('Confirm full payment and officially reserve the slot for this order?')) {
+      return;
+    }
+
     var btn = document.querySelector('#payment-action-area button');
     var msg = document.getElementById('payment-action-msg');
     msg.textContent = 'Processing…';
@@ -216,6 +257,11 @@ function getStatus($s){
       method: 'POST',
       headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
       credentials: 'same-origin',
+      body: JSON.stringify({
+        received_amount: receivedAmount,
+        discount_reason: discountReason,
+        manager_override: managerOverride
+      })
     })
     .then(function(r){ return r.json(); })
     .then(function(data) {
@@ -273,6 +319,39 @@ function getStatus($s){
   <p>Subtotal: ₹<?php echo $order['subtotal']; ?></p>
   <p>Delivery: ₹<?php echo $order['delivery_fee']; ?></p>
 <p class="price-highlight">Total: ₹<?php echo $order['grand_total']; ?></p>
+</div>
+
+<div class="container-box">
+  <div class="title">🧾 Payment Receipt History</div>
+  <?php if ($receiptHistory): ?>
+    <div style="display:grid;gap:10px;">
+      <?php foreach ($receiptHistory as $receipt): ?>
+        <div style="border:1px solid #ead9df;border-radius:10px;padding:12px;background:#fff8fa;">
+          <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap;">
+            <div>
+              <div style="font-weight:700;color:#5b1f3a;"><?= htmlspecialchars((string)($receipt['receipt_number'] ?? 'NA'), ENT_QUOTES, 'UTF-8') ?></div>
+              <div style="font-size:13px;color:#6b7280;">Issued <?= htmlspecialchars(invoice_format_datetime((string)($receipt['issued_at'] ?? '')), ENT_QUOTES, 'UTF-8') ?></div>
+            </div>
+            <div style="text-align:right;">
+              <div style="font-weight:700;">₹<?= number_format((float)($receipt['amount'] ?? 0), 2) ?></div>
+              <div style="font-size:12px;color:#6b7280;">Balance due: ₹<?= number_format((float)($receipt['balance_due'] ?? 0), 2) ?></div>
+            </div>
+          </div>
+          <div style="margin-top:8px;font-size:13px;color:#374151;display:grid;gap:4px;">
+            <div>Method: <strong><?= htmlspecialchars(invoice_payment_method_label((string)($receipt['payment_method'] ?? ($order['payment_method'] ?? 'NA'))), ENT_QUOTES, 'UTF-8') ?></strong></div>
+            <div>Status Snapshot: <strong><?= htmlspecialchars(strtoupper((string)($receipt['payment_status_snapshot'] ?? 'pending')), ENT_QUOTES, 'UTF-8') ?></strong></div>
+            <div>Issued By: <strong><?= htmlspecialchars((string)($receipt['issued_by_name'] ?? 'System'), ENT_QUOTES, 'UTF-8') ?></strong></div>
+            <?php if (!empty($receipt['financial_transaction_type']) || !empty($receipt['financial_narration'])): ?>
+              <div>Accounting Link: <strong><?= htmlspecialchars((string)($receipt['financial_transaction_type'] ?? 'transaction'), ENT_QUOTES, 'UTF-8') ?></strong><?php if (!empty($receipt['financial_amount'])): ?> · ₹<?= number_format((float)$receipt['financial_amount'], 2) ?><?php endif; ?></div>
+              <div style="color:#6b7280;"><?= htmlspecialchars((string)($receipt['financial_narration'] ?? ''), ENT_QUOTES, 'UTF-8') ?></div>
+            <?php endif; ?>
+          </div>
+        </div>
+      <?php endforeach; ?>
+    </div>
+  <?php else: ?>
+    <p style="margin:0;color:#6b7280;font-size:14px;">No payment receipts have been issued for this order yet.</p>
+  <?php endif; ?>
 </div>
 
 <!-- 🧁 ITEMS -->

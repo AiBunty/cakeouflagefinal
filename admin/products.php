@@ -8,6 +8,7 @@ if (!isset($_SESSION['admin'])) {
 
 require_once __DIR__ . '/includes/db.php';
 require_once __DIR__ . '/includes/image_helpers.php';
+require_once __DIR__ . '/../app/bootstrap.php';
 require_once __DIR__ . '/../app/Services/UnifiedMediaService.php';
 
 function prod_h(string $value): string {
@@ -36,8 +37,123 @@ function prod_unique_slug(mysqli $conn, string $baseSlug, int $productId): strin
   }
 }
 
+function prod_log_upload_issue(int $productId, string $stage, string $message): void {
+  error_log('[products.php] upload issue: product_id=' . $productId . ' stage=' . $stage . ' message=' . $message);
+}
+
+function prod_get_enum_values(mysqli $conn, string $table, string $column, array $fallback): array {
+  $sql = 'SELECT COLUMN_TYPE FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ? LIMIT 1';
+  $stmt = safePrepare($conn, $sql);
+  $stmt->bind_param('ss', $table, $column);
+  $stmt->execute();
+  $res = $stmt->get_result();
+  $row = $res ? $res->fetch_assoc() : null;
+  if (!$row) {
+    return $fallback;
+  }
+
+  $columnType = (string)($row['COLUMN_TYPE'] ?? '');
+  if ($columnType === '' || stripos($columnType, 'enum(') !== 0) {
+    return $fallback;
+  }
+
+  if (!preg_match_all("/'([^']+)'/", $columnType, $m) || empty($m[1])) {
+    return $fallback;
+  }
+
+  $values = array_values(array_unique(array_map('strval', $m[1])));
+  return $values !== [] ? $values : $fallback;
+}
+
+function prod_column_exists(mysqli $conn, string $table, string $column): bool {
+  $sql = 'SELECT COUNT(*) AS c FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?';
+  $stmt = safePrepare($conn, $sql);
+  $stmt->bind_param('ss', $table, $column);
+  $stmt->execute();
+  $res = $stmt->get_result();
+  $row = $res ? $res->fetch_assoc() : null;
+  return (int)($row['c'] ?? 0) > 0;
+}
+
+function prod_sync_gallery_slot(mysqli $conn, int $productId, int $sortOrder, ?string $imageUrl): void {
+  $deleteStmt = safePrepare($conn, 'DELETE FROM product_images WHERE product_id = ? AND sort_order = ?');
+  $deleteStmt->bind_param('ii', $productId, $sortOrder);
+  $deleteStmt->execute();
+  $deleteStmt->close();
+
+  $url = trim((string)$imageUrl);
+  if ($url === '') {
+    return;
+  }
+
+  $insertStmt = safePrepare($conn, 'INSERT INTO product_images (product_id, image_url, sort_order) VALUES (?, ?, ?)');
+  $insertStmt->bind_param('isi', $productId, $url, $sortOrder);
+  $insertStmt->execute();
+  $insertStmt->close();
+}
+
+function prod_enforce_two_image_slots(mysqli $conn, int $productId, string $featuredImage, ?string $image2): void {
+  $featured = trim($featuredImage);
+  if ($featured === '') {
+    $featured = '/public/assets/defaults/default-product-image.webp';
+  }
+
+  $secondary = trim((string)$image2);
+  if ($secondary !== '' && $secondary === $featured) {
+    $secondary = '';
+  }
+
+  $deleteAllStmt = safePrepare($conn, 'DELETE FROM product_images WHERE product_id = ?');
+  $deleteAllStmt->bind_param('i', $productId);
+  $deleteAllStmt->execute();
+  $deleteAllStmt->close();
+
+  $slot0 = 0;
+  $insertFeaturedStmt = safePrepare($conn, 'INSERT INTO product_images (product_id, image_url, sort_order) VALUES (?, ?, ?)');
+  $insertFeaturedStmt->bind_param('isi', $productId, $featured, $slot0);
+  $insertFeaturedStmt->execute();
+  $insertFeaturedStmt->close();
+
+  if ($secondary !== '') {
+    $slot1 = 1;
+    $insertImage2Stmt = safePrepare($conn, 'INSERT INTO product_images (product_id, image_url, sort_order) VALUES (?, ?, ?)');
+    $insertImage2Stmt->bind_param('isi', $productId, $secondary, $slot1);
+    $insertImage2Stmt->execute();
+    $insertImage2Stmt->close();
+  }
+}
+
+function prod_upload_media_field(int $productId, string $fieldName, string $module, int $adminId, array $replacePaths = []): array {
+  if (empty($_FILES[$fieldName]['name'])) {
+    return ['ok' => true, 'path' => '', 'error' => ''];
+  }
+
+  $errorCode = (int)($_FILES[$fieldName]['error'] ?? UPLOAD_ERR_NO_FILE);
+  if ($errorCode !== UPLOAD_ERR_OK) {
+    return ['ok' => false, 'path' => '', 'error' => 'PHP upload error code: ' . $errorCode];
+  }
+
+  $result = \App\Services\UnifiedMediaService::upload(
+    $_FILES[$fieldName],
+    [
+      'module' => $module,
+      'entity_type' => 'product',
+      'entity_id' => $productId,
+      'admin_id' => $adminId,
+      'allow_svg' => false,
+      'replace_paths' => $replacePaths,
+    ]
+  );
+
+  if (!(bool)($result['ok'] ?? false)) {
+    return ['ok' => false, 'path' => '', 'error' => (string)($result['error'] ?? 'Upload failed')];
+  }
+
+  return ['ok' => true, 'path' => (string)($result['relative_url'] ?? ''), 'error' => ''];
+}
+
 function prod_placeholder_image(): string {
-  return '/assets/defaults/default-product-image.webp';
+  return \App\Services\ProductImageService::placeholderForCategory(null);
 }
 
 function prod_resolve_image_url(string $path): string {
@@ -116,124 +232,144 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string)($_POST['action'] ?? '') ==
     $availabilityStatus = 'in_stock';
   }
 
-  // Server-side category fallback: if the JS dropdown failed to pre-select the category
-  // (e.g. the category was deleted, or openProductEditor received data-category-id="0"),
-  // the submitted value will be 0. Re-read the current value from DB so the NOT NULL FK
-  // constraint is satisfied and the update does not silently fail with updated=0.
-  if ($categoryId <= 0 && $id > 0) {
-    $catFbResult = $conn->query('SELECT collection_category_id FROM products WHERE id = ' . $id . ' AND deleted_at IS NULL LIMIT 1');
-    if ($catFbResult && ($catFbRow = $catFbResult->fetch_assoc())) {
-      $categoryId = (int)($catFbRow['collection_category_id'] ?? 0);
-    }
-  }
-
-  if ($id <= 0 || $name === '' || $basePrice <= 0 || $categoryId <= 0) {
+  if ($id <= 0 || $name === '' || $basePrice <= 0) {
     header('Location: products.php?updated=0');
     exit;
   }
 
-  $newImagePath = $currentImage !== '' ? $currentImage : '/assets/defaults/default-product-image.webp';
-  $image1Changed = false;
-  $uploadWarning = '';
-  if (!empty($_FILES['image']['name']) && (int)($_FILES['image']['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
-    $imgResult  = \App\Services\UnifiedMediaService::upload(
-      $_FILES['image'],
-      [
-        'module' => 'product',
-        'entity_type' => 'product',
-        'entity_id' => $id,
-        'admin_id' => (int)($_SESSION['admin'] ?? 0),
-        'allow_svg' => false,
-      ]
-    );
-    if ($imgResult['ok']) {
-      $newImagePath  = $imgResult['relative_url'];
-      $image1Changed = true;
-    } else {
-      $uploadWarning = $imgResult['error'];
-    }
+  $existingStmt = safePrepare($conn, 'SELECT p.id, p.collection_category_id, p.featured_image, (SELECT image_url FROM product_images WHERE product_id = p.id AND sort_order = 1 ORDER BY id DESC LIMIT 1) AS image2_url FROM products p WHERE p.id = ? AND p.deleted_at IS NULL LIMIT 1');
+  $existingStmt->bind_param('i', $id);
+  $existingStmt->execute();
+  $existingRes = $existingStmt->get_result();
+  $existing = $existingRes ? $existingRes->fetch_assoc() : null;
+  if (!$existing) {
+    header('Location: products.php?updated=0');
+    exit;
   }
 
-  // IMAGE 2 upload
-  $newImage2Path = null;
-  if (!empty($_FILES['image2']['name']) && (int)($_FILES['image2']['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
-    $img2Result  = \App\Services\UnifiedMediaService::upload(
-      $_FILES['image2'],
-      [
-        'module' => 'product_image_2',
-        'entity_type' => 'product',
-        'entity_id' => $id,
-        'admin_id' => (int)($_SESSION['admin'] ?? 0),
-        'allow_svg' => false,
-      ]
-    );
-    if ($img2Result['ok']) {
-      $newImage2Path = $img2Result['relative_url'];
-    } else {
-      // Image 2 is optional; log but don't overwrite the primary upload warning
-      error_log('[products.php] Image2 upload failed: id=' . $id . ' error=' . $img2Result['error']);
-    }
+  if ($categoryId <= 0) {
+    $categoryId = (int)($existing['collection_category_id'] ?? 0);
+  }
+  if ($categoryId <= 0) {
+    header('Location: products.php?updated=0');
+    exit;
+  }
+
+  $adminId = (int)($_SESSION['admin'] ?? 0);
+  $existingImage1 = trim((string)($existing['featured_image'] ?? ''));
+  if ($existingImage1 === '') {
+    $existingImage1 = $currentImage;
+  }
+  $existingImage2 = trim((string)($existing['image2_url'] ?? ''));
+
+  $newImagePath = $existingImage1 !== '' ? $existingImage1 : prod_placeholder_image();
+  $newImage2Path = $existingImage2 !== '' ? $existingImage2 : null;
+
+  $upload1 = prod_upload_media_field($id, 'image', 'product', $adminId, $existingImage1 !== '' ? [$existingImage1] : []);
+  if (!$upload1['ok']) {
+    prod_log_upload_issue($id, 'image1', (string)$upload1['error']);
+    header('Location: products.php?updated=0&uploadwarn=1&err=image1');
+    exit;
+  }
+  if ((string)$upload1['path'] !== '') {
+    $newImagePath = (string)$upload1['path'];
+  }
+
+  $upload2 = prod_upload_media_field($id, 'image2', 'product_image_2', $adminId, $existingImage2 !== '' ? [$existingImage2] : []);
+  if (!$upload2['ok']) {
+    prod_log_upload_issue($id, 'image2', (string)$upload2['error']);
+    header('Location: products.php?updated=0&uploadwarn=1&err=image2');
+    exit;
+  }
+  if ((string)$upload2['path'] !== '') {
+    $newImage2Path = (string)$upload2['path'];
   }
 
   $slug = prod_unique_slug($conn, prod_slugify($name), $id);
   $isChefSpecial = isset($_POST['is_chef_special']) ? 1 : 0;
   $dietaryTag = trim((string)($_POST['dietary_tag'] ?? 'regular'));
-  $allowedDietary = ['regular', 'eggless', 'vegan', 'sugar_free', 'healthy'];
-  if (!in_array($dietaryTag, $allowedDietary, true)) { $dietaryTag = 'regular'; }
+  $allowedDietary = prod_get_enum_values($conn, 'products', 'dietary_tag', ['regular', 'eggless', 'vegan', 'sugar_free']);
+  if (!in_array($dietaryTag, $allowedDietary, true)) {
+    $dietaryTag = in_array('regular', $allowedDietary, true) ? 'regular' : (string)($allowedDietary[0] ?? 'regular');
+  }
   $isVeg = isset($_POST['is_veg']) ? 1 : 0;
   $topperEnabled = isset($_POST['topper_enabled']) ? 1 : 0;
-  $noteEnabled   = isset($_POST['note_enabled']) ? 1 : 0;
-  try {
-    $stmt = safePrepare($conn, 'UPDATE products SET name = ?, slug = ?, starting_price = ?, collection_category_id = ?, short_description = ?, featured_image = ?, availability_status = ?, is_chef_special = ?, dietary_tag = ?, is_veg = ?, topper_enabled = ?, note_enabled = ?, updated_at = NOW() WHERE id = ? LIMIT 1');
-    $stmt->bind_param('ssdisssisiiii', $name, $slug, $basePrice, $categoryId, $description, $newImagePath, $availabilityStatus, $isChefSpecial, $dietaryTag, $isVeg, $topperEnabled, $noteEnabled, $id);
-    $ok = $stmt->execute();
-    if (!$ok) {
-      error_log('[products.php] UPDATE failed: id=' . $id . ' mysql_error=' . $conn->error);
-    }
-  } catch (RuntimeException $e) {
-    error_log('[products.php] UPDATE exception: id=' . $id . ' msg=' . $e->getMessage());
-    header('Location: products.php?updated=0');
-    exit;
-  }
+  $noteEnabled = isset($_POST['note_enabled']) ? 1 : 0;
 
-  // Keep variant prices aligned with base price logic from edit flow.
-  if ($ok) {
-    $weights = array('1', '1.5', '2', '2.5', '3', '4');
+  $ok = false;
+  try {
+    $conn->begin_transaction();
+
+    $updateAssignments = [
+      'name = ?',
+      'slug = ?',
+      'starting_price = ?',
+      'collection_category_id = ?',
+      'short_description = ?',
+      'featured_image = ?',
+      'availability_status = ?',
+      'is_chef_special = ?',
+      'dietary_tag = ?',
+    ];
+    $types = 'ssdisssis';
+    $values = [
+      $name,
+      $slug,
+      $basePrice,
+      $categoryId,
+      $description,
+      $newImagePath,
+      $availabilityStatus,
+      $isChefSpecial,
+      $dietaryTag,
+    ];
+
+    if (prod_column_exists($conn, 'products', 'is_veg')) {
+      $updateAssignments[] = 'is_veg = ?';
+      $types .= 'i';
+      $values[] = $isVeg;
+    }
+    if (prod_column_exists($conn, 'products', 'topper_enabled')) {
+      $updateAssignments[] = 'topper_enabled = ?';
+      $types .= 'i';
+      $values[] = $topperEnabled;
+    }
+    if (prod_column_exists($conn, 'products', 'note_enabled')) {
+      $updateAssignments[] = 'note_enabled = ?';
+      $types .= 'i';
+      $values[] = $noteEnabled;
+    }
+
+    $updateSql = 'UPDATE products SET ' . implode(', ', $updateAssignments) . ', updated_at = NOW() WHERE id = ? AND deleted_at IS NULL LIMIT 1';
+    $types .= 'i';
+    $values[] = $id;
+
+    $updateStmt = safePrepare($conn, $updateSql);
+    $updateStmt->bind_param($types, ...$values);
+    $ok = $updateStmt->execute();
+    if (!$ok) {
+      throw new RuntimeException('Product update failed: ' . $updateStmt->error);
+    }
+
+    $weights = ['1', '1.5', '2', '2.5', '3', '4'];
     foreach ($weights as $weight) {
       $variantPrice = $basePrice * (float)$weight;
       $variantStmt = safePrepare($conn, 'UPDATE product_variants SET price = ? WHERE product_id = ? AND weight_or_size = ?');
       $variantStmt->bind_param('dis', $variantPrice, $id, $weight);
       $variantStmt->execute();
+      $variantStmt->close();
     }
 
-    // Sync product_images for gallery. sort_order=0 → image 1, sort_order=1 → image 2.
-    if ($image1Changed && $newImagePath !== null) {
-      $piDel = safePrepare($conn, 'DELETE FROM product_images WHERE product_id = ? AND sort_order = 0');
-      $piDel->bind_param('i', $id);
-      $piDel->execute();
-      $piDel->close();
-      $piIns = safePrepare($conn, 'INSERT INTO product_images (product_id, image_url, sort_order) VALUES (?, ?, 0)');
-      $piIns->bind_param('is', $id, $newImagePath);
-      $piIns->execute();
-      $piIns->close();
-    }
-    if ($newImage2Path !== null) {
-      $pi2Del = safePrepare($conn, 'DELETE FROM product_images WHERE product_id = ? AND sort_order = 1');
-      $pi2Del->bind_param('i', $id);
-      $pi2Del->execute();
-      $pi2Del->close();
-      $pi2Ins = safePrepare($conn, 'INSERT INTO product_images (product_id, image_url, sort_order) VALUES (?, ?, 1)');
-      $pi2Ins->bind_param('is', $id, $newImage2Path);
-      $pi2Ins->execute();
-      $pi2Ins->close();
-    }
+    prod_enforce_two_image_slots($conn, $id, $newImagePath, $newImage2Path);
+
+    $conn->commit();
+  } catch (Throwable $e) {
+    $conn->rollback();
+    $ok = false;
+    error_log('[products.php] update_product_inline failure: product_id=' . $id . ' message=' . $e->getMessage());
   }
 
-  $redirectQuery = 'updated=' . ($ok ? '1' : '0');
-  if ($uploadWarning !== '') {
-    $redirectQuery .= '&uploadwarn=1';
-  }
-  header('Location: products.php?' . $redirectQuery);
+  header('Location: products.php?updated=' . ($ok ? '1' : '0'));
   exit;
 }
 
@@ -1123,7 +1259,7 @@ require_once __DIR__ . '/layout.php';
               $price = $row['discount_price'] ?: $row['starting_price'];
             ?>
             <tr class="product-row" data-name="<?php echo htmlspecialchars(strtolower((string)$row['name'])); ?>" data-collection="<?php echo htmlspecialchars(strtolower($collection)); ?>" data-subcategory="<?php echo htmlspecialchars(strtolower($subcategory)); ?>">
-              <td><img class="products-table__thumb" src="<?php echo prod_h(prod_resolve_image_url((string)($row['featured_image'] ?? ''))); ?>" alt="<?php echo htmlspecialchars((string)$row['name']); ?>" onerror="this.onerror=null;this.src='/assets/defaults/default-product-image.webp';"></td>
+              <td><img class="products-table__thumb" src="<?php echo prod_h(prod_resolve_image_url((string)($row['featured_image'] ?? ''))); ?>" alt="<?php echo htmlspecialchars((string)$row['name']); ?>" onerror="this.onerror=null;this.src='<?php echo prod_h(prod_placeholder_image()); ?>';"></td>
               <td>
                 <p class="products-title"><?php echo $row['name']; ?></p>
                 <p class="products-subtitle">ID #<?php echo (int)$row['id']; ?></p>
@@ -1173,7 +1309,7 @@ require_once __DIR__ . '/layout.php';
         ?>
         <article class="product-card product-row" data-name="<?php echo htmlspecialchars(strtolower((string)$row['name'])); ?>" data-collection="<?php echo htmlspecialchars(strtolower($collection)); ?>" data-subcategory="<?php echo htmlspecialchars(strtolower($subcategory)); ?>">
           <div class="product-card__media">
-            <img src="<?php echo prod_h(prod_resolve_image_url((string)($row['featured_image'] ?? ''))); ?>" alt="<?php echo htmlspecialchars((string)$row['name']); ?>" onerror="this.onerror=null;this.src='/assets/defaults/default-product-image.webp';">
+            <img src="<?php echo prod_h(prod_resolve_image_url((string)($row['featured_image'] ?? ''))); ?>" alt="<?php echo htmlspecialchars((string)$row['name']); ?>" onerror="this.onerror=null;this.src='<?php echo prod_h(prod_placeholder_image()); ?>';">
           </div>
           <div class="product-card__body">
             <h3><?php echo $row['name']; ?></h3>

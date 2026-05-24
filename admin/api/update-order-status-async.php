@@ -47,6 +47,35 @@ try {
     $pdo = \App\Core\Database::getConnection();
     $stateManager = new \App\Services\OrderStateManager();
 
+    $readLockStmt = $conn->prepare('SELECT order_status, payment_status, payment_confirmed_at FROM orders WHERE id = ? LIMIT 1');
+    $readLockStmt->bind_param('i', $orderId);
+    $readLockStmt->execute();
+    $existing = $readLockStmt->get_result()->fetch_assoc();
+
+    if (!$existing) {
+        http_response_code(404);
+        echo json_encode(['success' => false, 'error' => 'Order not found'], JSON_UNESCAPED_SLASHES);
+        exit;
+    }
+
+    $existingPaymentStatus = (string)($existing['payment_status'] ?? '');
+    $existingPaymentConfirmedAt = (string)($existing['payment_confirmed_at'] ?? '');
+    $paymentLockedStates = ['paid', 'credit', 'refund_pending', 'partially_refunded', 'refunded'];
+    $isPaymentLocked = in_array($existingPaymentStatus, $paymentLockedStates, true) || $existingPaymentConfirmedAt !== '';
+    $lockedDisallowedStatuses = ['pending_payment', 'payment_under_review', 'awaiting_confirmation', 'cancelled', 'rejected'];
+
+    if ($isPaymentLocked && in_array($status, $lockedDisallowedStatuses, true)) {
+        http_response_code(422);
+        echo json_encode(['success' => false, 'error' => 'Payment-confirmed orders are financially locked. Use fulfillment or refund workflow only.'], JSON_UNESCAPED_SLASHES);
+        exit;
+    }
+
+    if ($isPaymentLocked && $status === 'confirmed') {
+        http_response_code(422);
+        echo json_encode(['success' => false, 'error' => 'Order is already financially confirmed and cannot be reconfirmed.'], JSON_UNESCAPED_SLASHES);
+        exit;
+    }
+
     $transition = $stateManager->transition(
         $pdo,
         $orderId,
@@ -65,6 +94,9 @@ try {
         echo json_encode(['success' => false, 'error' => $transition['message']], JSON_UNESCAPED_SLASHES);
         exit;
     }
+
+    // State manager canonicalizes delivered -> completed.
+    $status = (string)($transition['new_status'] ?? $status);
 
     if ($status === 'confirmed') {
         if ($paymentMethod === 'credit') {
@@ -162,12 +194,40 @@ try {
                 if (!$postResult['success']) {
                     error_log('[update-order-status-async][fte] ' . $postResult['message']);
                 }
+
+                try {
+                    $receiptService = new \App\Services\PaymentReceiptService();
+                    $receiptResult = $receiptService->issueAdvanceReceipt($orderId, [
+                        'source_event' => 'async_order_status_confirmation',
+                        'source_reference' => 'async-order-status:' . $orderId . ':' . (string)($paymentRow['payment_method'] ?? $paymentMethod) . ':' . $confirmedAt,
+                        'payment_method' => (string)($paymentRow['payment_method'] ?? $paymentMethod),
+                        'payment_status' => (string)($paymentRow['payment_status'] ?? 'paid'),
+                        'issued_by_admin_id' => $adminId,
+                        'financial_transaction_id' => isset($postResult['transaction_id']) ? (int)$postResult['transaction_id'] : null,
+                        'metadata' => [
+                            'channel' => 'admin_async_status',
+                            'trigger' => 'async_status_confirmed',
+                        ],
+                    ]);
+                    if (!$receiptResult['success'] && !in_array($receiptResult['message'], ['Receipt not allowed after full payment', 'No advance amount available for receipt', 'Payment receipt schema is not ready', 'Receipt not required when partial payment is disabled'], true)) {
+                        error_log('[update-order-status-async][receipt] ' . $receiptResult['message']);
+                    }
+                } catch (\Throwable $receiptErr) {
+                    error_log('[update-order-status-async][receipt] ' . $receiptErr->getMessage());
+                }
             }
         }
     }
 
     $service = new \App\Services\OrderAutomationService();
     $service->handleStatusChange($pdo, $orderId, $status, $adminId);
+
+    try {
+        $snapshotService = new \App\Services\OrderFinanceSnapshotService();
+        $snapshotService->syncOrderFinancialColumns($pdo, $orderId);
+    } catch (\Throwable $syncErr) {
+        error_log('[update-order-status-async][finance-sync] ' . $syncErr->getMessage());
+    }
 
     $readStmt = $conn->prepare('SELECT order_status, payment_status, payment_method FROM orders WHERE id = ? LIMIT 1');
     $readStmt->bind_param('i', $orderId);

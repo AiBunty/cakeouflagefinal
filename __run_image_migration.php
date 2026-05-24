@@ -28,7 +28,7 @@ if ($isWeb) {
     header('Content-Type: text/plain; charset=UTF-8');
 }
 
-$defaultImage = '/assets/defaults/default-product-image.webp';
+$defaultImage = '/public/assets/defaults/default-product-image.webp';
 
 echo "=== Cakeouflage: Default Product Image Migration ===\n\n";
 

@@ -5,8 +5,6 @@ namespace App\Services;
 
 final class MediaUrlService
 {
-    private const DEFAULT_FALLBACK = '/assets/defaults/default-product-image.webp';
-
     public static function resolve(?string $path, string $variant = 'optimized', ?string $categorySlug = null): string
     {
         $raw = trim((string)$path);
@@ -34,7 +32,7 @@ final class MediaUrlService
             return $normalized;
         }
 
-        return self::DEFAULT_FALLBACK;
+        return ProductImageService::placeholderForCategory($categorySlug);
     }
 
     private static function variantPath(string $normalized, string $variant): string

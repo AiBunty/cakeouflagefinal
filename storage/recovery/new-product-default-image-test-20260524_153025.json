@@ -1,0 +1,9 @@
+{
+    "run_at": "2026-05-24T15:30:25+05:30",
+    "marker": "AUTO-DEFAULT-IMG-20260524153024-a54fe1",
+    "http_status": 200,
+    "product_id": 260,
+    "featured_image": "/public/assets/defaults/default-product-image.webp",
+    "gallery_image": "/public/assets/defaults/default-product-image.webp",
+    "ok": true
+}

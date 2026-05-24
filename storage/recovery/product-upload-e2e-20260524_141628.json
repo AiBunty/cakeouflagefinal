@@ -1,0 +1,64 @@
+{
+    "run_at": "2026-05-24T14:16:28+05:30",
+    "session_file": "/tmp/sess_e2eupload6cfddfa2e5a21a0a",
+    "sample_image": "/var/www/html/scripts/recovery/../../storage/test-media/sample-image.png",
+    "pass_count": 0,
+    "total": 5,
+    "results": [
+        {
+            "product_id": 1,
+            "name": "Belgian Velvet Hazelnut Gateau 01",
+            "status": 302,
+            "ok": false,
+            "error": "",
+            "location": "login.php",
+            "header_snippet": "HTTP/1.1 100 Continue\r\n\r\nHTTP/1.1 302 Found\r\nDate: Sun, 24 May 2026 08:46:28 GMT\r\nServer: Apache/2.4.67 (Debian)\r\nX-Powered-By: PHP/8.2.31\r\nLocation: login.php\r\nContent-Length: 0\r\nContent-Type: text/h",
+            "featured_image": "/assets/images/products/classic-chocolate/belgian-velvet-hazelnut-gateau-01-01.jpg",
+            "db_path_ok": false
+        },
+        {
+            "product_id": 2,
+            "name": "Belgian Velvet Hazelnut Gateau 02",
+            "status": 302,
+            "ok": false,
+            "error": "",
+            "location": "login.php",
+            "header_snippet": "HTTP/1.1 100 Continue\r\n\r\nHTTP/1.1 302 Found\r\nDate: Sun, 24 May 2026 08:46:28 GMT\r\nServer: Apache/2.4.67 (Debian)\r\nX-Powered-By: PHP/8.2.31\r\nLocation: login.php\r\nContent-Length: 0\r\nContent-Type: text/h",
+            "featured_image": "/assets/images/products/classic-chocolate/belgian-velvet-hazelnut-gateau-02-01.jpg",
+            "db_path_ok": false
+        },
+        {
+            "product_id": 3,
+            "name": "Belgian Velvet Hazelnut Gateau 03",
+            "status": 302,
+            "ok": false,
+            "error": "",
+            "location": "login.php",
+            "header_snippet": "HTTP/1.1 100 Continue\r\n\r\nHTTP/1.1 302 Found\r\nDate: Sun, 24 May 2026 08:46:28 GMT\r\nServer: Apache/2.4.67 (Debian)\r\nX-Powered-By: PHP/8.2.31\r\nLocation: login.php\r\nContent-Length: 0\r\nContent-Type: text/h",
+            "featured_image": "/assets/images/products/classic-chocolate/belgian-velvet-hazelnut-gateau-03-01.jpg",
+            "db_path_ok": false
+        },
+        {
+            "product_id": 4,
+            "name": "Belgian Velvet Hazelnut Gateau 04",
+            "status": 302,
+            "ok": false,
+            "error": "",
+            "location": "login.php",
+            "header_snippet": "HTTP/1.1 100 Continue\r\n\r\nHTTP/1.1 302 Found\r\nDate: Sun, 24 May 2026 08:46:28 GMT\r\nServer: Apache/2.4.67 (Debian)\r\nX-Powered-By: PHP/8.2.31\r\nLocation: login.php\r\nContent-Length: 0\r\nContent-Type: text/h",
+            "featured_image": "/assets/images/products/classic-chocolate/belgian-velvet-hazelnut-gateau-04-01.jpg",
+            "db_path_ok": false
+        },
+        {
+            "product_id": 5,
+            "name": "Belgian Velvet Hazelnut Gateau 05",
+            "status": 302,
+            "ok": false,
+            "error": "",
+            "location": "login.php",
+            "header_snippet": "HTTP/1.1 100 Continue\r\n\r\nHTTP/1.1 302 Found\r\nDate: Sun, 24 May 2026 08:46:28 GMT\r\nServer: Apache/2.4.67 (Debian)\r\nX-Powered-By: PHP/8.2.31\r\nLocation: login.php\r\nContent-Length: 0\r\nContent-Type: text/h",
+            "featured_image": "/assets/images/products/classic-chocolate/belgian-velvet-hazelnut-gateau-05-01.jpg",
+            "db_path_ok": false
+        }
+    ]
+}

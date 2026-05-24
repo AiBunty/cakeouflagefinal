@@ -1,0 +1,10 @@
+{
+    "run_at": "2026-05-24T15:16:35+05:30",
+    "marker": "AUTO-MEDIA-GUARD-20260524151634-6176b0",
+    "product_id": 259,
+    "status_code": 422,
+    "response_message": "Only two images are allowed per product (featured + one secondary). Remove or replace image 2 first.",
+    "slot_count_after_attempt": 2,
+    "path_attempted": "/uploads/media/guard-seed-3.webp",
+    "ok": true
+}

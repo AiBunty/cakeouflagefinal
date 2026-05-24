@@ -36,10 +36,14 @@ $settingKeys = array(
     'email_logo_url',
     'navbar_logo_url',
     'footer_logo_url',
+    'default_product_image_url',
     'brand_primary_color',
     'brand_secondary_color',
     'support_email',
     'support_phone',
+    'order_delete_password_hash',
+    'order_archive_retention_days',
+    'invoice_duplicate_copy',
 );
 
 $settings = array();
@@ -53,6 +57,11 @@ foreach ($settingKeys as $key) {
 }
 
 $adminId = isset($_SESSION['admin']) ? (int)$_SESSION['admin'] : 0;
+$hasOrderDeletePassword = trim((string)($settings['order_delete_password_hash'] ?? '')) !== '';
+$archiveRetentionDays = (int)($settings['order_archive_retention_days'] ?? 30);
+if ($archiveRetentionDays < 7 || $archiveRetentionDays > 3650) {
+  $archiveRetentionDays = 30;
+}
 ?>
 
 <style>
@@ -436,26 +445,82 @@ $adminId = isset($_SESSION['admin']) ? (int)$_SESSION['admin'] : 0;
       </div>
     </div>
 
+    <!-- Media Defaults Section -->
+    <div class="settings-section">
+      <h4>Media Defaults</h4>
+      <p style="margin:0 0 14px;font-size:0.85rem;color:#5a3344;">Control the global fallback image used when product media is missing.</p>
+      <div class="settings-grid">
+        <div class="settings-field" style="grid-column: 1/-1">
+          <label>Default Product Image (fallback when no image is uploaded)</label>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+            <?php if (!empty($settings['default_product_image_url'])): ?>
+              <img id="defaultProductImagePreview" src="<?= htmlspecialchars($settings['default_product_image_url']) ?>" alt="Default Product Image Preview" style="height:56px;border:1px solid rgba(128,0,31,0.18);border-radius:8px;padding:4px;background:#fff;">
+            <?php else: ?>
+              <div id="defaultProductImagePreview" style="height:56px;width:120px;border:1px dashed rgba(128,0,31,0.3);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:0.75rem;color:#999;">No image set</div>
+            <?php endif; ?>
+            <div style="display:flex;flex-direction:column;gap:6px;">
+              <label for="defaultProductImageFile" style="background:#80001F;color:#fff;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:0.82rem;font-weight:700;display:inline-block;">Upload Image</label>
+              <input type="file" id="defaultProductImageFile" accept="image/png,image/jpeg,image/svg+xml,image/webp,image/gif" style="display:none;">
+              <span id="defaultProductImageUploadStatus" style="font-size:0.78rem;color:#5a3344;"></span>
+            </div>
+          </div>
+          <input type="hidden" id="default_product_image_url" name="default_product_image_url" value="<?= htmlspecialchars($settings['default_product_image_url']) ?>">
+          <p style="margin:6px 0 0;font-size:0.78rem;color:#888;">Used globally when products have no uploaded image. Recommended size: at least 800x800.</p>
+        </div>
+      </div>
+    </div>
+
     <!-- Payment Settings -->
     <div class="settings-section">
       <h4>Payment Settings</h4>
       <div class="settings-grid">
+        <input type="hidden" name="allow_partial_payment" value="0">
+        <input type="hidden" name="payment_screenshot_required" value="1">
+        <div class="settings-field" style="grid-column:1/-1;">
+          <label>Checkout Collection Policy</label>
+          <input type="text" value="Full payment only (locked)" readonly>
+          <p class="settings-hint">Partial/advance checkout has been disabled globally. UPI screenshot remains required for manual UPI verification.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Invoice Section -->
+    <div class="settings-section">
+      <h4>Invoice Settings</h4>
+      <div class="settings-grid">
         <div class="settings-field">
-          <label for="allow_partial_payment">Allow Partial Payment (50% Advance)</label>
-          <select id="allow_partial_payment" name="allow_partial_payment">
-            <option value="1" <?= ($settings['allow_partial_payment'] ?? '1') !== '0' ? 'selected' : '' ?>>Enabled — customers can pay 50% advance at checkout</option>
-            <option value="0" <?= ($settings['allow_partial_payment'] ?? '1') === '0' ? 'selected' : '' ?>>Disabled — full payment required at checkout</option>
+          <label for="invoice_duplicate_copy">Print Duplicate Copy</label>
+          <select id="invoice_duplicate_copy" name="invoice_duplicate_copy">
+            <option value="on" <?= ($settings['invoice_duplicate_copy'] ?? 'on') !== 'off' ? 'selected' : '' ?>>On — print Original + Duplicate copy on every invoice</option>
+            <option value="off" <?= ($settings['invoice_duplicate_copy'] ?? 'on') === 'off' ? 'selected' : '' ?>>Off — print Original copy only</option>
           </select>
-          <p class="settings-hint">When disabled, the 50% advance option is hidden from the checkout page. BYOC quote orders are unaffected.</p>
+          <p class="settings-hint">When off, the invoice prints only the Original copy. Applies to both the half-page (&le;5 items) and full-page (&gt;5 items) layout modes.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <h4>Order Destructive Governance</h4>
+      <div class="settings-grid">
+        <div class="settings-field">
+          <label for="order_delete_password">Order Delete Password</label>
+          <input type="password" id="order_delete_password" name="order_delete_password" maxlength="120" placeholder="Set or rotate destructive action password">
         </div>
         <div class="settings-field">
-          <label for="payment_screenshot_required">Require UPI Payment Screenshot</label>
-          <select id="payment_screenshot_required" name="payment_screenshot_required">
-            <option value="1" <?= ($settings['payment_screenshot_required'] ?? '1') !== '0' ? 'selected' : '' ?>>Required — customer must upload screenshot before placing order</option>
-            <option value="0" <?= ($settings['payment_screenshot_required'] ?? '1') === '0' ? 'selected' : '' ?>>Optional — screenshot upload is shown but not enforced</option>
-          </select>
-          <p class="settings-hint">When required, the order cannot be placed without a UPI payment screenshot. Applies to UPI / manual payment only.</p>
+          <label for="order_delete_password_confirm">Confirm Delete Password</label>
+          <input type="password" id="order_delete_password_confirm" name="order_delete_password_confirm" maxlength="120" placeholder="Re-enter password">
         </div>
+        <div class="settings-field">
+          <label for="order_archive_retention_days">Archive Retention (Days)</label>
+          <input type="number" id="order_archive_retention_days" name="order_archive_retention_days" min="7" max="3650" value="<?= (int)$archiveRetentionDays ?>">
+        </div>
+        <div class="settings-field">
+          <label>Password Status</label>
+          <input type="text" value="<?= $hasOrderDeletePassword ? 'Configured (hashed)' : 'Not configured' ?>" readonly>
+        </div>
+      </div>
+      <div class="preview-box" style="margin-top:14px;">
+        <div><strong>Security:</strong> delete password is stored only as a hash and verified during destructive order actions.</div>
       </div>
     </div>
 
@@ -661,6 +726,7 @@ $adminId = isset($_SESSION['admin']) ? (int)$_SESSION['admin'] : 0;
   bindLogoUpload('emailLogoFile',  'email_logo_url',  'emailLogoPreview',  'emailLogoUploadStatus',  '#fff');
   bindLogoUpload('navbarLogoFile', 'navbar_logo_url', 'navbarLogoPreview', 'navbarLogoUploadStatus', '#fff');
   bindLogoUpload('footerLogoFile', 'footer_logo_url', 'footerLogoPreview', 'footerLogoUploadStatus', '#333');
+  bindLogoUpload('defaultProductImageFile', 'default_product_image_url', 'defaultProductImagePreview', 'defaultProductImageUploadStatus', '#fff');
 }());
 
 </script>

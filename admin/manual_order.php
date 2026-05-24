@@ -592,19 +592,15 @@ $createdPaymentStatus = trim((string)($_GET['payment_status'] ?? ''));
         <label for="payment_status">Payment Status</label>
         <select id="payment_status" name="payment_status" onchange="toggleAdvanceAmountField(this.value)">
           <option value="paid" selected>Paid</option>
+          <option value="pending">Pending Verification</option>
           <option value="credit">Credit</option>
-          <option value="partial">Partial (Advance)</option>
         </select>
-      </div>
-      <div class="manual-field" id="advanceAmountField" style="display:none;">
-        <label for="advance_amount">Advance Amount Received (&#x20b9;)</label>
-        <input type="number" id="advance_amount" name="advance_amount" min="0" step="0.01" placeholder="e.g. 500">
       </div>
       <div class="manual-field">
         <label for="payment_method">Payment Mode</label>
         <select id="payment_method" name="payment_method">
-          <option value="cod">Cash</option>
           <option value="upi_manual" selected>Bank</option>
+          <option value="gateway">Gateway</option>
           <option value="credit">Credit</option>
         </select>
       </div>
@@ -739,8 +735,9 @@ $createdPaymentStatus = trim((string)($_GET['payment_status'] ?? ''));
     if (notice) notice.style.display = (value === 'delivery' || value === 'custom_delivery') ? 'block' : 'none';
   }
   function toggleAdvanceAmountField(value) {
+    // Partial-payment inputs were removed in full-payment-only mode.
     const field = document.getElementById('advanceAmountField');
-    if (field) field.style.display = value === 'partial' ? 'block' : 'none';
+    if (field) field.style.display = 'none';
   }
 
   function setOrderMode(mode) {

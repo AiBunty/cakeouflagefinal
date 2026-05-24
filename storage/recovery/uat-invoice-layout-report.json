@@ -1,0 +1,14 @@
+[
+    {
+        "items": 4,
+        "expected_layout": "half",
+        "html_file": "uat-invoice-layout-4-items.html",
+        "order_number": "UAT-LAYOUT-4"
+    },
+    {
+        "items": 5,
+        "expected_layout": "full",
+        "html_file": "uat-invoice-layout-5-items.html",
+        "order_number": "UAT-LAYOUT-5"
+    }
+]

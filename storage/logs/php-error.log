@@ -174,3 +174,459 @@ Stack trace:
 [24-May-2026 12:15:57 Asia/Kolkata] [admin_auth] {"event":"session_regenerated","time":"2026-05-24T06:45:57+00:00","email_ref":"697e8521818b"}
 [24-May-2026 12:15:57 Asia/Kolkata] [admin_auth] {"event":"otp_verify_success","time":"2026-05-24T06:45:57+00:00","email_ref":"697e8521818b","admin_id":1}
 [24-May-2026 12:30:42 Asia/Kolkata] [OrderStateManager] order_audit_logs write skipped: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'cakeouflage_local.order_audit_logs' doesn't exist
+[24-May-2026 13:44:50 Asia/Kolkata] [2026-05-24T13:44:50+05:30] call_user_func_array(): Argument #1 ($callback) must be a valid callback, class App\Controllers\ApiController does not have a method "health" in /var/www/html/app/Core/App.php:340\n#0 /var/www/html/app/Core/App.php(340): call_user_func_array(Array, Array)
+#1 /var/www/html/index.php(54): App\Core\App->run()
+#2 {main}
+[24-May-2026 14:05:26 Asia/Kolkata] [admin_auth] {"event":"runtime_identity_mutation_skipped","time":"2026-05-24T08:35:26+00:00","reason":"non_dev_environment"}
+[24-May-2026 14:05:29 Asia/Kolkata] [admin_auth] {"event":"runtime_identity_mutation_skipped","time":"2026-05-24T08:35:29+00:00","reason":"non_dev_environment"}
+[24-May-2026 14:05:29 Asia/Kolkata] [admin_auth] {"event":"otp_generated","time":"2026-05-24T08:35:29+00:00","email_ref":"697e8521818b","otp_length":6}
+[24-May-2026 14:05:29 Asia/Kolkata] [admin_auth] {"event":"otp_send_attempt","time":"2026-05-24T08:35:29+00:00","email_ref":"697e8521818b"}
+[24-May-2026 14:05:35 Asia/Kolkata] SMTP OTP SEND SUCCESS: {"host":"smtp.dcoresystems.com","port":587,"encryption":"tls","auth_enabled":true,"username_set":true,"from_email_set":true}
+[24-May-2026 14:05:35 Asia/Kolkata] [admin_auth] {"event":"otp_send_success","time":"2026-05-24T08:35:35+00:00","email_ref":"697e8521818b"}
+[24-May-2026 14:05:43 Asia/Kolkata] [admin_auth] {"event":"runtime_identity_mutation_skipped","time":"2026-05-24T08:35:43+00:00","reason":"non_dev_environment"}
+[24-May-2026 14:05:46 Asia/Kolkata] [admin_auth] {"event":"runtime_identity_mutation_skipped","time":"2026-05-24T08:35:46+00:00","reason":"non_dev_environment"}
+[24-May-2026 14:05:46 Asia/Kolkata] [admin_auth] {"event":"session_regenerated","time":"2026-05-24T08:35:46+00:00","email_ref":"697e8521818b"}
+[24-May-2026 14:05:46 Asia/Kolkata] [admin_auth] {"event":"otp_verify_success","time":"2026-05-24T08:35:46+00:00","email_ref":"697e8521818b","admin_id":1}
+[24-May-2026 14:14:37 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":5.77}}
+[24-May-2026 14:14:37 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":1.07}}
+[24-May-2026 14:14:37 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":4.78}}
+[24-May-2026 14:14:37 Asia/Kolkata] [admin-db] {"operation":"prepare","message":"Unknown column 'is_veg' in 'field list'","sql":"UPDATE products SET name = ?, slug = ?, starting_price = ?, collection_category_id = ?, short_description = ?, featured_image = ?, availability_status = ?, is_chef_special = ?, dietary_tag = ?, is_veg = ?, topper_enabled = ?, note_enabled = ?, updated_at = NOW() WHERE id = ? AND deleted_at IS NULL LIMIT 1","context":{"errno":1054,"sqlstate":"42S22","duration_ms":2.43}}
+[24-May-2026 14:14:37 Asia/Kolkata] [products.php] update_product_inline failure: product_id=244 message=DB prepare failed: Unknown column 'is_veg' in 'field list'
+[24-May-2026 14:16:04 Asia/Kolkata] [2026-05-24T14:16:04+05:30] Session directory missing: /var/lib/php/sessions in /var/www/html/scripts/recovery/test_product_upload_e2e.php:146\n#0 {main}
+[24-May-2026 08:47:18 UTC] PHP Warning:  session_start(): open(/tmp/sess_probeea890b99, O_RDWR) failed: Permission denied (13) in /var/www/html/app/bootstrap.php on line 147
+[24-May-2026 08:47:18 UTC] PHP Warning:  session_start(): Failed to read session data: files (path: ) in /var/www/html/app/bootstrap.php on line 147
+[24-May-2026 14:18:20 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":1.27}}
+[24-May-2026 14:18:20 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.68}}
+[24-May-2026 14:18:20 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":3.88}}
+[24-May-2026 14:18:20 Asia/Kolkata] [admin-db] {"operation":"prepare","message":"Unknown column 'is_veg' in 'field list'","sql":"UPDATE products SET name = ?, slug = ?, starting_price = ?, collection_category_id = ?, short_description = ?, featured_image = ?, availability_status = ?, is_chef_special = ?, dietary_tag = ?, is_veg = ?, topper_enabled = ?, note_enabled = ?, updated_at = NOW() WHERE id = ? AND deleted_at IS NULL LIMIT 1","context":{"errno":1054,"sqlstate":"42S22","duration_ms":0.78}}
+[24-May-2026 14:18:20 Asia/Kolkata] [products.php] update_product_inline failure: product_id=1 message=DB prepare failed: Unknown column 'is_veg' in 'field list'
+[24-May-2026 14:18:20 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":1.16}}
+[24-May-2026 14:18:21 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":1.16}}
+[24-May-2026 14:18:21 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":14.92}}
+[24-May-2026 14:18:22 Asia/Kolkata] [admin-db] {"operation":"prepare","message":"Unknown column 'is_veg' in 'field list'","sql":"UPDATE products SET name = ?, slug = ?, starting_price = ?, collection_category_id = ?, short_description = ?, featured_image = ?, availability_status = ?, is_chef_special = ?, dietary_tag = ?, is_veg = ?, topper_enabled = ?, note_enabled = ?, updated_at = NOW() WHERE id = ? AND deleted_at IS NULL LIMIT 1","context":{"errno":1054,"sqlstate":"42S22","duration_ms":26.3}}
+[24-May-2026 14:18:22 Asia/Kolkata] [products.php] update_product_inline failure: product_id=2 message=DB prepare failed: Unknown column 'is_veg' in 'field list'
+[24-May-2026 14:18:26 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":39.49}}
+[24-May-2026 14:18:27 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.81}}
+[24-May-2026 14:18:27 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":12.49}}
+[24-May-2026 14:18:27 Asia/Kolkata] [admin-db] {"operation":"prepare","message":"Unknown column 'is_veg' in 'field list'","sql":"UPDATE products SET name = ?, slug = ?, starting_price = ?, collection_category_id = ?, short_description = ?, featured_image = ?, availability_status = ?, is_chef_special = ?, dietary_tag = ?, is_veg = ?, topper_enabled = ?, note_enabled = ?, updated_at = NOW() WHERE id = ? AND deleted_at IS NULL LIMIT 1","context":{"errno":1054,"sqlstate":"42S22","duration_ms":3.02}}
+[24-May-2026 14:18:27 Asia/Kolkata] [products.php] update_product_inline failure: product_id=3 message=DB prepare failed: Unknown column 'is_veg' in 'field list'
+[24-May-2026 14:18:27 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":6.46}}
+[24-May-2026 14:18:28 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.62}}
+[24-May-2026 14:18:28 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":4.27}}
+[24-May-2026 14:18:28 Asia/Kolkata] [admin-db] {"operation":"prepare","message":"Unknown column 'is_veg' in 'field list'","sql":"UPDATE products SET name = ?, slug = ?, starting_price = ?, collection_category_id = ?, short_description = ?, featured_image = ?, availability_status = ?, is_chef_special = ?, dietary_tag = ?, is_veg = ?, topper_enabled = ?, note_enabled = ?, updated_at = NOW() WHERE id = ? AND deleted_at IS NULL LIMIT 1","context":{"errno":1054,"sqlstate":"42S22","duration_ms":0.23}}
+[24-May-2026 14:18:28 Asia/Kolkata] [products.php] update_product_inline failure: product_id=4 message=DB prepare failed: Unknown column 'is_veg' in 'field list'
+[24-May-2026 14:18:28 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":2.33}}
+[24-May-2026 14:18:29 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":3.25}}
+[24-May-2026 14:18:29 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":28.47}}
+[24-May-2026 14:18:29 Asia/Kolkata] [admin-db] {"operation":"prepare","message":"Unknown column 'is_veg' in 'field list'","sql":"UPDATE products SET name = ?, slug = ?, starting_price = ?, collection_category_id = ?, short_description = ?, featured_image = ?, availability_status = ?, is_chef_special = ?, dietary_tag = ?, is_veg = ?, topper_enabled = ?, note_enabled = ?, updated_at = NOW() WHERE id = ? AND deleted_at IS NULL LIMIT 1","context":{"errno":1054,"sqlstate":"42S22","duration_ms":0.53}}
+[24-May-2026 14:18:30 Asia/Kolkata] [products.php] update_product_inline failure: product_id=5 message=DB prepare failed: Unknown column 'is_veg' in 'field list'
+[24-May-2026 14:19:09 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":5.56}}
+[24-May-2026 14:19:10 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.61}}
+[24-May-2026 14:19:10 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":2.57}}
+[24-May-2026 14:19:10 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":1.92}}
+[24-May-2026 14:19:10 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":1.31}}
+[24-May-2026 14:19:10 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":1.09}}
+[24-May-2026 14:19:10 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.69}}
+[24-May-2026 14:19:10 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":14.35}}
+[24-May-2026 14:19:10 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.43}}
+[24-May-2026 14:19:10 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.26}}
+[24-May-2026 14:19:10 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.37}}
+[24-May-2026 14:19:10 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.27}}
+[24-May-2026 14:19:10 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.32}}
+[24-May-2026 14:19:10 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.43}}
+[24-May-2026 14:19:10 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.28}}
+[24-May-2026 14:19:10 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.29}}
+[24-May-2026 14:19:10 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.3}}
+[24-May-2026 14:19:10 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":1.12}}
+[24-May-2026 14:19:10 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.36}}
+[24-May-2026 14:19:10 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":2.62}}
+[24-May-2026 14:19:10 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.47}}
+[24-May-2026 14:19:10 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":1.03}}
+[24-May-2026 14:19:10 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.49}}
+[24-May-2026 14:19:10 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.22}}
+[24-May-2026 14:19:10 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":1.08}}
+[24-May-2026 14:19:10 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.25}}
+[24-May-2026 14:19:10 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.26}}
+[24-May-2026 14:19:10 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.24}}
+[24-May-2026 14:19:10 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.3}}
+[24-May-2026 14:19:10 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.23}}
+[24-May-2026 14:19:11 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.26}}
+[24-May-2026 14:19:11 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.7}}
+[24-May-2026 14:19:11 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.28}}
+[24-May-2026 14:19:11 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.23}}
+[24-May-2026 14:19:11 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":4.9}}
+[24-May-2026 14:19:11 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.56}}
+[24-May-2026 14:19:11 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":2.92}}
+[24-May-2026 14:19:11 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.49}}
+[24-May-2026 14:19:11 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.51}}
+[24-May-2026 14:19:11 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.75}}
+[24-May-2026 14:19:11 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.78}}
+[24-May-2026 14:19:11 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.85}}
+[24-May-2026 14:19:11 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.21}}
+[24-May-2026 14:19:11 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.29}}
+[24-May-2026 14:19:11 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.22}}
+[24-May-2026 14:19:11 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.32}}
+[24-May-2026 14:19:11 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.22}}
+[24-May-2026 14:19:11 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.26}}
+[24-May-2026 14:19:11 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.23}}
+[24-May-2026 14:19:11 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.23}}
+[24-May-2026 14:19:11 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.32}}
+[24-May-2026 14:19:11 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":2.71}}
+[24-May-2026 14:19:11 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.32}}
+[24-May-2026 14:19:11 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":2.39}}
+[24-May-2026 14:19:11 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.77}}
+[24-May-2026 14:19:11 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.61}}
+[24-May-2026 14:19:11 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.65}}
+[24-May-2026 14:19:11 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.68}}
+[24-May-2026 14:19:11 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.82}}
+[24-May-2026 14:19:11 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.23}}
+[24-May-2026 14:19:11 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.25}}
+[24-May-2026 14:19:11 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.29}}
+[24-May-2026 14:19:11 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.26}}
+[24-May-2026 14:19:11 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.26}}
+[24-May-2026 14:19:11 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.14}}
+[24-May-2026 14:19:11 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.38}}
+[24-May-2026 14:19:11 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.2}}
+[24-May-2026 14:19:11 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.24}}
+[24-May-2026 14:19:11 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.53}}
+[24-May-2026 14:19:11 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.45}}
+[24-May-2026 14:19:11 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":1.26}}
+[24-May-2026 14:19:11 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":1.65}}
+[24-May-2026 14:19:11 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":1.3}}
+[24-May-2026 14:19:11 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.73}}
+[24-May-2026 14:19:11 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.43}}
+[24-May-2026 14:19:12 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.39}}
+[24-May-2026 14:19:12 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.26}}
+[24-May-2026 14:19:12 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.52}}
+[24-May-2026 14:19:12 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":1.36}}
+[24-May-2026 14:19:12 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.27}}
+[24-May-2026 14:19:12 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.2}}
+[24-May-2026 14:19:12 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.33}}
+[24-May-2026 14:19:12 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.36}}
+[24-May-2026 14:19:12 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.65}}
+[24-May-2026 14:19:12 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.23}}
+[24-May-2026 14:36:25 Asia/Kolkata] [admin_auth] {"event":"runtime_identity_mutation_skipped","time":"2026-05-24T09:06:25+00:00","reason":"non_dev_environment"}
+[24-May-2026 14:38:01 Asia/Kolkata] [OrderStateManager] order_audit_logs write skipped: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'cakeouflage_local.order_audit_logs' doesn't exist
+[24-May-2026 14:38:01 Asia/Kolkata] [OrderStateManager] order_audit_logs write skipped: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'cakeouflage_local.order_audit_logs' doesn't exist
+[24-May-2026 14:38:16 Asia/Kolkata] [OrderStateManager] order_audit_logs write skipped: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'cakeouflage_local.order_audit_logs' doesn't exist
+[24-May-2026 14:38:16 Asia/Kolkata] [OrderStateManager] order_audit_logs write skipped: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'cakeouflage_local.order_audit_logs' doesn't exist
+[24-May-2026 14:42:55 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.77}}
+[24-May-2026 14:42:56 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.52}}
+[24-May-2026 14:42:56 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":1.52}}
+[24-May-2026 14:42:56 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.77}}
+[24-May-2026 14:42:56 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.54}}
+[24-May-2026 14:42:56 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.48}}
+[24-May-2026 14:42:56 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.44}}
+[24-May-2026 14:42:56 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.57}}
+[24-May-2026 14:42:56 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.27}}
+[24-May-2026 14:42:56 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.21}}
+[24-May-2026 14:42:56 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.31}}
+[24-May-2026 14:42:56 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.21}}
+[24-May-2026 14:42:56 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.24}}
+[24-May-2026 14:42:56 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.31}}
+[24-May-2026 14:42:56 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.2}}
+[24-May-2026 14:42:56 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.2}}
+[24-May-2026 14:42:56 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.24}}
+[24-May-2026 14:43:09 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.48}}
+[24-May-2026 14:43:09 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.45}}
+[24-May-2026 14:43:09 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.85}}
+[24-May-2026 14:43:09 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":2.92}}
+[24-May-2026 14:43:09 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.55}}
+[24-May-2026 14:43:09 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.66}}
+[24-May-2026 14:43:09 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.3}}
+[24-May-2026 14:43:09 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.35}}
+[24-May-2026 14:43:09 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.26}}
+[24-May-2026 14:43:09 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.23}}
+[24-May-2026 14:43:09 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.22}}
+[24-May-2026 14:43:09 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.24}}
+[24-May-2026 14:43:09 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.2}}
+[24-May-2026 14:43:09 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.23}}
+[24-May-2026 14:43:09 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.26}}
+[24-May-2026 14:43:09 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.23}}
+[24-May-2026 14:43:09 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.17}}
+[24-May-2026 14:43:25 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":1.04}}
+[24-May-2026 14:43:26 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.36}}
+[24-May-2026 14:43:26 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":2.16}}
+[24-May-2026 14:43:26 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.42}}
+[24-May-2026 14:43:26 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.57}}
+[24-May-2026 14:43:26 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.58}}
+[24-May-2026 14:43:26 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.27}}
+[24-May-2026 14:43:26 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.34}}
+[24-May-2026 14:43:26 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.25}}
+[24-May-2026 14:43:26 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.16}}
+[24-May-2026 14:43:26 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.17}}
+[24-May-2026 14:43:26 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.18}}
+[24-May-2026 14:43:26 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.2}}
+[24-May-2026 14:43:26 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.54}}
+[24-May-2026 14:43:26 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.21}}
+[24-May-2026 14:43:26 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.21}}
+[24-May-2026 14:43:26 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.26}}
+[24-May-2026 14:43:43 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.64}}
+[24-May-2026 14:43:43 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.47}}
+[24-May-2026 14:43:43 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":1.26}}
+[24-May-2026 14:43:43 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.42}}
+[24-May-2026 14:43:43 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.44}}
+[24-May-2026 14:43:43 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.47}}
+[24-May-2026 14:43:43 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.25}}
+[24-May-2026 14:43:43 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.31}}
+[24-May-2026 14:43:43 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.23}}
+[24-May-2026 14:43:43 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.2}}
+[24-May-2026 14:43:43 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.21}}
+[24-May-2026 14:43:43 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.26}}
+[24-May-2026 14:43:43 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.2}}
+[24-May-2026 14:43:43 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.2}}
+[24-May-2026 14:43:43 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.29}}
+[24-May-2026 14:43:43 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.2}}
+[24-May-2026 14:43:43 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.24}}
+[24-May-2026 14:43:55 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.83}}
+[24-May-2026 14:43:56 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.28}}
+[24-May-2026 14:43:56 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.67}}
+[24-May-2026 14:43:56 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.47}}
+[24-May-2026 14:43:56 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.55}}
+[24-May-2026 14:43:56 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.52}}
+[24-May-2026 14:43:56 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.37}}
+[24-May-2026 14:43:56 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.36}}
+[24-May-2026 14:43:56 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.19}}
+[24-May-2026 14:43:56 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.2}}
+[24-May-2026 14:43:56 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.23}}
+[24-May-2026 14:43:56 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.22}}
+[24-May-2026 14:43:56 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.76}}
+[24-May-2026 14:43:56 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.19}}
+[24-May-2026 14:43:56 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.18}}
+[24-May-2026 14:43:56 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.16}}
+[24-May-2026 14:43:56 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.26}}
+[24-May-2026 14:44:05 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.42}}
+[24-May-2026 14:44:05 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.35}}
+[24-May-2026 14:44:05 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.98}}
+[24-May-2026 14:44:05 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.47}}
+[24-May-2026 14:44:05 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.47}}
+[24-May-2026 14:44:05 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.49}}
+[24-May-2026 14:44:05 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.28}}
+[24-May-2026 14:44:05 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.39}}
+[24-May-2026 14:44:05 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.26}}
+[24-May-2026 14:44:05 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.2}}
+[24-May-2026 14:44:05 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.2}}
+[24-May-2026 14:44:05 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.24}}
+[24-May-2026 14:44:05 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.18}}
+[24-May-2026 14:44:05 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.28}}
+[24-May-2026 14:44:05 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.17}}
+[24-May-2026 14:44:05 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.45}}
+[24-May-2026 14:44:05 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.24}}
+[24-May-2026 14:44:19 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.48}}
+[24-May-2026 14:44:19 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.32}}
+[24-May-2026 14:44:19 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.74}}
+[24-May-2026 14:44:19 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.44}}
+[24-May-2026 14:44:19 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.67}}
+[24-May-2026 14:44:19 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.5}}
+[24-May-2026 14:44:19 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.3}}
+[24-May-2026 14:44:19 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.24}}
+[24-May-2026 14:44:19 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.24}}
+[24-May-2026 14:44:19 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.19}}
+[24-May-2026 14:44:19 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.24}}
+[24-May-2026 14:44:19 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.2}}
+[24-May-2026 14:44:19 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.27}}
+[24-May-2026 14:44:19 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.25}}
+[24-May-2026 14:44:19 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.24}}
+[24-May-2026 14:44:19 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.51}}
+[24-May-2026 14:44:19 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.2}}
+[24-May-2026 14:44:39 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.5}}
+[24-May-2026 14:44:40 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.27}}
+[24-May-2026 14:44:40 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.59}}
+[24-May-2026 14:44:40 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.79}}
+[24-May-2026 14:44:40 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.52}}
+[24-May-2026 14:44:40 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.47}}
+[24-May-2026 14:44:40 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.31}}
+[24-May-2026 14:44:40 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.22}}
+[24-May-2026 14:44:40 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.19}}
+[24-May-2026 14:44:40 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.23}}
+[24-May-2026 14:44:40 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.15}}
+[24-May-2026 14:44:40 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.34}}
+[24-May-2026 14:44:40 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.13}}
+[24-May-2026 14:44:40 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.73}}
+[24-May-2026 14:44:40 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.2}}
+[24-May-2026 14:44:40 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.2}}
+[24-May-2026 14:44:40 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.18}}
+[24-May-2026 14:50:07 Asia/Kolkata] [2026-05-24T14:50:07+05:30] Product row was not created by add-product flow. status=403 body_snippet=Access denied in /var/www/html/scripts/recovery/test_new_product_default_image.php:102\n#0 {main}
+[24-May-2026 14:50:52 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.71}}
+[24-May-2026 14:50:52 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":1.62}}
+[24-May-2026 14:50:52 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":1.48}}
+[24-May-2026 14:50:53 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":1.24}}
+[24-May-2026 14:50:53 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":1.19}}
+[24-May-2026 14:50:53 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":1.17}}
+[24-May-2026 14:50:53 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.38}}
+[24-May-2026 14:50:53 Asia/Kolkata] [admin-fatal] {"event":"php_error","request_uri":"/admin/add-product.php","request_method":"POST","admin_id":1,"time":"2026-05-24T09:20:53+00:00","post_keys":["name","base_price","category_id","description","dietary_tag"],"get_keys":[],"severity":2,"message":"mysqli_stmt::execute(): (HY000/1364): Field 'long_description' doesn't have a default value","file":"/var/www/html/admin/add-product.php","line":243}
+[24-May-2026 14:50:53 Asia/Kolkata] [2026-05-24T14:50:53+05:30] mysqli_stmt::execute(): (HY000/1364): Field 'long_description' doesn't have a default value in /var/www/html/admin/add-product.php:243\n#0 [internal function]: AdminErrorHandler::handleError(2, 'mysqli_stmt::ex...', '/var/www/html/a...', 243)
+#1 /var/www/html/admin/add-product.php(243): mysqli_stmt->execute()
+#2 {main}
+[24-May-2026 14:50:53 Asia/Kolkata] [2026-05-24T14:50:53+05:30] Product row was not created by add-product flow. status=500 body_snippet=Unhandled exception: mysqli_stmt::execute(): (HY000/1364): Field 'long_description' doesn't have a default value
+/var/www/html/admin/add-product.php:243
+ in /var/www/html/scripts/recovery/test_new_product_default_image.php:105\n#0 {main}
+[24-May-2026 14:51:20 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.29}}
+[24-May-2026 14:51:20 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.5}}
+[24-May-2026 14:51:20 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.57}}
+[24-May-2026 14:51:20 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.66}}
+[24-May-2026 14:51:20 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.54}}
+[24-May-2026 14:51:20 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.59}}
+[24-May-2026 14:51:20 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.26}}
+[24-May-2026 14:51:20 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.43}}
+[24-May-2026 14:51:20 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.28}}
+[24-May-2026 14:51:20 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.33}}
+[24-May-2026 14:51:20 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.37}}
+[24-May-2026 14:51:20 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.64}}
+[24-May-2026 14:51:20 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.43}}
+[24-May-2026 15:13:28 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.61}}
+[24-May-2026 15:13:28 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.57}}
+[24-May-2026 15:13:28 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":1.62}}
+[24-May-2026 15:13:28 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.57}}
+[24-May-2026 15:13:28 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.63}}
+[24-May-2026 15:13:28 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.54}}
+[24-May-2026 15:13:28 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.23}}
+[24-May-2026 15:13:28 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.92}}
+[24-May-2026 15:13:28 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.21}}
+[24-May-2026 15:13:28 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.35}}
+[24-May-2026 15:13:28 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.31}}
+[24-May-2026 15:13:28 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.34}}
+[24-May-2026 15:13:28 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.21}}
+[24-May-2026 15:14:22 Asia/Kolkata] [2026-05-24T15:14:22+05:30] SQLSTATE[HY000]: General error: 3065 Expression #1 of ORDER BY clause is not in SELECT list, references column 'cakeouflage_local.product_images.id' which is not in SELECT list; this is incompatible with DISTINCT in /var/www/html/scripts/recovery/test_product_media_two_slot_guard.php:65\n#0 /var/www/html/scripts/recovery/test_product_media_two_slot_guard.php(65): PDO->query('SELECT DISTINCT...')
+#1 {main}
+[24-May-2026 15:15:04 Asia/Kolkata] [2026-05-24T15:15:04+05:30] Not enough /uploads/media images found for guard test. Need at least 3. in /var/www/html/scripts/recovery/test_product_media_two_slot_guard.php:74\n#0 {main}
+[24-May-2026 15:15:54 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":4.25}}
+[24-May-2026 15:15:54 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":1.04}}
+[24-May-2026 15:15:54 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":1.54}}
+[24-May-2026 15:15:54 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.91}}
+[24-May-2026 15:15:54 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.92}}
+[24-May-2026 15:15:54 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":1.33}}
+[24-May-2026 15:15:54 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.52}}
+[24-May-2026 15:15:54 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.65}}
+[24-May-2026 15:15:54 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.41}}
+[24-May-2026 15:15:55 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.38}}
+[24-May-2026 15:15:55 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.4}}
+[24-May-2026 15:15:55 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":6.33}}
+[24-May-2026 15:15:55 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.38}}
+[24-May-2026 15:16:35 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.39}}
+[24-May-2026 15:16:35 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.74}}
+[24-May-2026 15:16:35 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.52}}
+[24-May-2026 15:16:35 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.5}}
+[24-May-2026 15:16:35 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.6}}
+[24-May-2026 15:16:35 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.45}}
+[24-May-2026 15:16:35 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.29}}
+[24-May-2026 15:16:35 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.23}}
+[24-May-2026 15:16:35 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.26}}
+[24-May-2026 15:16:35 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.31}}
+[24-May-2026 15:16:35 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.18}}
+[24-May-2026 15:16:35 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.27}}
+[24-May-2026 15:16:35 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.21}}
+[24-May-2026 15:30:25 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":1.79}}
+[24-May-2026 15:30:25 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":1.09}}
+[24-May-2026 15:30:25 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.91}}
+[24-May-2026 15:30:25 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":3.34}}
+[24-May-2026 15:30:25 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.8}}
+[24-May-2026 15:30:25 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":1.33}}
+[24-May-2026 15:30:25 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.56}}
+[24-May-2026 15:30:25 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.48}}
+[24-May-2026 15:30:25 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.44}}
+[24-May-2026 15:30:25 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.5}}
+[24-May-2026 15:30:25 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":1.09}}
+[24-May-2026 15:30:25 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.49}}
+[24-May-2026 15:30:25 Asia/Kolkata] [admin-db] {"operation":"prepare_ok","message":"Statement prepared","context":{"duration_ms":0.39}}
+[24-May-2026 15:51:11 Asia/Kolkata] [admin_auth] {"event":"runtime_identity_mutation_skipped","time":"2026-05-24T10:21:11+00:00","reason":"non_dev_environment"}
+[24-May-2026 15:51:18 Asia/Kolkata] [admin_auth] {"event":"runtime_identity_mutation_skipped","time":"2026-05-24T10:21:18+00:00","reason":"non_dev_environment"}
+[24-May-2026 15:51:18 Asia/Kolkata] [admin_auth] {"event":"otp_generated","time":"2026-05-24T10:21:18+00:00","email_ref":"697e8521818b","otp_length":6}
+[24-May-2026 15:51:18 Asia/Kolkata] [admin_auth] {"event":"otp_send_attempt","time":"2026-05-24T10:21:18+00:00","email_ref":"697e8521818b"}
+[24-May-2026 15:51:28 Asia/Kolkata] SMTP OTP SEND SUCCESS: {"host":"smtp.dcoresystems.com","port":587,"encryption":"tls","auth_enabled":true,"username_set":true,"from_email_set":true}
+[24-May-2026 15:51:28 Asia/Kolkata] [admin_auth] {"event":"otp_send_success","time":"2026-05-24T10:21:28+00:00","email_ref":"697e8521818b"}
+[24-May-2026 15:52:30 Asia/Kolkata] [admin_auth] {"event":"runtime_identity_mutation_skipped","time":"2026-05-24T10:22:30+00:00","reason":"non_dev_environment"}
+[24-May-2026 15:52:35 Asia/Kolkata] [admin_auth] {"event":"runtime_identity_mutation_skipped","time":"2026-05-24T10:22:35+00:00","reason":"non_dev_environment"}
+[24-May-2026 15:52:35 Asia/Kolkata] [admin_auth] {"event":"otp_generated","time":"2026-05-24T10:22:35+00:00","email_ref":"697e8521818b","otp_length":6}
+[24-May-2026 15:52:35 Asia/Kolkata] [admin_auth] {"event":"otp_send_attempt","time":"2026-05-24T10:22:35+00:00","email_ref":"697e8521818b"}
+[24-May-2026 15:52:40 Asia/Kolkata] SMTP OTP SEND SUCCESS: {"host":"smtp.dcoresystems.com","port":587,"encryption":"tls","auth_enabled":true,"username_set":true,"from_email_set":true}
+[24-May-2026 15:52:40 Asia/Kolkata] [admin_auth] {"event":"otp_send_success","time":"2026-05-24T10:22:40+00:00","email_ref":"697e8521818b"}
+[24-May-2026 15:53:00 Asia/Kolkata] [admin_auth] {"event":"runtime_identity_mutation_skipped","time":"2026-05-24T10:23:00+00:00","reason":"non_dev_environment"}
+[24-May-2026 15:53:00 Asia/Kolkata] [admin_auth] {"event":"session_regenerated","time":"2026-05-24T10:23:00+00:00","email_ref":"697e8521818b"}
+[24-May-2026 15:53:00 Asia/Kolkata] [admin_auth] {"event":"otp_verify_success","time":"2026-05-24T10:23:00+00:00","email_ref":"697e8521818b","admin_id":1}
+[24-May-2026 15:53:01 Asia/Kolkata] [admin_auth] {"event":"runtime_identity_mutation_skipped","time":"2026-05-24T10:23:01+00:00","reason":"non_dev_environment"}
+[24-May-2026 15:53:01 Asia/Kolkata] [admin_auth] {"event":"otp_verify_failure","time":"2026-05-24T10:23:01+00:00","email_ref":"697e8521818b","reason":"expired"}
+[24-May-2026 15:54:16 Asia/Kolkata] [admin_auth] {"event":"runtime_identity_mutation_skipped","time":"2026-05-24T10:24:16+00:00","reason":"non_dev_environment"}
+[24-May-2026 15:54:16 Asia/Kolkata] [admin_auth] {"event":"otp_generated","time":"2026-05-24T10:24:16+00:00","email_ref":"697e8521818b","otp_length":6}
+[24-May-2026 15:54:16 Asia/Kolkata] [admin_auth] {"event":"otp_send_attempt","time":"2026-05-24T10:24:16+00:00","email_ref":"697e8521818b"}
+[24-May-2026 15:54:20 Asia/Kolkata] SMTP OTP SEND SUCCESS: {"host":"smtp.dcoresystems.com","port":587,"encryption":"tls","auth_enabled":true,"username_set":true,"from_email_set":true}
+[24-May-2026 15:54:20 Asia/Kolkata] [admin_auth] {"event":"otp_send_success","time":"2026-05-24T10:24:20+00:00","email_ref":"697e8521818b"}
+[24-May-2026 15:54:40 Asia/Kolkata] [admin_auth] {"event":"runtime_identity_mutation_skipped","time":"2026-05-24T10:24:40+00:00","reason":"non_dev_environment"}
+[24-May-2026 15:54:40 Asia/Kolkata] [admin_auth] {"event":"session_regenerated","time":"2026-05-24T10:24:40+00:00","email_ref":"697e8521818b"}
+[24-May-2026 15:54:40 Asia/Kolkata] [admin_auth] {"event":"otp_verify_success","time":"2026-05-24T10:24:40+00:00","email_ref":"697e8521818b","admin_id":1}
+[24-May-2026 15:56:07 Asia/Kolkata] [OrderStateManager] order_audit_logs write skipped: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'cakeouflage_local.order_audit_logs' doesn't exist
+[24-May-2026 15:56:07 Asia/Kolkata] [OrderStateManager] order_audit_logs write skipped: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'cakeouflage_local.order_audit_logs' doesn't exist
+[24-May-2026 16:00:28 Asia/Kolkata] [OrderStateManager] order_audit_logs write skipped: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'cakeouflage_local.order_audit_logs' doesn't exist
+[24-May-2026 16:06:05 Asia/Kolkata] [admin_auth] {"event":"runtime_identity_mutation_skipped","time":"2026-05-24T10:36:05+00:00","reason":"non_dev_environment"}
+[24-May-2026 16:06:47 Asia/Kolkata] [admin_auth] {"event":"runtime_identity_mutation_skipped","time":"2026-05-24T10:36:47+00:00","reason":"non_dev_environment"}
+[24-May-2026 16:07:03 Asia/Kolkata] [admin_auth] {"event":"runtime_identity_mutation_skipped","time":"2026-05-24T10:37:03+00:00","reason":"non_dev_environment"}
+[24-May-2026 16:07:03 Asia/Kolkata] [admin_auth] {"event":"otp_cooldown_block","time":"2026-05-24T10:37:03+00:00","email_ref":"697e8521818b"}
+[24-May-2026 16:07:14 Asia/Kolkata] [admin_auth] {"event":"runtime_identity_mutation_skipped","time":"2026-05-24T10:37:14+00:00","reason":"non_dev_environment"}
+[24-May-2026 16:07:14 Asia/Kolkata] [admin_auth] {"event":"session_regenerated","time":"2026-05-24T10:37:14+00:00","email_ref":"697e8521818b"}
+[24-May-2026 16:07:14 Asia/Kolkata] [admin_auth] {"event":"otp_verify_success","time":"2026-05-24T10:37:14+00:00","email_ref":"697e8521818b","admin_id":1}
+[24-May-2026 16:17:23 Asia/Kolkata] [order-destructive-action] SQLSTATE[42S22]: Column not found: 1054 Unknown column 'value' in 'field list'
+[24-May-2026 16:18:05 Asia/Kolkata] [order-destructive-action] SQLSTATE[42S22]: Column not found: 1054 Unknown column 'value' in 'field list'
+[24-May-2026 16:18:34 Asia/Kolkata] [order-destructive-action] SQLSTATE[42S22]: Column not found: 1054 Unknown column 'value' in 'field list'
+[24-May-2026 16:55:24 Asia/Kolkata] [admin_auth] {"event":"runtime_identity_mutation_skipped","time":"2026-05-24T11:25:24+00:00","reason":"non_dev_environment"}
+[24-May-2026 16:55:28 Asia/Kolkata] [admin_auth] {"event":"runtime_identity_mutation_skipped","time":"2026-05-24T11:25:28+00:00","reason":"non_dev_environment"}
+[24-May-2026 16:55:28 Asia/Kolkata] [admin_auth] {"event":"otp_generated","time":"2026-05-24T11:25:28+00:00","email_ref":"697e8521818b","otp_length":6}
+[24-May-2026 16:55:28 Asia/Kolkata] [admin_auth] {"event":"otp_send_attempt","time":"2026-05-24T11:25:28+00:00","email_ref":"697e8521818b"}
+[24-May-2026 16:55:33 Asia/Kolkata] SMTP OTP SEND SUCCESS: {"host":"smtp.dcoresystems.com","port":587,"encryption":"tls","auth_enabled":true,"username_set":true,"from_email_set":true}
+[24-May-2026 16:55:33 Asia/Kolkata] [admin_auth] {"event":"otp_send_success","time":"2026-05-24T11:25:33+00:00","email_ref":"697e8521818b"}
+[24-May-2026 16:55:50 Asia/Kolkata] [admin_auth] {"event":"runtime_identity_mutation_skipped","time":"2026-05-24T11:25:50+00:00","reason":"non_dev_environment"}
+[24-May-2026 16:55:50 Asia/Kolkata] [admin_auth] {"event":"session_regenerated","time":"2026-05-24T11:25:50+00:00","email_ref":"697e8521818b"}
+[24-May-2026 16:55:50 Asia/Kolkata] [admin_auth] {"event":"otp_verify_success","time":"2026-05-24T11:25:50+00:00","email_ref":"697e8521818b","admin_id":1}
+[24-May-2026 17:03:47 Asia/Kolkata] [admin_auth] {"event":"runtime_identity_mutation_skipped","time":"2026-05-24T11:33:47+00:00","reason":"non_dev_environment"}
+[24-May-2026 17:45:03 Asia/Kolkata] [admin_auth] {"event":"runtime_identity_mutation_skipped","time":"2026-05-24T12:15:03+00:00","reason":"non_dev_environment"}
+[24-May-2026 17:45:04 Asia/Kolkata] [admin_auth] {"event":"runtime_identity_mutation_skipped","time":"2026-05-24T12:15:04+00:00","reason":"non_dev_environment"}
+[24-May-2026 17:45:26 Asia/Kolkata] [admin_auth] {"event":"runtime_identity_mutation_skipped","time":"2026-05-24T12:15:26+00:00","reason":"non_dev_environment"}
+[24-May-2026 17:45:26 Asia/Kolkata] [admin_auth] {"event":"otp_generated","time":"2026-05-24T12:15:26+00:00","email_ref":"697e8521818b","otp_length":6}
+[24-May-2026 17:45:26 Asia/Kolkata] [admin_auth] {"event":"otp_send_attempt","time":"2026-05-24T12:15:26+00:00","email_ref":"697e8521818b"}
+[24-May-2026 17:45:31 Asia/Kolkata] SMTP OTP SEND SUCCESS: {"host":"smtp.dcoresystems.com","port":587,"encryption":"tls","auth_enabled":true,"username_set":true,"from_email_set":true}
+[24-May-2026 17:45:31 Asia/Kolkata] [admin_auth] {"event":"otp_send_success","time":"2026-05-24T12:15:31+00:00","email_ref":"697e8521818b"}
+[24-May-2026 17:46:35 Asia/Kolkata] [admin_auth] {"event":"runtime_identity_mutation_skipped","time":"2026-05-24T12:16:35+00:00","reason":"non_dev_environment"}
+[24-May-2026 17:46:35 Asia/Kolkata] [admin_auth] {"event":"otp_cooldown_block","time":"2026-05-24T12:16:35+00:00","email_ref":"697e8521818b"}
+[24-May-2026 17:46:43 Asia/Kolkata] [admin_auth] {"event":"runtime_identity_mutation_skipped","time":"2026-05-24T12:16:43+00:00","reason":"non_dev_environment"}
+[24-May-2026 17:46:43 Asia/Kolkata] [admin_auth] {"event":"otp_verify_failure","time":"2026-05-24T12:16:43+00:00","email_ref":"697e8521818b","reason":"invalid"}
+[24-May-2026 17:46:47 Asia/Kolkata] [admin_auth] {"event":"runtime_identity_mutation_skipped","time":"2026-05-24T12:16:47+00:00","reason":"non_dev_environment"}
+[24-May-2026 17:46:47 Asia/Kolkata] [admin_auth] {"event":"session_regenerated","time":"2026-05-24T12:16:47+00:00","email_ref":"697e8521818b"}
+[24-May-2026 17:46:47 Asia/Kolkata] [admin_auth] {"event":"otp_verify_success","time":"2026-05-24T12:16:47+00:00","email_ref":"697e8521818b","admin_id":1}
+[24-May-2026 17:47:18 Asia/Kolkata] [2026-05-24T17:47:18+05:30] SQLSTATE[42000]: Syntax error or access violation: 1064 You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '?' at line 1 in /var/www/html/app/Services/PaymentReceiptService.php:171\n#0 /var/www/html/app/Services/PaymentReceiptService.php(171): PDO->prepare('SHOW TABLES LIK...')
+#1 /var/www/html/app/Services/PaymentReceiptService.php(161): App\Services\PaymentReceiptService->tableExists('payment_receipt...')
+#2 /var/www/html/app/Services/PaymentReceiptService.php(130): App\Services\PaymentReceiptService->isSchemaReady()
+#3 /var/www/html/admin/payment_receipt.php(26): App\Services\PaymentReceiptService->getLatestReceiptForOrder(20)
+#4 {main}
+[24-May-2026 17:56:23 Asia/Kolkata] SMTP OTP SEND SUCCESS: {"host":"smtp.dcoresystems.com","port":587,"encryption":"tls","auth_enabled":true,"username_set":true,"from_email_set":true}
+[24-May-2026 17:57:57 Asia/Kolkata] [SlotService] logEvent failed: SQLSTATE[01000]: Warning: 1265 Data truncated for column 'event_type' at row 1
+[24-May-2026 17:57:57 Asia/Kolkata] [ORDER_FAIL] {"module":"placeOrder","error":"SQLSTATE[01000]: Warning: 1265 Data truncated for column 'order_status' at row 1","file":"\/var\/www\/html\/app\/Controllers\/ApiController.php","line":1682,"user_id":1,"cart_id":2,"order_number":"CKF-20260524-979386","in_tx":false}
+[24-May-2026 17:58:04 Asia/Kolkata] [SlotService] logEvent failed: SQLSTATE[01000]: Warning: 1265 Data truncated for column 'event_type' at row 1
+[24-May-2026 17:58:04 Asia/Kolkata] [ORDER_FAIL] {"module":"placeOrder","error":"SQLSTATE[01000]: Warning: 1265 Data truncated for column 'order_status' at row 1","file":"\/var\/www\/html\/app\/Controllers\/ApiController.php","line":1682,"user_id":1,"cart_id":2,"order_number":"CKF-20260524-249176","in_tx":false}
+[24-May-2026 17:59:56 Asia/Kolkata] [admin-fatal] {"event":"php_error","request_uri":"/admin/manual_order.php","request_method":"POST","admin_id":1,"time":"2026-05-24T12:29:56+00:00","post_keys":["idempotency_key","order_items","matched_user_id","order_mode","customer_phone","customer_name","customer_email","fulfilment_mode","order_status","payment_status","advance_amount","payment_method","coupon_code","slot_booking_date","slot_id","slot_label","billing_address_line1","billing_address_line2","billing_city","billing_state","billing_postal_code","delivery_maps_link","admin_note"],"get_keys":[],"severity":2,"message":"mysqli_stmt::execute(): (01000/1265): Data truncated for column 'payment_status' at row 1","file":"/var/www/html/admin/save_manual_order.php","line":413}
+[24-May-2026 17:59:56 Asia/Kolkata] [manual_order_save] mysqli_stmt::execute(): (01000/1265): Data truncated for column 'payment_status' at row 1
+[24-May-2026 18:10:48 Asia/Kolkata] [SlotService] logEvent failed: SQLSTATE[01000]: Warning: 1265 Data truncated for column 'event_type' at row 1
+[24-May-2026 18:10:48 Asia/Kolkata] [ORDER_FAIL] {"module":"placeOrder","error":"SQLSTATE[01000]: Warning: 1265 Data truncated for column 'order_status' at row 1","file":"\/var\/www\/html\/app\/Controllers\/ApiController.php","line":1682,"user_id":1,"cart_id":2,"order_number":"CKF-20260524-141501","in_tx":false}
+[24-May-2026 18:13:32 Asia/Kolkata] [SlotService] logEvent failed: SQLSTATE[01000]: Warning: 1265 Data truncated for column 'event_type' at row 1
+[24-May-2026 18:13:32 Asia/Kolkata] [placeOrder] slot hold creation failed: Call to undefined function App\Controllers\getSettingValue()
+[24-May-2026 18:13:32 Asia/Kolkata] user_addresses insert failed: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'street' in 'field list'
+[24-May-2026 18:15:56 Asia/Kolkata] [SlotService] logEvent failed: SQLSTATE[01000]: Warning: 1265 Data truncated for column 'event_type' at row 1
+[24-May-2026 18:15:57 Asia/Kolkata] [placeOrder] slot hold creation failed: Call to undefined function App\Controllers\getSettingValue()
+[24-May-2026 18:15:57 Asia/Kolkata] user_addresses insert failed: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'street' in 'field list'
+[24-May-2026 18:53:22 Asia/Kolkata] [admin-fatal] {"event":"php_error","request_uri":"/admin/manual_order.php","request_method":"POST","admin_id":1,"time":"2026-05-24T13:23:22+00:00","post_keys":["idempotency_key","order_items","matched_user_id","order_mode","customer_phone","customer_name","customer_email","fulfilment_mode","order_status","payment_status","advance_amount","payment_method","coupon_code","slot_booking_date","slot_id","slot_label","billing_address_line1","billing_address_line2","billing_city","billing_state","billing_postal_code","delivery_maps_link","admin_note"],"get_keys":[],"severity":2,"message":"mysqli::prepare(): (21S01/1136): Column count doesn't match value count at row 1","file":"/var/www/html/admin/save_manual_order.php","line":433}
+[24-May-2026 18:53:22 Asia/Kolkata] [manual_order_save] mysqli::prepare(): (21S01/1136): Column count doesn't match value count at row 1
+[24-May-2026 19:01:45 Asia/Kolkata] [OrderStateManager] order_audit_logs write skipped: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'cakeouflage_local.order_audit_logs' doesn't exist
+[24-May-2026 19:14:09 Asia/Kolkata] [OrderStateManager] order_audit_logs write skipped: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'cakeouflage_local.order_audit_logs' doesn't exist
+[24-May-2026 19:54:04 Asia/Kolkata] [admin_auth] {"event":"runtime_identity_mutation_skipped","time":"2026-05-24T14:24:04+00:00","reason":"non_dev_environment"}
+[24-May-2026 19:56:00 Asia/Kolkata] [admin_auth] {"event":"runtime_identity_mutation_skipped","time":"2026-05-24T14:26:00+00:00","reason":"non_dev_environment"}
+[24-May-2026 19:56:05 Asia/Kolkata] [admin_auth] {"event":"runtime_identity_mutation_skipped","time":"2026-05-24T14:26:05+00:00","reason":"non_dev_environment"}
+[24-May-2026 19:56:05 Asia/Kolkata] [admin_auth] {"event":"otp_generated","time":"2026-05-24T14:26:05+00:00","email_ref":"697e8521818b","otp_length":6}
+[24-May-2026 19:56:05 Asia/Kolkata] [admin_auth] {"event":"otp_send_attempt","time":"2026-05-24T14:26:05+00:00","email_ref":"697e8521818b"}
+[24-May-2026 19:56:10 Asia/Kolkata] SMTP OTP SEND SUCCESS: {"host":"smtp.dcoresystems.com","port":587,"encryption":"tls","auth_enabled":true,"username_set":true,"from_email_set":true}
+[24-May-2026 19:56:10 Asia/Kolkata] [admin_auth] {"event":"otp_send_success","time":"2026-05-24T14:26:10+00:00","email_ref":"697e8521818b"}
+[24-May-2026 19:56:23 Asia/Kolkata] [admin_auth] {"event":"runtime_identity_mutation_skipped","time":"2026-05-24T14:26:23+00:00","reason":"non_dev_environment"}
+[24-May-2026 19:56:23 Asia/Kolkata] [admin_auth] {"event":"session_regenerated","time":"2026-05-24T14:26:23+00:00","email_ref":"697e8521818b"}
+[24-May-2026 19:56:23 Asia/Kolkata] [admin_auth] {"event":"otp_verify_success","time":"2026-05-24T14:26:23+00:00","email_ref":"697e8521818b","admin_id":1}
+[24-May-2026 19:59:22 Asia/Kolkata] [admin_auth] {"event":"runtime_identity_mutation_skipped","time":"2026-05-24T14:29:22+00:00","reason":"non_dev_environment"}
+[24-May-2026 20:00:19 Asia/Kolkata] [admin_auth] {"event":"runtime_identity_mutation_skipped","time":"2026-05-24T14:30:19+00:00","reason":"non_dev_environment"}
+[24-May-2026 20:00:43 Asia/Kolkata] [admin_auth] {"event":"runtime_identity_mutation_skipped","time":"2026-05-24T14:30:43+00:00","reason":"non_dev_environment"}
+[24-May-2026 20:00:43 Asia/Kolkata] [admin_auth] {"event":"session_regenerated","time":"2026-05-24T14:30:43+00:00","email_ref":"697e8521818b"}
+[24-May-2026 20:00:43 Asia/Kolkata] [admin_auth] {"event":"otp_verify_success","time":"2026-05-24T14:30:43+00:00","email_ref":"697e8521818b","admin_id":1}

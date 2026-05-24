@@ -8,7 +8,7 @@ $grandTotal   = $order ? (float)($order['grand_total'] ?? 0) : 0;
 $advanceAmount = $order ? (float)($order['advance_amount'] ?? 0) : 0;
 $paymentStatus = $order ? (string)($order['payment_status'] ?? '') : '';
 $remaining = max(0, $grandTotal - $advanceAmount);
-$isPartial = $paymentStatus === 'partial';
+$isPartial = ($paymentStatus === 'under_review' && $advanceAmount > 0 && $remaining > 0);
 ?>
 <main data-page="order-confirmation">
   <section class="section" style="padding:40px 0 60px;">

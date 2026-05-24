@@ -43,7 +43,7 @@ $adminId = isset($_SESSION['admin']) ? (int)$_SESSION['admin'] : 0;
 $adminName = isset($_SESSION['admin_name']) ? (string)$_SESSION['admin_name'] : 'Admin';
 
 try {
-    $readLockStmt = $conn->prepare('SELECT order_status, payment_status, payment_method, grand_total, COALESCE(refund_amount, 0) AS refund_amount FROM orders WHERE id = ? LIMIT 1');
+    $readLockStmt = $conn->prepare('SELECT order_status, payment_status, payment_method, payment_confirmed_at, grand_total, COALESCE(refund_amount, 0) AS refund_amount FROM orders WHERE id = ? LIMIT 1');
     $readLockStmt->bind_param('i', $orderId);
     $readLockStmt->execute();
     $existing = $readLockStmt->get_result()->fetch_assoc();
@@ -57,6 +57,7 @@ try {
     $existingOrderStatus = (string)($existing['order_status'] ?? '');
     $existingPaymentStatus = (string)($existing['payment_status'] ?? '');
     $existingPaymentMethod = (string)($existing['payment_method'] ?? '');
+    $existingPaymentConfirmedAt = (string)($existing['payment_confirmed_at'] ?? '');
     $existingGrandTotal = (float)($existing['grand_total'] ?? 0);
     $existingRefundAmount = (float)($existing['refund_amount'] ?? 0);
     if (in_array($existingOrderStatus, ['partially_refunded', 'fully_refunded', 'refunded'], true)
@@ -64,6 +65,15 @@ try {
     ) {
         http_response_code(422);
         echo json_encode(['success' => false, 'error' => 'Financial edits are locked for refunded orders'], JSON_UNESCAPED_SLASHES);
+        exit;
+    }
+
+    $lockedPaymentStates = ['paid', 'credit', 'refund_pending', 'partially_refunded', 'refunded'];
+    $isPaymentLocked = in_array($existingPaymentStatus, $lockedPaymentStates, true) || $existingPaymentConfirmedAt !== '';
+    $isCreditSettlement = $existingPaymentStatus === 'credit' && $paymentStatus === 'paid';
+    if ($isPaymentLocked && !$isCreditSettlement) {
+        http_response_code(422);
+        echo json_encode(['success' => false, 'error' => 'Payment-confirmed orders are financially locked. Only credit settlement is allowed.'], JSON_UNESCAPED_SLASHES);
         exit;
     }
 
@@ -163,6 +173,34 @@ try {
         if (!$postResult['success']) {
             error_log('[update-order-payment-async][fte] ' . $postResult['message']);
         }
+
+        try {
+            $receiptService = new \App\Services\PaymentReceiptService();
+            $receiptResult = $receiptService->issueAdvanceReceipt($orderId, [
+                'source_event' => 'async_payment_update',
+                'source_reference' => 'async-payment-update:' . $orderId . ':' . (string)$row['payment_method'] . ':' . $confirmedAt,
+                'payment_method' => (string)$row['payment_method'],
+                'payment_status' => (string)$row['payment_status'],
+                'issued_by_admin_id' => $adminId,
+                'financial_transaction_id' => isset($postResult['transaction_id']) ? (int)$postResult['transaction_id'] : null,
+                'metadata' => [
+                    'channel' => 'async_payment_update',
+                    'trigger' => 'manual_payment_confirmation',
+                ],
+            ]);
+            if (!$receiptResult['success'] && !in_array($receiptResult['message'], ['Receipt not allowed after full payment', 'No advance amount available for receipt', 'Payment receipt schema is not ready', 'Receipt not required when partial payment is disabled'], true)) {
+                error_log('[update-order-payment-async][receipt] ' . $receiptResult['message']);
+            }
+        } catch (\Throwable $receiptErr) {
+            error_log('[update-order-payment-async][receipt] ' . $receiptErr->getMessage());
+        }
+    }
+
+    try {
+        $snapshotService = new \App\Services\OrderFinanceSnapshotService();
+        $snapshotService->syncOrderFinancialColumns(\App\Core\Database::getConnection(), $orderId);
+    } catch (\Throwable $syncErr) {
+        error_log('[update-order-payment-async][finance-sync] ' . $syncErr->getMessage());
     }
 
     echo json_encode([

@@ -491,12 +491,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const totalEl = document.getElementById("checkoutGrandTotal");
 
     const payFullEl = document.getElementById("payFull");
-    const payAdvEl = document.getElementById("payAdvance50");
     const upiQR = document.getElementById("upiQR");
     const upiDeepLink = document.getElementById("upiDeepLink");
     const upiAmountText = document.getElementById("upiAmountText");
     const upiButtonHint = document.getElementById("upiButtonHint");
-    const payAdvanceAmount = document.getElementById("payAdvanceAmount");
     const upiId = "anshpopo013-1@okaxis";
     let lastGrandTotal = 0;
 
@@ -526,10 +524,7 @@ document.addEventListener("DOMContentLoaded", () => {
       statusEl.textContent = "Checkout preview updated.";
 
       lastGrandTotal = payload.data?.grand_total || 0;
-      const advAmt = Math.round(lastGrandTotal * 0.5 * 100) / 100;
-      if (payAdvanceAmount) payAdvanceAmount.textContent = `(₹${advAmt.toFixed(2)})`;
-      const isAdv = payAdvEl?.checked;
-      updateCheckoutQr(isAdv ? advAmt : lastGrandTotal);
+      updateCheckoutQr(lastGrandTotal);
 
       return payload;
     };
@@ -559,17 +554,31 @@ document.addEventListener("DOMContentLoaded", () => {
 
     syncFulfilment();
 
-    if (!window.ALLOW_PARTIAL_PAYMENT) {
-      const advLabel = payAdvEl?.closest("label");
-      if (advLabel) advLabel.style.display = "none";
-    }
-
     payFullEl?.addEventListener("change", () => {
       if (payFullEl.checked && lastGrandTotal) updateCheckoutQr(lastGrandTotal);
     });
-    payAdvEl?.addEventListener("change", () => {
-      if (payAdvEl.checked && lastGrandTotal) updateCheckoutQr(Math.round(lastGrandTotal * 0.5 * 100) / 100);
-    });
+  };
+
+  const mapCustomerPaymentStatus = (paymentStatus = "") => {
+    const normalized = String(paymentStatus || "").toLowerCase();
+    if (normalized === "paid") return "Paid";
+    if (normalized === "under_review" || normalized === "payment_under_review") return "Under Review";
+    return "Pending Payment";
+  };
+
+  const mapCustomerOrderStatus = (orderStatus = "", paymentStatus = "") => {
+    const normalizedOrder = String(orderStatus || "").toLowerCase();
+    const normalizedPayment = String(paymentStatus || "").toLowerCase();
+    if (normalizedOrder === "delivered" || normalizedOrder === "completed") {
+      return "Delivered";
+    }
+    if (normalizedPayment === "under_review" || normalizedPayment === "payment_under_review") {
+      return "Under Review";
+    }
+    if (normalizedPayment !== "paid") {
+      return "Pending Payment";
+    }
+    return "Confirmed";
   };
 
   const renderOrderCards = (orders = []) => {
@@ -588,10 +597,17 @@ document.addEventListener("DOMContentLoaded", () => {
           <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap">
             <div>
               <h3 style="margin:0 0 6px 0">${item.order_number}</h3>
-              <p class="text-muted" style="margin:0">${item.order_status} | ${item.payment_status} | ${item.item_count} items</p>
+              <p class="text-muted" style="margin:0">Order ID: ${item.id || "-"}</p>
+              <p class="text-muted" style="margin:4px 0 0">${mapCustomerOrderStatus(item.order_status, item.payment_status)} | ${mapCustomerPaymentStatus(item.payment_status)} | ${item.item_count} items</p>
+              <p class="text-muted" style="margin:4px 0 0">Cakes: ${item.cake_names || "-"}</p>
+              <p class="text-muted" style="margin:4px 0 0">Coupon: ${item.coupon_info || utils.formatInr(item.discount_total || 0)}</p>
             </div>
             <div style="text-align:right">
               <strong>${utils.formatInr(item.grand_total || 0)}</strong>
+              <p class="text-muted" style="margin:6px 0 0 0">Payment: ${mapCustomerPaymentStatus(item.payment_status)}</p>
+              <div style="margin-top:6px">
+                ${item.can_download_invoice ? `<a class="btn btn--outline btn--sm" href="${item.invoice_download_url}" target="_blank" rel="noopener">Download Invoice</a>` : `<span class="text-muted">Invoice unlocks after payment confirmation</span>`}
+              </div>
               <p class="text-muted" style="margin:6px 0 0 0">${item.created_at || "-"}</p>
             </div>
           </div>
@@ -898,10 +914,17 @@ document.addEventListener("DOMContentLoaded", () => {
               <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap">
                 <div>
                   <h3 style="margin:0 0 6px 0">${item.order_number}</h3>
-                  <p class="text-muted" style="margin:0">${item.order_status} | ${item.payment_status} | ${item.item_count} items</p>
+                  <p class="text-muted" style="margin:0">Order ID: ${item.id || "-"}</p>
+                  <p class="text-muted" style="margin:4px 0 0">${mapCustomerOrderStatus(item.order_status, item.payment_status)} | ${mapCustomerPaymentStatus(item.payment_status)} | ${item.item_count} items</p>
+                  <p class="text-muted" style="margin:4px 0 0">Cakes: ${item.cake_names || "-"}</p>
+                  <p class="text-muted" style="margin:4px 0 0">Coupon: ${item.coupon_info || utils.formatInr(item.discount_total || 0)}</p>
                 </div>
                 <div style="text-align:right">
                   <strong>${utils.formatInr(item.grand_total || 0)}</strong>
+                  <p class="text-muted" style="margin:6px 0 0 0">Payment: ${mapCustomerPaymentStatus(item.payment_status)}</p>
+                  <div style="margin-top:6px">
+                    ${item.can_download_invoice ? `<a class="btn btn--outline btn--sm" href="${item.invoice_download_url}" target="_blank" rel="noopener">Download Invoice</a>` : `<span class="text-muted">Invoice unlocks after payment confirmation</span>`}
+                  </div>
                   <div style="margin-top:8px"><button class="btn btn--secondary btn--sm" type="button" data-view-order="${item.id}">View</button></div>
                 </div>
               </div>
@@ -930,8 +953,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
         drawerBody.innerHTML = `
           <h3>${order.order_number || "Order"}</h3>
-          <p class="text-muted">${order.order_status || "-"} | ${order.payment_status || "-"}</p>
+          <p class="text-muted">${mapCustomerOrderStatus(order.order_status, order.payment_status)} | ${mapCustomerPaymentStatus(order.payment_status)}</p>
+          <p class="text-muted">Order ID: ${order.id || "-"}</p>
           <p><strong>Total:</strong> ${utils.formatInr(order.grand_total || 0)}</p>
+          <p><strong>Coupon Discount:</strong> ${utils.formatInr(order.discount_total || 0)}</p>
+          <p><strong>Payment Status:</strong> ${mapCustomerPaymentStatus(order.payment_status)}</p>
+          <div style="margin:10px 0 14px">
+            ${payload.data?.can_download_invoice ? `<a class="btn btn--outline btn--sm" href="${payload.data?.invoice_download_url}" target="_blank" rel="noopener">Download Invoice</a>` : `<span class="text-muted">Invoice unlocks after payment confirmation</span>`}
+          </div>
           <h4>Items</h4>
           <ul>
             ${items.map((item) => `<li>${item.product_name_snapshot} (${item.variant_snapshot || "standard"}) x ${item.quantity} - ${utils.formatInr(item.line_total || 0)}</li>`).join("")}
@@ -1613,10 +1642,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const submitBtn = document.getElementById("byocQuoteAcceptBtn");
     const token = form?.getAttribute("data-token") || "";
     const quoteAmount = parseFloat(form?.getAttribute("data-quote-amount") || "0");
-    const advanceAmount = Math.round(quoteAmount * 0.5 * 100) / 100;
     const eventDate = form?.getAttribute("data-event-date") || "";
 
-    // Dynamic QR + UPI deep-link based on selected payment type
+    // Dynamic QR + UPI deep-link for full payment
     const upiId = "anshpopo013-1@okaxis";
     const updateQr = (amount) => {
       const upiLink = `upi://pay?pa=${upiId}&pn=Cakeouflage&am=${amount.toFixed(2)}&cu=INR&tn=BYOC+Quote+Payment`;
@@ -1629,9 +1657,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (label) label.textContent = `\u20b9${Math.round(amount)}`;
     };
     const payFull = document.getElementById("byocPayFull");
-    const payAdv = document.getElementById("byocPayAdvance");
     if (payFull) payFull.addEventListener("change", () => { if (payFull.checked) updateQr(quoteAmount); });
-    if (payAdv) payAdv.addEventListener("change", () => { if (payAdv.checked) updateQr(advanceAmount); });
 
     // Fulfillment type + slot loading
     const deliverySection = document.getElementById("byocDeliverySection");
@@ -1785,9 +1811,8 @@ document.addEventListener("DOMContentLoaded", () => {
       body.append("delivery_street", deliveryStreet);
       body.append("delivery_pincode", deliveryPincode);
       body.append("delivery_maps_link", deliveryMapsLink);
-      const paymentType = document.getElementById("byocPayFull")?.checked ? "full" : "advance_50";
-      body.append("payment_type", paymentType);
-      body.append("advance_amount", String(paymentType === "full" ? Math.ceil(quoteAmount) : Math.ceil(quoteAmount * 0.5)));
+      body.append("payment_type", "full");
+      body.append("advance_amount", "0");
 
       const byocCouponCode = (document.getElementById("byocCouponInput")?.value || "").trim().toUpperCase();
       if (byocCouponCode) {
@@ -1845,9 +1870,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (label) label.textContent = `\u20b9${Math.round(amount)}`;
     };
     const payFull = document.getElementById("byocPayFull");
-    const payAdv = document.getElementById("byocPayAdvance");
     if (payFull) payFull.addEventListener("change", () => { if (payFull.checked) updateQr(quoteAmount); });
-    if (payAdv) payAdv.addEventListener("change", () => { if (payAdv.checked) updateQr(advanceAmount); });
 
     // Use My Location button
     const useLocationBtn = document.getElementById("byocUseLocationBtn");
@@ -1924,9 +1947,8 @@ document.addEventListener("DOMContentLoaded", () => {
       body.append("delivery_street", deliveryStreet);
       body.append("delivery_pincode", deliveryPincode);
       body.append("delivery_maps_link", deliveryMapsLink);
-      const paymentType = document.getElementById("byocPayFull")?.checked ? "full" : "advance_50";
-      body.append("payment_type", paymentType);
-      body.append("advance_amount", String(paymentType === "full" ? Math.ceil(quoteAmount) : Math.ceil(quoteAmount * 0.5)));
+      body.append("payment_type", "full");
+      body.append("advance_amount", "0");
 
       if (submitBtn) {
         submitBtn.disabled = true;

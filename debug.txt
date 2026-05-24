@@ -1,8 +1,6 @@
 Array
 (
-    [product_id] => 92
-    [variant_id] => 552
+    [product_id] => 13
+    [variant_id] => 
     [quantity] => 1
-    [cake_message] => Sarah
-    [topper_id] => 3
 )

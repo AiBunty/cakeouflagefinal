@@ -81,21 +81,40 @@ $appsScriptEndpoint = trim((string)($_POST['upi_apps_script_endpoint_url'] ?? ''
 $appsScriptSecretInput = trim((string)($_POST['upi_apps_script_shared_secret'] ?? ''));
 $appsScriptMode = trim((string)($_POST['upi_apps_script_mode'] ?? 'disabled'));
 $appsScriptSenderAllowlist = trim((string)($_POST['upi_apps_script_sender_allowlist'] ?? ''));
-$allowPartialPayment = trim((string)($_POST['allow_partial_payment'] ?? '1'));
-if (!in_array($allowPartialPayment, ['0', '1'], true)) { $allowPartialPayment = '1'; }
-$screenshotRequired = trim((string)($_POST['payment_screenshot_required'] ?? '1'));
-if (!in_array($screenshotRequired, ['0', '1'], true)) { $screenshotRequired = '1'; }
+// Full-payment policy is now always enforced.
+$allowPartialPayment = '0';
+$screenshotRequired = '1';
+$invoiceDuplicateCopy = trim((string)($_POST['invoice_duplicate_copy'] ?? 'on'));
+if (!in_array($invoiceDuplicateCopy, ['on', 'off'], true)) { $invoiceDuplicateCopy = 'on'; }
 
 // Branding fields
 $emailLogoUrl       = trim((string)($_POST['email_logo_url'] ?? ''));
 $navbarLogoUrl      = trim((string)($_POST['navbar_logo_url'] ?? ''));
 $footerLogoUrl      = trim((string)($_POST['footer_logo_url'] ?? ''));
+$defaultProductImageUrl = trim((string)($_POST['default_product_image_url'] ?? ''));
 $brandPrimaryColor  = trim((string)($_POST['brand_primary_color'] ?? '#80001F'));
 $brandSecondaryColor = trim((string)($_POST['brand_secondary_color'] ?? '#140b0f'));
 $supportEmail       = trim((string)($_POST['support_email'] ?? ''));
 $supportPhone       = trim((string)($_POST['support_phone'] ?? ''));
+$orderDeletePassword = (string)($_POST['order_delete_password'] ?? '');
+$orderDeletePasswordConfirm = (string)($_POST['order_delete_password_confirm'] ?? '');
+$archiveRetentionDays = (int)($_POST['order_archive_retention_days'] ?? 30);
 if (!preg_match('/^#[0-9a-fA-F]{3,8}$/', $brandPrimaryColor)) { $brandPrimaryColor = '#80001F'; }
 if (!preg_match('/^#[0-9a-fA-F]{3,8}$/', $brandSecondaryColor)) { $brandSecondaryColor = '#140b0f'; }
+if ($archiveRetentionDays < 7 || $archiveRetentionDays > 3650) {
+    $archiveRetentionDays = 30;
+}
+
+if ($orderDeletePassword !== '' || $orderDeletePasswordConfirm !== '') {
+    if ($orderDeletePassword !== $orderDeletePasswordConfirm) {
+        header('Location: business-settings.php?status=error&message=' . rawurlencode('Order delete password confirmation does not match.'));
+        exit;
+    }
+    if (strlen($orderDeletePassword) < 12) {
+        header('Location: business-settings.php?status=error&message=' . rawurlencode('Order delete password must be at least 12 characters.'));
+        exit;
+    }
+}
 
 $settingsAction = trim((string)($_POST['settings_action'] ?? 'save'));
 
@@ -114,6 +133,11 @@ if ($appsScriptEndpoint !== '' && !filter_var($appsScriptEndpoint, FILTER_VALIDA
     exit;
 }
 
+if ($defaultProductImageUrl !== '' && !preg_match('#^(https?://|/public/)#i', $defaultProductImageUrl)) {
+    header('Location: business-settings.php?status=error&message=' . rawurlencode('Default product image must be an absolute URL or a /public/ path.'));
+    exit;
+}
+
 if (!in_array($appsScriptMode, ['disabled', 'test', 'live'], true)) {
     $appsScriptMode = 'disabled';
 }
@@ -122,6 +146,8 @@ $adminId = isset($_SESSION['admin']) ? (int)$_SESSION['admin'] : 0;
 
 try {
     $conn->begin_transaction();
+
+    $previousDefaultProductImageUrl = get_setting($conn, 'default_product_image_url');
 
     upsert_setting($conn, 'business_name', $businessName, $adminId);
     upsert_setting($conn, 'business_address_line1', $addressLine1, $adminId);
@@ -142,13 +168,48 @@ try {
     upsert_setting($conn, 'upi_apps_script_sender_allowlist', $appsScriptSenderAllowlist, $adminId);
     upsert_setting($conn, 'allow_partial_payment', $allowPartialPayment, $adminId);
     upsert_setting($conn, 'payment_screenshot_required', $screenshotRequired, $adminId);
+    upsert_setting($conn, 'invoice_duplicate_copy', $invoiceDuplicateCopy, $adminId);
     upsert_setting($conn, 'email_logo_url', $emailLogoUrl, $adminId);
     upsert_setting($conn, 'navbar_logo_url', $navbarLogoUrl, $adminId);
     upsert_setting($conn, 'footer_logo_url', $footerLogoUrl, $adminId);
+    upsert_setting($conn, 'default_product_image_url', $defaultProductImageUrl, $adminId);
+
+    // When admin changes the global fallback image, migrate existing rows that still point
+    // to previous/default fallback paths so storefront reflects the new default immediately.
+    if ($defaultProductImageUrl !== '' && $defaultProductImageUrl !== $previousDefaultProductImageUrl) {
+        $fallbackCandidates = array_values(array_unique(array_filter([
+            $previousDefaultProductImageUrl,
+            '/public/assets/defaults/default-product-image.webp',
+            '/assets/defaults/default-product-image.webp',
+            '/public/assets/defaults/default-product-image.png',
+            '/assets/defaults/default-product-image.png',
+        ], static fn($v) => is_string($v) && trim($v) !== '')));
+
+        foreach ($fallbackCandidates as $candidate) {
+            $updProducts = $conn->prepare('UPDATE products SET featured_image = ? WHERE featured_image = ?');
+            $updProducts->bind_param('ss', $defaultProductImageUrl, $candidate);
+            $updProducts->execute();
+            $updProducts->close();
+
+            $updGallery = $conn->prepare('UPDATE product_images SET image_url = ? WHERE image_url = ?');
+            $updGallery->bind_param('ss', $defaultProductImageUrl, $candidate);
+            $updGallery->execute();
+            $updGallery->close();
+        }
+    }
     upsert_setting($conn, 'brand_primary_color', $brandPrimaryColor, $adminId);
     upsert_setting($conn, 'brand_secondary_color', $brandSecondaryColor, $adminId);
     upsert_setting($conn, 'support_email', $supportEmail, $adminId);
     upsert_setting($conn, 'support_phone', $supportPhone, $adminId);
+    upsert_setting($conn, 'order_archive_retention_days', (string)$archiveRetentionDays, $adminId);
+
+    if ($orderDeletePassword !== '') {
+        $deletePasswordHash = password_hash($orderDeletePassword, PASSWORD_DEFAULT);
+        if (!is_string($deletePasswordHash) || $deletePasswordHash === '') {
+            throw new RuntimeException('Unable to hash order delete password.');
+        }
+        upsert_setting($conn, 'order_delete_password_hash', $deletePasswordHash, $adminId);
+    }
 
     if ($settingsAction === 'test_apps_script') {
         if ($appsScriptEndpoint === '') {

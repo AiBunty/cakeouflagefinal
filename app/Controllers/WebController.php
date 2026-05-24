@@ -1009,17 +1009,12 @@ final class WebController
                 // Non-fatal — proceed without pre-fill
             }
         }
-        $allowPartialPayment = true;
+        $allowPartialPayment = false;
         $screenshotRequired = true;
         try {
             $settingPdo = Database::getConnection();
             if ($settingPdo) {
                 $settingStmt = $settingPdo->prepare('SELECT setting_value FROM settings WHERE setting_key = :key LIMIT 1');
-                $settingStmt->execute(['key' => 'allow_partial_payment']);
-                $settingRow = $settingStmt->fetch(\PDO::FETCH_ASSOC);
-                if ($settingRow && isset($settingRow['setting_value'])) {
-                    $allowPartialPayment = (string)$settingRow['setting_value'] !== '0';
-                }
                 $settingStmt->execute(['key' => 'payment_screenshot_required']);
                 $settingRow = $settingStmt->fetch(\PDO::FETCH_ASSOC);
                 if ($settingRow && isset($settingRow['setting_value'])) {

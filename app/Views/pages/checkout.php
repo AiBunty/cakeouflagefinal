@@ -7,7 +7,7 @@ $prefillEmail = $isLoggedIn ? htmlspecialchars((string)($currentUser['email']   
 $prefillStreet = ($isLoggedIn && !empty($lastAddress['street']))     ? htmlspecialchars((string)$lastAddress['street'],     ENT_QUOTES, 'UTF-8') : '';
 $prefillPincode = ($isLoggedIn && !empty($lastAddress['postal_code'])) ? htmlspecialchars((string)$lastAddress['postal_code'], ENT_QUOTES, 'UTF-8') : '';
 $prefillMaps    = ($isLoggedIn && !empty($lastAddress['maps_link']))   ? htmlspecialchars((string)$lastAddress['maps_link'],   ENT_QUOTES, 'UTF-8') : '';
-$allowPartialPayment = isset($allowPartialPayment) ? (bool)$allowPartialPayment : true;
+$allowPartialPayment = isset($allowPartialPayment) ? (bool)$allowPartialPayment : false;
 $screenshotRequired  = isset($screenshotRequired)  ? (bool)$screenshotRequired  : true;
 ?>
 <style>
@@ -842,19 +842,11 @@ $screenshotRequired  = isset($screenshotRequired)  ? (bool)$screenshotRequired  
               <!-- Payment type -->
               <div class="checkout-section__eyebrow" style="margin-bottom:6px">Step 4</div>
               <h2 class="checkout-section__title" style="margin-bottom:12px">Payment Method</h2>
-              <p class="checkout-section__subtitle" style="margin-bottom:14px">Preview the amount, choose full or advance payment, then upload your UPI screenshot to confirm.</p>
+              <p class="checkout-section__subtitle" style="margin-bottom:14px">Preview the full amount and upload your UPI screenshot to confirm.</p>
               <div class="payment-choice-card">
                 <p style="margin:0 0 8px; font-weight:600; font-size:0.92rem;">💳 Payment Option</p>
-                <label style="display:flex; align-items:center; gap:8px; margin-bottom:6px; cursor:pointer;">
-                  <input type="radio" name="payment_type" id="payFull" value="full" checked>
-                  <span id="payFullLabel">Pay in Full <span id="payFullAmount"></span></span>
-                </label>
-                <?php if ($allowPartialPayment): ?>
-                <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
-                  <input type="radio" name="payment_type" id="payAdvance50" value="advance_50">
-                  <span id="payAdvanceLabel">Pay 50% Advance <span id="payAdvanceAmount"></span> &amp; 50% on Delivery</span>
-                </label>
-                <?php endif; ?>
+                <input type="hidden" name="payment_type" value="full">
+                <p id="payFullLabel" style="margin:0;">Pay in Full <strong id="payFullAmount"></strong></p>
               </div>
 
               <div class="upi-section" style="margin-top:16px">
@@ -946,7 +938,6 @@ $screenshotRequired  = isset($screenshotRequired)  ? (bool)$screenshotRequired  
 
 <script>
   window.otpVerified = <?= $isLoggedIn ? 'true' : 'false' ?>;
-  window.ALLOW_PARTIAL_PAYMENT = <?= $allowPartialPayment ? 'true' : 'false' ?>;
   window.__screenshotRequired = <?= $screenshotRequired ? 'true' : 'false' ?>;
 <?php if ($isLoggedIn && !empty($prefillStreet)): ?>
 document.addEventListener("DOMContentLoaded", function () {
@@ -1116,13 +1107,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const syncPaymentType = () => {
     const total = Number(window.__checkoutGrandTotal || 0);
     if (!total) return;
-    const type = form.querySelector('input[name="payment_type"]:checked')?.value || 'full';
-    const amount = type === 'advance_50' ? Math.ceil(total * 0.5) : total;
-    const balance = Math.max(total - amount, 0);
-    document.getElementById('upiAmountText').textContent = type === 'advance_50'
-      ? 'Pay ₹' + amount + ' now (50% advance). Balance ₹' + balance + ' due on delivery.'
-      : 'Pay ₹' + amount + ' using UPI';
-    generateQR(amount);
+    document.getElementById('upiAmountText').textContent = 'Pay ₹' + total + ' using UPI';
+    generateQR(total);
   };
 
   const syncAddressSection = () => {
@@ -1154,7 +1140,6 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   form.querySelectorAll('input[name="payment_method"]').forEach((input) => input.addEventListener('change', syncPaymentUi));
-  form.querySelectorAll('input[name="payment_type"]').forEach((input) => input.addEventListener('change', syncPaymentType));
   form.querySelectorAll('input[name="fulfilment_mode"]').forEach((input) => input.addEventListener('change', syncAddressSection));
 
   ['customerName', 'customerPhone', 'customerEmail', 'deliveryStreet', 'deliveryPincode', 'deliveryDate', 'deliverySlot'].forEach((id) => {
@@ -1274,7 +1259,7 @@ document.addEventListener("DOMContentLoaded", () => {
     formData.set('customer_email', customerEmail.value.trim());
     formData.set('slot_id', deliverySlot.value);
     formData.set('payment_method', paymentMethod);
-    formData.set('payment_type', form.querySelector('input[name="payment_type"]:checked')?.value || 'full');
+    formData.set('payment_type', 'full');
 
     if (fulfilmentMode === 'delivery') {
       formData.set('delivery_street', deliveryStreet.value.trim());
@@ -1581,14 +1566,10 @@ if (window.__checkoutSyncMobileTotals) {
 document.getElementById("upiAmountText").textContent = "Pay ₹" + total + " using UPI";
 
 window.__checkoutGrandTotal = total;
-const payType = document.querySelector('input[name="payment_type"]:checked')?.value || 'full';
-const payAmt = payType === 'advance_50' ? Math.ceil(total * 0.5) : total;
-generateQR(payAmt);
+generateQR(total);
 
 const payFullAmt  = document.getElementById('payFullAmount');
-const payAdvAmt   = document.getElementById('payAdvanceAmount');
 if (payFullAmt)  payFullAmt.textContent  = '(₹' + total + ')';
-if (payAdvAmt)   payAdvAmt.textContent   = '(₹' + Math.ceil(total * 0.5) + ')';
 
     // ✅ items list
     let html = "";
