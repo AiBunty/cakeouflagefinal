@@ -1,6 +1,6 @@
 Array
 (
-    [product_id] => 13
+    [product_id] => 1
     [variant_id] => 
     [quantity] => 1
 )

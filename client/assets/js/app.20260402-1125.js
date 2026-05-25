@@ -623,6 +623,24 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     if (isCategoryPage) {
+      const preserveScroll = () => {
+        if (window.CakeScrollPreserver && typeof window.CakeScrollPreserver.saveState === "function") {
+          window.CakeScrollPreserver.saveState();
+        }
+      };
+
+      const submitWithPreserve = (form) => {
+        if (!(form instanceof HTMLFormElement)) {
+          return;
+        }
+        if (window.CakeScrollPreserver && typeof window.CakeScrollPreserver.submitForm === "function") {
+          window.CakeScrollPreserver.submitForm(form);
+          return;
+        }
+        preserveScroll();
+        form.submit();
+      };
+
       const setDrawerOpen = (isOpen) => {
         if (!sidebar || !sidebarBackdrop) return;
         sidebar.classList.toggle("is-open", isOpen);
@@ -675,6 +693,7 @@ document.addEventListener("DOMContentLoaded", () => {
       forms.forEach((form) => {
         form.addEventListener("submit", () => {
           trimEmptyFields(form);
+          preserveScroll();
         });
       });
 
@@ -703,7 +722,12 @@ document.addEventListener("DOMContentLoaded", () => {
           return;
         }
         if (mode === "all") {
-          window.location.href = window.location.pathname;
+          if (window.CakeScrollPreserver && typeof window.CakeScrollPreserver.navigate === "function") {
+            window.CakeScrollPreserver.navigate(window.location.pathname);
+          } else {
+            preserveScroll();
+            window.location.href = window.location.pathname;
+          }
           return;
         }
         if (mode === "eggless") {
@@ -727,7 +751,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (mode === "bestseller") setRadioValue("is_bestseller", "1");
         if (mode === "sameDay") setRadioValue("same_day", "1");
         if (mode === "chefSpecial") setRadioValue("is_chef_special", "1");
-        filterForm.submit();
+        submitWithPreserve(filterForm);
       };
 
       quickChips.forEach((chip) => {
@@ -764,6 +788,20 @@ document.addEventListener("DOMContentLoaded", () => {
         categoryWrap.innerHTML = buildCategoryTreeMarkup(items, "category", currentCategorySlug);
         bindAccordionBehavior(categoryWrap);
       };
+
+      categoryWrap?.addEventListener("click", (event) => {
+        const link = event.target instanceof Element ? event.target.closest("a[href]") : null;
+        if (!(link instanceof HTMLAnchorElement)) {
+          return;
+        }
+        if (event.defaultPrevented || event.button !== 0) {
+          return;
+        }
+        if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+          return;
+        }
+        preserveScroll();
+      });
 
       void loadCategoryTree();
 

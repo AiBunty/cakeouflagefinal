@@ -47,7 +47,7 @@ if (!in_array($statusFilter, ['open', 'pending', 'matched_auto', 'confirmed', 'r
     </div>
     <form class="queue-filter" method="get">
       <label for="status">Filter</label>
-      <select id="status" name="status" onchange="this.form.submit()">
+      <select id="status" name="status" onchange="window.CakeScrollPreserver ? window.CakeScrollPreserver.submitForm(this.form) : this.form.submit()">
         <?php foreach (['open' => 'Open', 'pending' => 'Pending', 'matched_auto' => 'Matched Auto', 'confirmed' => 'Confirmed', 'rejected' => 'Rejected', 'duplicate' => 'Duplicate', 'ignored' => 'Ignored'] as $value => $label): ?>
           <option value="<?= htmlspecialchars($value, ENT_QUOTES, 'UTF-8') ?>" <?= $statusFilter === $value ? 'selected' : '' ?>><?= htmlspecialchars($label, ENT_QUOTES, 'UTF-8') ?></option>
         <?php endforeach; ?>

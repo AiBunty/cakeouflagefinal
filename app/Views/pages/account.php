@@ -1,138 +1,171 @@
-<?php /* Cakeouflage — My Account Dashboard */ ?>
-<main class="section" data-page="account">
-  <div class="container">
-    <div class="account-layout">
+<?php /* Cakeouflage — Customer Dashboard */ ?>
+<main class="customer-shell" data-page="customer-dashboard">
+  <aside class="customer-sidebar customer-panel">
+    <div class="customer-sidebar__avatar" id="customerDashboardAvatar">C</div>
+    <p class="customer-sidebar__name" id="customerDashboardName">Cakeouflage Customer</p>
+    <nav class="customer-sidebar__nav" aria-label="Customer dashboard navigation">
+      <button type="button" data-dashboard-tab="home">Overview</button>
+      <button type="button" data-dashboard-tab="orders">Orders</button>
+      <button type="button" data-dashboard-tab="tracking">Tracking</button>
+      <button type="button" data-dashboard-tab="profile">Profile</button>
+      <button type="button" data-dashboard-tab="addresses">Addresses</button>
+      <button type="button" data-dashboard-tab="wishlist">Wishlist</button>
+      <button type="button" data-dashboard-tab="notifications">Notifications</button>
+      <button type="button" data-dashboard-tab="help">Help Center</button>
+      <button type="button" id="customerLogoutBtn">Sign Out</button>
+    </nav>
+  </aside>
 
-      <!-- Sidebar -->
-      <aside class="account-sidebar">
-        <div class="account-sidebar__avatar" id="accountAvatar">👤</div>
-        <div class="account-sidebar__name" id="accountName">Loading…</div>
-        <nav class="account-sidebar__nav" aria-label="Account navigation">
-          <a href="#profile" class="account-nav-link active" data-tab="profile">👤 My Profile</a>
-          <a href="#orders" class="account-nav-link" data-tab="orders">📦 My Orders</a>
-            <!--         <a href="#wishlist" class="account-nav-link" data-tab="wishlist">❤️ Wishlist</a> -->
-  
-          <a href="#addresses" class="account-nav-link" data-tab="addresses">📍 Addresses</a>
-        <a href="/logout" class="account-nav-link account-nav-link--logout">🚪 Sign Out</a>
-        </nav>
-      </aside>
-
-      <!-- Content -->
-      <div class="account-content">
-
-        <!-- Auth gate -->
-        <div class="account-gate" id="accountGate">
-          <div class="account-gate__inner">
-            <span class="account-gate__icon">🎂</span>
-            <h2>Sign in to Your Account</h2>
-            <p>View your orders, wishlist, and manage your profile.</p>
-           <a href="/login" class="btn btn--primary btn--lg">Sign In</a>
-            <p>New here? <a href="/register" class="link">Create an account →</a></p>
-          </div>
-        </div>
-
-        <!-- Profile Tab -->
-        <section class="account-tab" id="tab-profile" style="display:none">
-          <h2 class="account-tab__title">My Profile</h2>
-          <form class="form-grid" id="profileForm">
-            <div class="form-row-2">
-              <label class="form-control">
-                <span class="form-label">Full Name</span>
-                <input type="text" name="full_name" id="profileFullName">
-              </label>
-              <label class="form-control">
-                <span class="form-label">Phone</span>
-                <input type="tel" name="phone" id="profilePhone">
-              </label>
-            </div>
-            <label class="form-control">
-              <span class="form-label">Email</span>
-              <input type="email" name="email" id="profileEmail" disabled>
-            </label>
-            <label class="form-control">
-              <span class="form-label">Date of Birthday (for birthday surprises 🎂)</span>
-              <input type="date" name="dob" id="profileDob">
-            </label>
-            <label class="form-control">
-              <span class="form-label">Date of Anniversary (DOA)</span>
-              <input type="date" name="doa" id="profileDoa">
-            </label>
-            <button class="btn btn--primary" type="submit">Save Changes</button>
-            <p id="profileStatus" class="form-feedback" aria-live="polite"></p>
-          </form>
-        </section>
-
-        <!-- Orders Tab -->
-        <section class="account-tab" id="tab-orders" style="display:none">
-          <h2 class="account-tab__title">My Orders</h2>
-          <div id="ordersListContainer">
-            <div class="empty-state">
-              <span class="empty-state__icon">📦</span>
-              <p>No orders yet. <a href="<?= $baseUrl ?>/category" class="link">Browse our cakes →</a></p>
-            </div>
-          </div>
-        </section>
-
-
-        <!-- Wishlist Tab -->
-        <section class="account-tab" id="tab-wishlist" style="display:none">
-          <h2 class="account-tab__title">My Wishlist</h2>
-          <div class="product-grid" id="wishlistContainer">
-            <div class="empty-state">
-              <span class="empty-state__icon">❤️</span>
-              <p>No saved items yet. <a href="<?= $baseUrl ?>/category" class="link">Start browsing →</a></p>
-            </div>
-          </div>
-        </section>
-
-        <!-- Addresses Tab -->
-        <section class="account-tab" id="tab-addresses" style="display:none">
-          <h2 class="account-tab__title">Saved Addresses</h2>
-          <div id="addressListContainer"></div>
-          <button class="btn btn--secondary" id="addAddressBtn" type="button" style="margin-top:var(--space-4)">+ Add New Address</button>
-        </section>
-
+  <section>
+    <header class="customer-topbar customer-panel">
+      <div>
+        <h1>Customer Dashboard</h1>
+        <p>Personal profile, delivery tracking, wishlist, and support in one premium workspace.</p>
       </div>
+      <div class="customer-topbar__actions">
+        <a class="customer-btn customer-btn--ghost" href="/category">Shop Cakes</a>
+      </div>
+    </header>
+
+    <div class="customer-mobile-tabs customer-panel" style="margin-top:12px;">
+      <button type="button" data-dashboard-tab="home">Home</button>
+      <button type="button" data-dashboard-tab="orders">Orders</button>
+      <button type="button" data-dashboard-tab="tracking">Track</button>
+      <button type="button" data-dashboard-tab="profile">Profile</button>
+      <button type="button" data-dashboard-tab="wishlist">Wishlist</button>
+      <button type="button" data-dashboard-tab="help">Help</button>
     </div>
-  </div>
+
+    <section id="customerDashboardAuthGate" class="customer-panel" style="margin-top:12px;" hidden>
+      <h2>Please sign in</h2>
+      <p class="address-card__line">You need an active login session to view orders, addresses, and account details.</p>
+      <a class="customer-btn customer-btn--primary" href="/login">Go to Login</a>
+    </section>
+
+    <section data-dashboard-panel="home" class="customer-grid" style="margin-top:12px;">
+      <div class="customer-grid customer-grid--stats">
+        <article class="customer-stat">
+          <p class="customer-stat__label">Total Orders</p>
+          <p class="customer-stat__value" id="customerStatOrders">0</p>
+        </article>
+        <article class="customer-stat">
+          <p class="customer-stat__label">Total Spend</p>
+          <p class="customer-stat__value" id="customerStatSpent">Rs 0.00</p>
+        </article>
+        <article class="customer-stat">
+          <p class="customer-stat__label">Wishlist Items</p>
+          <p class="customer-stat__value" id="customerStatWishlist">0</p>
+        </article>
+        <article class="customer-stat">
+          <p class="customer-stat__label">Saved Addresses</p>
+          <p class="customer-stat__value" id="customerStatAddresses">0</p>
+        </article>
+      </div>
+
+      <article class="customer-panel">
+        <h2>Recent Orders</h2>
+        <div id="customerOrdersRecent"></div>
+      </article>
+    </section>
+
+    <section data-dashboard-panel="orders" class="customer-panel" hidden style="margin-top:12px;">
+      <h2>All Orders</h2>
+      <div id="customerOrdersAll"></div>
+    </section>
+
+    <section data-dashboard-panel="tracking" class="customer-panel" hidden style="margin-top:12px;">
+      <h2>Order Tracking</h2>
+      <form id="customerTrackForm" class="customer-track">
+        <div class="customer-track__bar">
+          <input id="customerTrackReference" class="customer-track__input" type="text" placeholder="Enter order number or ID" />
+          <button class="customer-btn customer-btn--primary" type="submit">Track</button>
+        </div>
+      </form>
+      <div id="customerTrackResult" style="margin-top:10px;"></div>
+    </section>
+
+    <section data-dashboard-panel="profile" class="customer-panel" hidden style="margin-top:12px;">
+      <h2>My Profile</h2>
+      <form id="customerProfileForm" class="customer-grid customer-grid--two">
+        <label>
+          Full Name
+          <input id="customerProfileName" name="full_name" type="text" required />
+        </label>
+        <label>
+          Phone
+          <input id="customerProfilePhone" name="phone" type="tel" required />
+        </label>
+        <label>
+          Email
+          <input id="customerProfileEmail" type="email" disabled />
+        </label>
+        <label>
+          Date of Birth
+          <input id="customerProfileDob" name="dob" type="date" />
+        </label>
+        <label>
+          Anniversary Date
+          <input id="customerProfileDoa" name="doa" type="date" />
+        </label>
+        <div>
+          <button class="customer-btn customer-btn--primary" type="submit">Save Profile</button>
+        </div>
+      </form>
+      <p id="customerProfileStatus" class="address-card__line" aria-live="polite"></p>
+    </section>
+
+    <section data-dashboard-panel="addresses" class="customer-panel" hidden style="margin-top:12px;">
+      <h2>Saved Addresses</h2>
+      <form id="customerAddressForm" class="customer-grid customer-grid--two">
+        <input id="customerAddressId" type="hidden" name="address_id" />
+        <label>Label<input id="addressLabel" name="label" type="text" placeholder="Home / Office" /></label>
+        <label>Recipient Name<input id="addressRecipientName" name="recipient_name" type="text" required /></label>
+        <label>Phone<input id="addressPhone" name="phone" type="tel" required /></label>
+        <label>Line 1<input id="addressLine1" name="line1" type="text" required /></label>
+        <label>Line 2<input id="addressLine2" name="line2" type="text" /></label>
+        <label>Landmark<input id="addressLandmark" name="landmark" type="text" /></label>
+        <label>City<input id="addressCity" name="city" type="text" required /></label>
+        <label>State<input id="addressState" name="state" type="text" required /></label>
+        <label>Postal Code<input id="addressPostalCode" name="postal_code" type="text" required /></label>
+        <label style="display:flex;align-items:center;gap:8px;">Set default <input id="addressIsDefault" name="is_default" type="checkbox" value="1" /></label>
+        <div style="display:flex;gap:8px;">
+          <button id="customerAddressSubmit" class="customer-btn customer-btn--primary" type="submit">Save Address</button>
+          <button id="customerAddressReset" class="customer-btn customer-btn--ghost" type="button">Reset</button>
+        </div>
+      </form>
+      <div id="customerAddresses" class="customer-grid" style="margin-top:12px;"></div>
+    </section>
+
+    <section data-dashboard-panel="wishlist" class="customer-panel" hidden style="margin-top:12px;">
+      <h2>Wishlist</h2>
+      <div id="customerWishlist" class="customer-grid"></div>
+    </section>
+
+    <section data-dashboard-panel="notifications" class="customer-panel" hidden style="margin-top:12px;">
+      <h2>Notifications</h2>
+      <div id="customerNotifications" class="customer-grid"></div>
+    </section>
+
+    <section data-dashboard-panel="help" class="customer-panel" hidden style="margin-top:12px;">
+      <h2>Help Center</h2>
+      <div class="customer-grid">
+        <details class="profile-card"><summary>How can I track my order?</summary><p class="address-card__line">Use the Tracking tab and enter your order number or ID to view the live timeline.</p></details>
+        <details class="profile-card"><summary>How do I update delivery address?</summary><p class="address-card__line">Go to Addresses tab, edit any address card, and save instantly.</p></details>
+        <details class="profile-card"><summary>Where can I download invoice?</summary><p class="address-card__line">Invoices are available for paid orders from the order details panel.</p></details>
+      </div>
+      <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
+        <a class="customer-btn customer-btn--ghost" href="/contact">Raise a Ticket</a>
+        <a class="customer-btn customer-btn--ghost" href="/faq">View FAQ</a>
+      </div>
+    </section>
+  </section>
+
+  <aside id="customerOrderDetail" class="customer-detail" aria-label="Order details panel"></aside>
+
+  <nav class="mobile-nav" aria-label="Mobile quick navigation">
+    <button type="button" data-dashboard-tab="home">Home</button>
+    <button type="button" data-dashboard-tab="orders">Orders</button>
+    <button type="button" data-dashboard-tab="tracking">Track</button>
+    <button type="button" data-dashboard-tab="wishlist">Wishlist</button>
+  </nav>
 </main>
-
-<script>
-async function loadAccount() {
-  try {
-    const res = await fetch("/api/auth/me", {
-      credentials: "include"
-    });
-
-    const data = await res.json();
-
-    if (!data.success) {
-      document.getElementById("accountGate").style.display = "block";
-      return;
-    }
-
-    const user = data.data.user;
-
-    // ✅ Sidebar name
-    document.getElementById("accountName").textContent = user.full_name || "User";
-
-    // ✅ Profile form fill
-    document.getElementById("profileFullName").value = user.full_name || "";
-    document.getElementById("profilePhone").value = user.phone || "";
-    document.getElementById("profileEmail").value = user.email || "";
-    const profileDoa = document.getElementById("profileDoa");
-    if (profileDoa) {
-      profileDoa.value = "";
-    }
-
-    // ✅ show content
-    document.getElementById("accountGate").style.display = "none";
-    document.getElementById("tab-profile").style.display = "block";
-
-  } catch (err) {
-    console.error(err);
-  }
-}
-
-loadAccount();
-</script>

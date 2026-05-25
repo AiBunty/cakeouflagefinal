@@ -146,7 +146,7 @@ $currentUri = htmlspecialchars((string)($_SERVER['REQUEST_URI'] ?? 'credit_repor
       <div class="crx-filter-row">
         <label>
           Time Period
-          <select name="period" onchange="this.form.submit()">
+          <select name="period" onchange="window.CakeScrollPreserver ? window.CakeScrollPreserver.submitForm(this.form) : this.form.submit()">
             <option value="all" <?= ($period === 'all') ? 'selected' : '' ?>>All Time</option>
             <option value="recent" <?= ($period === 'recent') ? 'selected' : '' ?>>This Week</option>
             <option value="month" <?= ($period === 'month') ? 'selected' : '' ?>>This Month</option>
@@ -154,7 +154,7 @@ $currentUri = htmlspecialchars((string)($_SERVER['REQUEST_URI'] ?? 'credit_repor
         </label>
         <label>
           Aging Analysis
-          <select name="aging" onchange="this.form.submit()">
+          <select name="aging" onchange="window.CakeScrollPreserver ? window.CakeScrollPreserver.submitForm(this.form) : this.form.submit()">
             <option value="all" <?= ($agingFilter === 'all') ? 'selected' : '' ?>>All</option>
             <option value="due_0_30" <?= ($agingFilter === 'due_0_30') ? 'selected' : '' ?>>Due 0-30 Days</option>
             <option value="due_30_60" <?= ($agingFilter === 'due_30_60') ? 'selected' : '' ?>>Due 30-60 Days</option>
@@ -163,7 +163,7 @@ $currentUri = htmlspecialchars((string)($_SERVER['REQUEST_URI'] ?? 'credit_repor
         </label>
         <label>
           Sort By
-          <select name="sort" onchange="this.form.submit()">
+          <select name="sort" onchange="window.CakeScrollPreserver ? window.CakeScrollPreserver.submitForm(this.form) : this.form.submit()">
             <option value="date_desc" <?= ($sortBy === 'date_desc') ? 'selected' : '' ?>>Newest First</option>
             <option value="date_asc" <?= ($sortBy === 'date_asc') ? 'selected' : '' ?>>Oldest First</option>
             <option value="amount_high" <?= ($sortBy === 'amount_high') ? 'selected' : '' ?>>Highest Amount</option>
@@ -172,7 +172,7 @@ $currentUri = htmlspecialchars((string)($_SERVER['REQUEST_URI'] ?? 'credit_repor
         </label>
         <label>
           Per Page
-          <select name="per_page" onchange="this.form.submit()">
+          <select name="per_page" onchange="window.CakeScrollPreserver ? window.CakeScrollPreserver.submitForm(this.form) : this.form.submit()">
             <option value="20" <?= ($perPage === 20) ? 'selected' : '' ?>>20 Items</option>
             <option value="50" <?= ($perPage === 50) ? 'selected' : '' ?>>50 Items</option>
             <option value="100" <?= ($perPage === 100) ? 'selected' : '' ?>>100 Items</option>
@@ -367,5 +367,6 @@ $currentUri = htmlspecialchars((string)($_SERVER['REQUEST_URI'] ?? 'credit_repor
 </div><!-- /.cr-shell -->
 </div>
 </div>
+<script src="/client/assets/js/scroll-preserve.js"></script>
 </body>
 </html>

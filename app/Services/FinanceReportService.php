@@ -176,7 +176,7 @@ final class FinanceReportService
                 COALESCE(SUM(bank_net_amount), 0) AS bank_total,
                 COALESCE(SUM(credit_outstanding_amount), 0) AS credit_total,
                 COALESCE(SUM(net_collected_amount), 0) AS overall_total,
-                COALESCE(SUM(gross_amount), 0) AS gross_total,
+                COALESCE(SUM(realized_gross_amount), 0) AS gross_total,
                 COALESCE(SUM(refund_amount), 0) AS refunded_total,
                 COALESCE(SUM(advance_collected_amount), 0) AS advance_collected,
                 COALESCE(SUM(CASE WHEN balance_due_amount > 0 THEN balance_due_amount ELSE 0 END), 0) AS balance_outstanding,
@@ -672,7 +672,11 @@ final class FinanceReportService
                 COALESCE(refunds.refund_amount, COALESCE(o.total_refunded, 0), 0) AS refund_amount,
                 COALESCE(refunds.refund_count, 0) AS refund_count,
                 refunds.last_refunded_at,
-                o.grand_total AS gross_amount,
+                CASE
+                    WHEN o.order_status IN ('cancelled', 'rejected', 'refunded', 'partially_refunded', 'fully_refunded')
+                        OR o.payment_status IN ('refunded', 'partially_refunded') THEN 0
+                    ELSE o.grand_total
+                END AS gross_amount,
                 LEAST(
                     CASE
                         WHEN o.payment_status IN ('paid', 'partially_refunded', 'refunded') THEN o.grand_total
@@ -682,31 +686,41 @@ final class FinanceReportService
                     o.grand_total
                 ) AS collected_before_refunds,
                 CASE
+                    WHEN o.order_status IN ('cancelled', 'rejected', 'refunded', 'partially_refunded', 'fully_refunded')
+                        OR o.payment_status IN ('refunded', 'partially_refunded') THEN 0
                     WHEN o.payment_status IN ('paid', 'partially_refunded', 'refunded') THEN o.grand_total
                     ELSE 0
                 END AS realized_gross_amount,
-                GREATEST(
-                    LEAST(
-                        CASE
-                            WHEN o.payment_status IN ('paid', 'partially_refunded', 'refunded') THEN o.grand_total
-                            WHEN COALESCE(o.advance_amount, 0) > 0 THEN COALESCE(o.advance_amount, 0)
-                            ELSE 0
-                        END,
-                        o.grand_total
-                    ) - COALESCE(refunds.refund_amount, COALESCE(o.total_refunded, 0), 0),
-                    0
-                ) AS net_collected_amount,
-                GREATEST(
-                    LEAST(
-                        CASE
-                            WHEN o.payment_status IN ('paid', 'partially_refunded', 'refunded') THEN o.grand_total
-                            WHEN COALESCE(o.advance_amount, 0) > 0 THEN COALESCE(o.advance_amount, 0)
-                            ELSE 0
-                        END,
-                        o.grand_total
-                    ) - COALESCE(refunds.refund_amount, COALESCE(o.total_refunded, 0), 0),
-                    0
-                ) AS net_realized_amount,
+                CASE
+                    WHEN o.order_status IN ('cancelled', 'rejected', 'refunded', 'partially_refunded', 'fully_refunded')
+                        OR o.payment_status IN ('refunded', 'partially_refunded') THEN 0
+                    ELSE GREATEST(
+                        LEAST(
+                            CASE
+                                WHEN o.payment_status IN ('paid', 'partially_refunded', 'refunded') THEN o.grand_total
+                                WHEN COALESCE(o.advance_amount, 0) > 0 THEN COALESCE(o.advance_amount, 0)
+                                ELSE 0
+                            END,
+                            o.grand_total
+                        ) - COALESCE(refunds.refund_amount, COALESCE(o.total_refunded, 0), 0),
+                        0
+                    )
+                END AS net_collected_amount,
+                CASE
+                    WHEN o.order_status IN ('cancelled', 'rejected', 'refunded', 'partially_refunded', 'fully_refunded')
+                        OR o.payment_status IN ('refunded', 'partially_refunded') THEN 0
+                    ELSE GREATEST(
+                        LEAST(
+                            CASE
+                                WHEN o.payment_status IN ('paid', 'partially_refunded', 'refunded') THEN o.grand_total
+                                WHEN COALESCE(o.advance_amount, 0) > 0 THEN COALESCE(o.advance_amount, 0)
+                                ELSE 0
+                            END,
+                            o.grand_total
+                        ) - COALESCE(refunds.refund_amount, COALESCE(o.total_refunded, 0), 0),
+                        0
+                    )
+                END AS net_realized_amount,
                 CASE
                     WHEN COALESCE(o.advance_amount, 0) > 0 THEN LEAST(COALESCE(o.advance_amount, 0), o.grand_total)
                     ELSE 0
@@ -772,6 +786,8 @@ final class FinanceReportService
                     ELSE 'Fully Paid'
                 END AS collection_status_label,
                 CASE
+                    WHEN o.order_status IN ('cancelled', 'rejected', 'refunded', 'partially_refunded', 'fully_refunded')
+                        OR o.payment_status IN ('refunded', 'partially_refunded') THEN 0
                     WHEN o.payment_method = 'cod' THEN GREATEST(
                         LEAST(
                             CASE
@@ -786,6 +802,8 @@ final class FinanceReportService
                     ELSE 0
                 END AS cash_net_amount,
                 CASE
+                    WHEN o.order_status IN ('cancelled', 'rejected', 'refunded', 'partially_refunded', 'fully_refunded')
+                        OR o.payment_status IN ('refunded', 'partially_refunded') THEN 0
                     WHEN o.payment_method IN ('upi_manual', 'gateway') THEN GREATEST(
                         LEAST(
                             CASE

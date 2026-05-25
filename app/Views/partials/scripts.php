@@ -1,12 +1,30 @@
-<?php $baseUrl='';
- ?>
+<?php
+$baseUrl='';
+$requestPath = parse_url((string) ($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH) ?: '/';
+if ($requestPath === '/index.php') {
+	$requestPath = '/';
+}
+if ($requestPath !== '/') {
+	$requestPath = rtrim($requestPath, '/');
+	if ($requestPath === '') {
+		$requestPath = '/';
+	}
+}
+$isCategoryRoute = $requestPath === '/category' || strpos($requestPath, '/category/') === 0;
+?>
 <?php $assetVersion = '20260519-d'; ?>
 
 <script src="<?=$baseUrl?>/client/assets/js/utils.20260402-1125.js?v=<?= $assetVersion ?>" defer></script>
+<script src="<?=$baseUrl?>/client/assets/js/scroll-preserve.js?v=<?= @filemtime(__DIR__ . '/../../../client/assets/js/scroll-preserve.js') ?: $assetVersion ?>" defer></script>
 
 <script src="<?=$baseUrl?>/client/assets/js/cart.js?v=<?= $assetVersion ?>" defer></script>
 <script src="<?=$baseUrl?>/client/assets/js/modal.js?v=<?= $assetVersion ?>" defer></script>
 <script src="<?=$baseUrl?>/client/assets/js/app.20260402-1125.js?v=<?= $assetVersion ?>" defer></script>
+<?php if ($isCategoryRoute): ?>
+<script src="<?=$baseUrl?>/client/assets/js/category-hero-v2.js?v=<?= filemtime(__DIR__ . '/../../../client/assets/js/category-hero-v2.js') ?>" defer></script>
+<script src="<?=$baseUrl?>/client/category/category.js?v=<?= filemtime(__DIR__ . '/../../../client/category/category.js') ?>" defer></script>
+<?php endif; ?>
+<script src="<?=$baseUrl?>/client/assets/js/customer-dashboard.js?v=<?= $assetVersion ?>" defer></script>
 <script src="<?=$baseUrl?>/client/assets/js/admin.js?v=<?= $assetVersion ?>" defer></script>
 
 

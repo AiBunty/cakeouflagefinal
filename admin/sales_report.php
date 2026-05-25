@@ -183,7 +183,7 @@ $statusSales = $conn->query($statusSalesQuery);
       <div class="sr-filter-row">
         <label>
           Period
-          <select name="period" onchange="this.form.submit()">
+          <select name="period" onchange="window.CakeScrollPreserver ? window.CakeScrollPreserver.submitForm(this.form) : this.form.submit()">
             <option value="today" <?= ($period === 'today') ? 'selected' : '' ?>>Today</option>
             <option value="week" <?= ($period === 'week') ? 'selected' : '' ?>>This Week</option>
             <option value="month" <?= ($period === 'month') ? 'selected' : '' ?>>This Month</option>
@@ -195,11 +195,11 @@ $statusSales = $conn->query($statusSalesQuery);
         <?php if ($period === 'custom'): ?>
         <label>
           From Date
-          <input type="date" name="from_date" value="<?= htmlspecialchars($fromDate) ?>" onchange="this.form.submit()">
+          <input type="date" name="from_date" value="<?= htmlspecialchars($fromDate) ?>" onchange="window.CakeScrollPreserver ? window.CakeScrollPreserver.submitForm(this.form) : this.form.submit()">
         </label>
         <label>
           To Date
-          <input type="date" name="to_date" value="<?= htmlspecialchars($toDate) ?>" onchange="this.form.submit()">
+          <input type="date" name="to_date" value="<?= htmlspecialchars($toDate) ?>" onchange="window.CakeScrollPreserver ? window.CakeScrollPreserver.submitForm(this.form) : this.form.submit()">
         </label>
         <?php endif; ?>
       </div>
@@ -207,7 +207,7 @@ $statusSales = $conn->query($statusSalesQuery);
       <div class="sr-filter-row">
         <label>
           Payment Mode
-          <select name="payment_mode" onchange="this.form.submit()">
+          <select name="payment_mode" onchange="window.CakeScrollPreserver ? window.CakeScrollPreserver.submitForm(this.form) : this.form.submit()">
             <option value="all">All Methods</option>
             <option value="cod" <?= ($paymentMode === 'cod') ? 'selected' : '' ?>>Cash</option>
             <option value="upi_manual" <?= ($paymentMode === 'upi_manual') ? 'selected' : '' ?>>UPI / Bank</option>
@@ -215,7 +215,7 @@ $statusSales = $conn->query($statusSalesQuery);
         </label>
         <label>
           Order Status
-          <select name="status" onchange="this.form.submit()">
+          <select name="status" onchange="window.CakeScrollPreserver ? window.CakeScrollPreserver.submitForm(this.form) : this.form.submit()">
             <option value="all">All Status</option>
             <option value="pending_payment" <?= ($statusFilter === 'pending_payment') ? 'selected' : '' ?>>Pending Payment</option>
             <option value="payment_under_review" <?= ($statusFilter === 'payment_under_review') ? 'selected' : '' ?>>Under Review</option>

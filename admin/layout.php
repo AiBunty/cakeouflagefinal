@@ -59,6 +59,7 @@ foreach (admin_navigation_items() as $_ni) {
 <title>Admin Panel</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="csrf-token" content="<?= htmlspecialchars(\App\Core\Csrf::token(), ENT_QUOTES, 'UTF-8') ?>">
+<script src="/client/assets/js/scroll-preserve.js?v=<?= (int) (@filemtime(__DIR__ . '/../client/assets/js/scroll-preserve.js') ?: time()) ?>"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Poppins:wght@400;500;600;700&display=swap');
 

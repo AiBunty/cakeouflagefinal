@@ -22,6 +22,8 @@
     }
   }
 
+  $isCategoryRoute = $requestPath === '/category' || strpos($requestPath, '/category/') === 0;
+
   $canonicalUrl = $canonicalBase . ($requestPath === '/' ? '/' : $requestPath);
   ?>
   <meta charset="UTF-8" />
@@ -62,5 +64,12 @@
 <link rel="stylesheet" href="/client/assets/css/components.css" />
 <link rel="stylesheet" href="/client/assets/css/pages.css?v=<?= filemtime(__DIR__ . '/../../../client/assets/css/pages.css') ?>" />
 <link rel="stylesheet" href="/client/assets/css/responsive.css" />
+<link rel="stylesheet" href="/client/assets/css/customer-dashboard.css?v=<?= filemtime(__DIR__ . '/../../../client/assets/css/customer-dashboard.css') ?>" />
+<?php if ($isCategoryRoute): ?>
+<link rel="preload" as="image" href="/client/assets/images/category/hero-bg.webp" fetchpriority="high" />
+<link rel="preload" as="image" href="/client/assets/images/category/hero-bg-mobile.webp" media="(max-width: 768px)" />
+<link rel="stylesheet" href="/client/category/category.css?v=<?= filemtime(__DIR__ . '/../../../client/category/category.css') ?>" />
+<link rel="stylesheet" href="/client/assets/css/category-hero-v2.css?v=<?= filemtime(__DIR__ . '/../../../client/assets/css/category-hero-v2.css') ?>" />
+<?php endif; ?>
 </head>
 <body>

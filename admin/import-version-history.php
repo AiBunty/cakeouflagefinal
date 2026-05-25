@@ -423,7 +423,11 @@ function performRestore() {
     .then(data => {
         if (data.success) {
             alert('✓ Restored ' + data.data.products_restored + ' products to version #' + restoreVersionNumber);
-            location.reload();
+            if (window.CakeScrollPreserver && typeof window.CakeScrollPreserver.reload === 'function') {
+                window.CakeScrollPreserver.reload();
+            } else {
+                location.reload();
+            }
         } else {
             alert('✗ Restore failed: ' + data.message);
             button.disabled = false;
@@ -436,4 +440,6 @@ function performRestore() {
         button.textContent = 'Restore';
     });
 }
+
 </script>
+<script src="/client/assets/js/scroll-preserve.js"></script>

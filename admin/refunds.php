@@ -210,6 +210,7 @@ table.rf-table tr:hover td { background:#fff9fb; }
 </div>
 
 <?php if ($canApprove): ?>
+<script src="/client/assets/js/scroll-preserve.js"></script>
 <script>
 function approveRefund(refundId, maxAmount) {
   const amt = prompt('Enter approved amount (max: ' + maxAmount + '):', maxAmount);
@@ -229,7 +230,11 @@ function approveRefund(refundId, maxAmount) {
   .then(data => {
     if (data.success) {
       alert('\u2705 Refund approved successfully');
-      location.reload();
+      if (window.CakeScrollPreserver && typeof window.CakeScrollPreserver.reload === 'function') {
+        window.CakeScrollPreserver.reload();
+      } else {
+        location.reload();
+      }
     } else {
       alert('\u274c ' + (data.message || 'Failed to approve refund'));
     }
@@ -250,7 +255,11 @@ function rejectRefund(refundId) {
   .then(data => {
     if (data.success) {
       alert('\u2705 Refund rejected');
-      location.reload();
+      if (window.CakeScrollPreserver && typeof window.CakeScrollPreserver.reload === 'function') {
+        window.CakeScrollPreserver.reload();
+      } else {
+        location.reload();
+      }
     } else {
       alert('\u274c ' + (data.message || 'Failed to reject refund'));
     }

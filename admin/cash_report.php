@@ -150,7 +150,7 @@ $statusBreak = $conn->query($statusBreakQuery);
       <div class="cr-filter-row">
         <label>
           Period
-          <select name="period" onchange="this.form.submit()">
+          <select name="period" onchange="window.CakeScrollPreserver ? window.CakeScrollPreserver.submitForm(this.form) : this.form.submit()">
             <option value="today" <?= ($period === 'today') ? 'selected' : '' ?>>Today</option>
             <option value="week" <?= ($period === 'week') ? 'selected' : '' ?>>This Week</option>
             <option value="month" <?= ($period === 'month') ? 'selected' : '' ?>>This Month</option>
@@ -161,16 +161,16 @@ $statusBreak = $conn->query($statusBreakQuery);
         <?php if ($period === 'custom'): ?>
         <label>
           From Date
-          <input type="date" name="from_date" value="<?= htmlspecialchars($fromDate) ?>" onchange="this.form.submit()">
+          <input type="date" name="from_date" value="<?= htmlspecialchars($fromDate) ?>" onchange="window.CakeScrollPreserver ? window.CakeScrollPreserver.submitForm(this.form) : this.form.submit()">
         </label>
         <label>
           To Date
-          <input type="date" name="to_date" value="<?= htmlspecialchars($toDate) ?>" onchange="this.form.submit()">
+          <input type="date" name="to_date" value="<?= htmlspecialchars($toDate) ?>" onchange="window.CakeScrollPreserver ? window.CakeScrollPreserver.submitForm(this.form) : this.form.submit()">
         </label>
         <?php endif; ?>
         <label>
           Status Filter
-          <select name="status" onchange="this.form.submit()">
+          <select name="status" onchange="window.CakeScrollPreserver ? window.CakeScrollPreserver.submitForm(this.form) : this.form.submit()">
             <option value="all">All Status</option>
             <option value="paid" <?= ($statusFilter === 'paid') ? 'selected' : '' ?>>Collected</option>
             <option value="pending" <?= ($statusFilter === 'pending') ? 'selected' : '' ?>>Pending</option>

@@ -1,664 +1,608 @@
 <?php
+declare(strict_types=1);
 
-
-
-$pageTitle = "Order Details";
+$pageTitle = 'Order Details';
 require_once __DIR__ . '/../app/bootstrap.php';
 require_once __DIR__ . '/layout.php';
-
 require_once __DIR__ . '/includes/db.php';
 require_once __DIR__ . '/includes/invoice_helpers.php';
-$order_id = intval($_GET['id'] ?? 0);
+
+use App\Services\OrderStateManager;
+use App\Services\PaymentReceiptService;
+
+$orderId = max((int)($_GET['id'] ?? 0), 0);
 $returnTo = trim((string)($_GET['return_to'] ?? ''));
 $backHref = 'orders.php';
 if ($returnTo !== '') {
-  $parts = parse_url($returnTo);
-  if (is_array($parts)) {
-    $path = basename((string)($parts['path'] ?? ''));
-    $safePages = array('orders.php', 'sales_register.php', 'collection_report.php');
-    if (in_array($path, $safePages, true)) {
-      $query = isset($parts['query']) ? trim((string)$parts['query']) : '';
-      $backHref = $path . ($query !== '' ? ('?' . $query) : '');
+    $parts = parse_url($returnTo);
+    if (is_array($parts)) {
+        $path = basename((string)($parts['path'] ?? ''));
+        $safePages = ['orders.php', 'sales_register.php', 'collection_report.php'];
+        if (in_array($path, $safePages, true)) {
+            $query = isset($parts['query']) ? trim((string)$parts['query']) : '';
+            $backHref = $path . ($query !== '' ? ('?' . $query) : '');
+        }
     }
-  }
 }
+
 $canOrderReject = admin_has_permission('order_reject');
 $canOrderRefund = admin_has_permission('order_refund');
-$canRefund      = admin_has_permission('can_approve_refund') || admin_has_permission('can_force_refund');
+$canOrderEdit = admin_has_permission('order_edit');
+$canManualOrders = admin_has_permission('manual_orders');
+$canRefundApproval = admin_has_permission('can_approve_refund') || admin_has_permission('can_force_refund');
+$canOrderDelete = admin_has_permission('order_delete');
+$isSuperAdmin = admin_is_super_admin();
 
-// 🔥 ORDER FETCH
-$order = $conn->query("SELECT * FROM orders WHERE id=$order_id")->fetch_assoc();
-$canGenerateInvoice = is_array($order) && invoice_is_fully_paid($order);
-$canOpenReceipt = is_array($order) && payment_receipt_is_eligible($order);
+function od_h(?string $value): string
+{
+    return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+}
+
+function od_money($value): string
+{
+    return 'Rs ' . number_format((float)$value, 2);
+}
+
+function od_first_non_empty(...$values): string
+{
+    foreach ($values as $value) {
+        if (trim((string)$value) !== '') {
+            return trim((string)$value);
+        }
+    }
+    return '';
+}
+
+function od_labelize(string $value): string
+{
+    $value = trim($value);
+    if ($value === '') {
+        return '-';
+    }
+    return ucwords(str_replace('_', ' ', $value));
+}
+
+function od_status_label(string $status): string
+{
+    $map = [
+        'pending_payment' => 'Pending Payment',
+        'payment_under_review' => 'Payment Review',
+        'awaiting_confirmation' => 'Awaiting Confirmation',
+        'confirmed' => 'Confirmed',
+        'preparing' => 'Preparing',
+        'ready_for_pickup' => 'Ready',
+        'out_for_delivery' => 'Out For Delivery',
+        'delivered' => 'Delivered',
+        'completed' => 'Completed',
+        'cancelled' => 'Cancelled',
+        'rejected' => 'Rejected',
+        'refund_requested' => 'Refund Requested',
+        'refunded' => 'Refunded',
+        'partially_refunded' => 'Partially Refunded',
+        'fully_refunded' => 'Fully Refunded',
+        'paid' => 'Paid',
+        'pending' => 'Pending',
+        'credit' => 'Credit',
+        'failed' => 'Failed',
+        'under_review' => 'Under Review',
+    ];
+    return $map[$status] ?? od_labelize($status);
+}
+
+function od_status_class(string $status): string
+{
+    return 'od-chip-status-' . preg_replace('/[^a-z_]/', '', strtolower($status));
+}
+
+function od_format_datetime(?string $value, string $fallback = '-'): string
+{
+    $value = trim((string)$value);
+    if ($value === '') {
+        return $fallback;
+    }
+    $ts = strtotime($value);
+    if ($ts === false) {
+        return $fallback;
+    }
+    return date('d M Y, h:i A', $ts);
+}
+
+function od_format_date(?string $value, string $fallback = '-'): string
+{
+    $value = trim((string)$value);
+    if ($value === '') {
+        return $fallback;
+    }
+    $ts = strtotime($value);
+    if ($ts === false) {
+        return $fallback;
+    }
+    return date('d M Y', $ts);
+}
+
+function od_build_action_form(int $orderId, string $status, string $label, string $class, string $redirectTo): string
+{
+    return '<form method="POST" action="update_order_status.php">'
+        . '<input type="hidden" name="order_id" value="' . $orderId . '">'
+        . '<input type="hidden" name="status" value="' . od_h($status) . '">'
+        . '<input type="hidden" name="redirect_to" value="' . od_h($redirectTo) . '">'
+        . '<button type="submit" class="od-btn ' . $class . '">' . od_h($label) . '</button>'
+        . '</form>';
+}
+
+$order = null;
+if ($orderId > 0) {
+    $stmt = $conn->prepare('SELECT * FROM orders WHERE id = ? LIMIT 1');
+    if ($stmt) {
+        $stmt->bind_param('i', $orderId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $order = $result ? $result->fetch_assoc() : null;
+        $stmt->close();
+    }
+}
+
+if (!is_array($order)) {
+    ?>
+    <link rel="stylesheet" href="assets/css/admin-order-details.css?v=<?php echo (int)(@filemtime(__DIR__ . '/assets/css/admin-order-details.css') ?: time()); ?>">
+    <div class="od-shell">
+      <section class="od-card">
+        <h2 class="od-card-title">Order not found</h2>
+        <p>The requested order could not be loaded.</p>
+        <a href="<?php echo od_h($backHref); ?>" class="od-btn-link od-btn-link-primary">Back to Orders</a>
+      </section>
+    </div>
+    </div>
+    </div>
+    </body>
+    </html>
+    <?php
+    exit;
+}
+
+$stateManager = new OrderStateManager();
+$currentOrderStatus = (string)($order['order_status'] ?? 'pending_payment');
+$currentPaymentStatus = (string)($order['payment_status'] ?? 'pending');
+$allowedTransitions = $stateManager->getAllowedTransitions($currentOrderStatus);
+$governance = $stateManager->getAllowedActions($currentOrderStatus, $currentPaymentStatus);
+$canConfirmPayment = (bool)($governance['can_confirm_payment'] ?? false);
+$isRefundFinal = (bool)($governance['is_refund_final'] ?? false);
+
+$hasArchivedColumn = false;
+$archivedColumnRes = $conn->query("SHOW COLUMNS FROM orders LIKE 'is_archived'");
+if ($archivedColumnRes && $archivedColumnRes->fetch_assoc()) {
+    $hasArchivedColumn = true;
+}
+$isArchived = $hasArchivedColumn && (int)($order['is_archived'] ?? 0) === 1;
+
+$canGenerateInvoice = invoice_is_fully_paid($order);
+$canOpenReceipt = payment_receipt_is_eligible($order);
 $receiptHistory = [];
 $latestReceipt = null;
-if (is_array($order) && (int)($order['id'] ?? 0) > 0) {
-  try {
-    $paymentReceiptService = new \App\Services\PaymentReceiptService();
+try {
+    $paymentReceiptService = new PaymentReceiptService();
     $receiptHistory = $paymentReceiptService->getReceiptHistoryForOrder((int)$order['id']);
     $latestReceipt = $receiptHistory[0] ?? null;
-  } catch (\Throwable $receiptErr) {
+} catch (Throwable $receiptErr) {
     error_log('[order_details][receipt-history] ' . $receiptErr->getMessage());
-  }
 }
 
-// 🔥 ITEMS FETCH (IMPORTANT: table name check kar)
-$items = $conn->query("SELECT * FROM order_items WHERE order_id=$order_id");
+$itemRows = [];
+$itemStmt = $conn->prepare(
+    'SELECT oi.*, '
+    . 'COALESCE(NULLIF(p.featured_image, ""), (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = oi.product_id ORDER BY pi.id ASC LIMIT 1)) AS product_image '
+    . 'FROM order_items oi '
+    . 'LEFT JOIN products p ON p.id = oi.product_id '
+    . 'WHERE oi.order_id = ? '
+    . 'ORDER BY oi.id ASC'
+);
+if ($itemStmt) {
+    $itemStmt->bind_param('i', $orderId);
+    $itemStmt->execute();
+    $itemResult = $itemStmt->get_result();
+    while ($itemResult && ($row = $itemResult->fetch_assoc())) {
+        $itemRows[] = $row;
+    }
+    $itemStmt->close();
+}
+
+$paymentMethodLabelMap = [
+    'upi_manual' => 'UPI / Bank',
+    'cod' => 'Cash',
+    'gateway' => 'Gateway',
+    'credit' => 'Credit',
+];
+$fulfilmentLabelMap = [
+    'delivery' => 'Delivery',
+    'pickup' => 'Pickup',
+    'custom_delivery' => 'Custom Delivery',
+];
+$paymentMethodLabel = $paymentMethodLabelMap[(string)($order['payment_method'] ?? '')] ?? od_labelize((string)($order['payment_method'] ?? ''));
+$fulfilmentLabel = $fulfilmentLabelMap[(string)($order['fulfilment_mode'] ?? '')] ?? od_labelize((string)($order['fulfilment_mode'] ?? ''));
+
+$slotLabel = od_first_non_empty((string)($order['scheduled_slot_label'] ?? ''), (string)($order['scheduled_slot'] ?? ''));
+$deliveryDateLabel = !empty($order['scheduled_slot']) ? od_format_date((string)$order['scheduled_slot']) : '-';
+$deliveryTimeLabel = !empty($order['scheduled_slot']) ? date('h:i A', strtotime((string)$order['scheduled_slot'])) : '-';
+
+$customerAddress = trim(implode(', ', array_filter([
+    od_first_non_empty((string)($order['billing_address_line1'] ?? ''), (string)($order['address_line1'] ?? ''), (string)($order['delivery_address_line1'] ?? '')),
+    od_first_non_empty((string)($order['billing_address_line2'] ?? ''), (string)($order['address_line2'] ?? ''), (string)($order['delivery_address_line2'] ?? '')),
+    od_first_non_empty((string)($order['billing_city'] ?? ''), (string)($order['city'] ?? ''), (string)($order['delivery_city'] ?? '')),
+    od_first_non_empty((string)($order['billing_state'] ?? ''), (string)($order['state'] ?? ''), (string)($order['delivery_state'] ?? '')),
+    od_first_non_empty((string)($order['billing_postal_code'] ?? ''), (string)($order['postal_code'] ?? ''), (string)($order['delivery_postal_code'] ?? '')),
+]))) ?: '-';
+$mapHref = $customerAddress !== '-' ? 'https://www.google.com/maps/search/?api=1&query=' . rawurlencode($customerAddress) : '';
+
+$channelLabel = od_labelize((string)($order['order_source'] ?? 'retail'));
+$modeLabel = trim((string)($order['order_mode'] ?? '')) !== '' ? od_labelize((string)$order['order_mode']) : $channelLabel;
+
+$isPaidState = in_array($currentPaymentStatus, ['paid', 'credit'], true);
+$refundEligibleStatuses = ['confirmed', 'preparing', 'ready_for_pickup', 'out_for_delivery', 'delivered', 'completed'];
+$alreadyRefundedStatuses = ['partially_refunded', 'fully_refunded', 'refunded'];
+$isRefundEligible = in_array($currentOrderStatus, $refundEligibleStatuses, true)
+    && $isPaidState
+    && !in_array($currentOrderStatus, $alreadyRefundedStatuses, true);
+$isAlreadyRefunded = in_array($currentOrderStatus, $alreadyRefundedStatuses, true)
+    || in_array($currentPaymentStatus, ['refunded', 'partially_refunded'], true);
+
+$refundAmount = max((float)($order['total_refunded'] ?? 0), (float)($order['refund_amount'] ?? 0));
+$discountTotal = (float)($order['discount_total'] ?? 0);
+$taxTotal = (float)($order['tax_total'] ?? 0);
+$deliveryFee = (float)($order['delivery_fee'] ?? 0);
+
+$specialInstructions = [];
+if (trim((string)($order['admin_note'] ?? '')) !== '') {
+    $specialInstructions[] = trim((string)$order['admin_note']);
+}
+foreach ($itemRows as $itemRow) {
+    foreach (['cake_message', 'customisation_note'] as $noteKey) {
+        $note = trim((string)($itemRow[$noteKey] ?? ''));
+        if ($note !== '') {
+            $specialInstructions[] = $note;
+        }
+    }
+}
+$specialInstructions = array_values(array_unique($specialInstructions));
+
+$paymentReference = od_first_non_empty(
+    (string)($order['payment_reference'] ?? ''),
+    is_array($latestReceipt) ? (string)($latestReceipt['settlement_reference'] ?? '') : '',
+    is_array($latestReceipt) ? (string)($latestReceipt['receipt_number'] ?? '') : ''
+);
+$collectedByLabel = od_first_non_empty(
+    is_array($latestReceipt) ? (string)($latestReceipt['issued_by_name'] ?? '') : '',
+    !empty($order['payment_confirmed_by_admin_id']) ? ('Admin #' . (int)$order['payment_confirmed_by_admin_id']) : '',
+    'System'
+);
+
+$financeBadge = (string)($governance['finance_badge'] ?? '');
+$summaryCards = [
+    ['icon' => 'OD', 'title' => 'Order Date', 'value' => od_format_date((string)($order['created_at'] ?? '')), 'sub' => od_format_datetime((string)($order['created_at'] ?? ''))],
+    ['icon' => 'FUL', 'title' => 'Fulfillment', 'value' => $fulfilmentLabel, 'sub' => $slotLabel !== '' ? $slotLabel : 'Slot pending'],
+    ['icon' => 'PMT', 'title' => 'Payment Method', 'value' => $paymentMethodLabel, 'sub' => $channelLabel],
+  ['icon' => 'STS', 'title' => 'Payment', 'value' => od_status_label($currentPaymentStatus), 'sub' => $financeBadge !== '' ? od_labelize($financeBadge) : od_status_label($currentOrderStatus)],
+  ['icon' => 'TOT', 'title' => 'Order Total', 'value' => od_money((float)($order['grand_total'] ?? 0)), 'sub' => $refundAmount > 0 ? ('Refunded ' . od_money($refundAmount)) : 'Accounting safe'],
+];
+
+$timelineSteps = [
+    ['label' => 'Created', 'note' => od_format_datetime((string)($order['created_at'] ?? ''))],
+    ['label' => 'Payment Verified', 'note' => $currentPaymentStatus === 'paid' || $currentPaymentStatus === 'credit' ? od_status_label($currentPaymentStatus) : 'Pending confirmation'],
+    ['label' => 'Preparing', 'note' => 'Kitchen work started'],
+    ['label' => 'Ready', 'note' => 'Awaiting pickup / dispatch'],
+    ['label' => 'Delivered', 'note' => in_array($currentOrderStatus, ['completed', 'delivered'], true) ? 'Fulfillment completed' : 'Pending delivery'],
+];
+
+$timelineCurrentIndex = 0;
+$timelineStatusOrder = ['pending_payment', 'payment_under_review', 'awaiting_confirmation', 'confirmed', 'preparing', 'ready_for_pickup', 'out_for_delivery', 'delivered', 'completed'];
+$currentIndexLookup = array_search($currentOrderStatus, $timelineStatusOrder, true);
+if ($currentIndexLookup !== false) {
+    if ($currentIndexLookup >= 7) {
+        $timelineCurrentIndex = 4;
+    } elseif ($currentIndexLookup >= 5) {
+        $timelineCurrentIndex = 3;
+    } elseif ($currentIndexLookup >= 4) {
+        $timelineCurrentIndex = 2;
+    } elseif ($currentIndexLookup >= 3) {
+        $timelineCurrentIndex = 1;
+    }
+}
+
+$orderDetailsCssVersion = @filemtime(__DIR__ . '/assets/css/admin-order-details.css') ?: time();
+$orderDetailsJsVersion = @filemtime(__DIR__ . '/assets/js/admin-order-details.js') ?: time();
+$currentUri = 'order_details.php?id=' . (int)$orderId . ($returnTo !== '' ? '&return_to=' . rawurlencode($returnTo) : '');
+
+$desktopActions = [];
+if (!$isArchived && in_array($currentOrderStatus, ['pending_payment', 'payment_under_review', 'awaiting_confirmation'], true)) {
+    if ($canManualOrders) {
+        $desktopActions[] = '<a href="manual_order.php?order_id=' . (int)$orderId . '" class="od-btn-link od-btn-link-secondary">Edit Entry</a>';
+    }
+  if ($canConfirmPayment) {
+        $desktopActions[] = '<button type="button" class="od-btn od-btn-success" data-od-confirm-payment="1" data-order-id="' . (int)$orderId . '" data-expected-amount="' . od_h((string)number_format((float)($order['grand_total'] ?? 0), 2, '.', '')) . '">Confirm Payment</button>';
+    }
+    if ($canOrderReject) {
+        $desktopActions[] = '<button type="button" class="od-btn od-btn-warning" data-od-cancel-order="1" data-order-id="' . (int)$orderId . '">Cancel</button>';
+    }
+}
+if (!$isArchived && $currentOrderStatus === 'confirmed' && in_array('preparing', $allowedTransitions, true) && $canOrderEdit) {
+    $desktopActions[] = od_build_action_form((int)$orderId, 'preparing', 'Mark Preparing', 'od-btn-primary', $currentUri);
+}
+if (!$isArchived && $currentOrderStatus === 'preparing' && in_array('ready_for_pickup', $allowedTransitions, true) && $canOrderEdit) {
+    $desktopActions[] = od_build_action_form((int)$orderId, 'ready_for_pickup', 'Mark Ready', 'od-btn-primary', $currentUri);
+}
+if (!$isArchived && in_array($currentOrderStatus, ['ready_for_pickup', 'out_for_delivery'], true) && in_array('delivered', $allowedTransitions, true) && $canOrderEdit) {
+    $desktopActions[] = od_build_action_form((int)$orderId, 'delivered', 'Mark Delivered', 'od-btn-primary', $currentUri);
+}
+if ($isRefundEligible && $canOrderRefund) {
+    $desktopActions[] = '<button type="button" class="od-btn od-btn-secondary" data-od-scroll-refund="1">Refund</button>';
+}
+if ($canGenerateInvoice) {
+    $desktopActions[] = '<a href="order_invoice.php?id=' . (int)$orderId . '" class="od-btn-link od-btn-link-muted">Invoice</a>';
+}
+if ($canOrderDelete) {
+    if ($isArchived) {
+        $desktopActions[] = '<button type="button" class="od-btn od-btn-secondary" data-od-destructive="restore" data-order-id="' . (int)$orderId . '" data-order-number="' . od_h((string)($order['order_number'] ?? '')) . '">Restore</button>';
+    } elseif (in_array($currentOrderStatus, ['cancelled', 'rejected'], true)) {
+        $desktopActions[] = '<button type="button" class="od-btn od-btn-secondary" data-od-destructive="archive" data-order-id="' . (int)$orderId . '" data-order-number="' . od_h((string)($order['order_number'] ?? '')) . '">Archive</button>';
+    }
+    if ($isSuperAdmin) {
+        $desktopActions[] = '<button type="button" class="od-btn od-btn-danger" data-od-destructive="force_purge" data-order-id="' . (int)$orderId . '" data-order-number="' . od_h((string)($order['order_number'] ?? '')) . '">Delete Permanently</button>';
+    }
+}
+if ($isAlreadyRefunded || $isRefundFinal) {
+    $desktopActions = ['<span class="od-pill">View only - refund already processed</span>'];
+}
+
+$stickyPrimary = '<a href="production_plan.php?order_id=' . (int)$orderId . '" class="od-btn-link od-btn-link-primary">Production</a>';
+$stickyInvoice = $canGenerateInvoice
+    ? '<a href="order_invoice.php?id=' . (int)$orderId . '" class="od-btn-link od-btn-link-secondary">Invoice</a>'
+    : '<span class="od-btn-link od-btn-link-muted" aria-disabled="true">Invoice</span>';
+$stickyRefund = ($isRefundEligible && $canOrderRefund)
+    ? '<button type="button" class="od-btn od-btn-secondary" data-od-scroll-refund="1">Refund</button>'
+    : '<span class="od-btn od-btn-muted" aria-disabled="true">Refund</span>';
 ?>
-<?php
-function getStatus($s){
-  if($s=="pending") return "confirmed";
-  return $s;
-}
-?>
-<style>
-.container-box {
-  background: #fff;
-  padding: 20px;
-  border-radius: 12px;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.06);
-  margin-bottom: 20px;
-}
 
-.title {
-  font-size: 20px;
-  font-weight: 600;
-  margin-bottom: 10px;
-}
+<link rel="stylesheet" href="assets/css/admin-order-details.css?v=<?php echo (int)$orderDetailsCssVersion; ?>">
 
-.status {
-  display: inline-block;
-  padding: 5px 14px;
-  border-radius: 20px;
-  font-size: 12px;
-  font-weight: 600;
-}
+<div class="od-shell">
+  <section class="od-top">
+    <div class="od-top-meta">
+      <div class="od-breadcrumb">Orders / <?php echo od_h($channelLabel); ?> / Operational Detail</div>
+      <div class="od-order-line">
+        <span class="od-order-id" data-order-copy-value="<?php echo od_h((string)($order['order_number'] ?? '')); ?>"><?php echo od_h((string)($order['order_number'] ?? '')); ?></span>
+        <button type="button" id="odCopyOrderId" class="od-copy-btn">Copy</button>
+        <span class="od-chip <?php echo od_h(od_status_class($currentOrderStatus)); ?>"><?php echo od_h(od_status_label($currentOrderStatus)); ?></span>
+      </div>
+      <div class="od-customer-line">
+        <strong><?php echo od_h((string)($order['customer_name'] ?? '-')); ?></strong>
+        <span><?php echo od_h((string)($order['customer_phone'] ?? '-')); ?></span>
+        <span><?php echo od_h($modeLabel); ?></span>
+      </div>
+    </div>
 
-/* status colors */
-.status.confirmed { background: #dcfce7; color: #166534; }
-.status.preparing { background: #fef3c7; color: #92400e; }
-.status.delivered { background: #e0e7ff; color: #3730a3; }
-
-.item-row {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 8px;
-  padding-bottom: 6px;
-  border-bottom: 1px dashed #eee;
-}
-
-.timeline {
-  list-style: none;
-  padding-left: 0;
-}
-
-.timeline li {
-  position: relative;
-  padding-left: 18px;
-  margin-bottom: 6px;
-}
-
-.timeline li::before {
-  content: "●";
-  position: absolute;
-  left: 0;
-  color: #e11d48;
-}
-.btn-back {
-  background: #111;
-  color: #fff;
-  padding: 6px 12px;
-  border-radius: 6px;
-  text-decoration: none;
-  font-size: 13px;
-}
-
-.btn-back:hover {
-  background: #333;
-}
-
-.container-box {
-  transition: 0.2s;
-}
-
-.container-box:hover {
-  transform: translateY(-3px);
-}
-
-.title {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.price-highlight {
-  font-size: 18px;
-  color: #e11d48;
-  font-weight: bold;
-}
-</style>
-
-<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-  <h2>Order Details</h2>
-
-  <div style="display:flex; gap:8px; align-items:center;">
-    <a href="production_plan.php?order_id=<?= (int)$order['id'] ?>" class="btn-back" style="background:#5b1f3a; color:#fff;">🖨 Print Production Plan</a>
-    <?php if ($canGenerateInvoice): ?>
-      <a href="order_invoice.php?id=<?php echo (int)$order['id']; ?>" class="btn-back" style="background:#111;">🧾 Invoice</a>
-    <?php else: ?>
-      <span class="btn-back" style="background:#9ca3af; cursor:not-allowed; opacity:.65;" title="Invoice unlocks only after payment is confirmed.">🧾 Invoice</span>
-    <?php endif; ?>
-    <?php if ($canOpenReceipt || is_array($latestReceipt)): ?>
-      <a href="payment_receipt.php?id=<?php echo (int)$order['id']; ?>" class="btn-back" style="background:#5b1f3a; color:#fff;">🧾 Payment Receipt</a>
-    <?php endif; ?>
-    <a href="<?= htmlspecialchars($backHref, ENT_QUOTES, 'UTF-8') ?>" class="btn-back">← Back</a>
-  </div>
-</div>
-
-<!-- 🔥 ACTION BUTTONS -->
-<div class="container-box" style="background: #fef2f2; border: 1px solid #fecdd3;">
-  <div class="title" style="margin-bottom:14px; color:#9f1239;">Order Actions</div>
-  <div style="display:flex; gap:8px; flex-wrap:wrap;">
-    <?php
-    $terminalStates = ['completed', 'cancelled', 'rejected', 'refunded', 'partially_refunded', 'fully_refunded'];
-    $cancelableUnpaidStates = ['pending_payment', 'payment_under_review'];
-    $currentOrderStatus = (string)($order['order_status'] ?? '');
-    $currentPayStatus   = (string)($order['payment_status'] ?? '');
-    $isPaidState = in_array($currentPayStatus, ['paid', 'credit'], true);
-    // Eligible for atomic refund: any paid, unrefunded, non-terminal mid-flow state
-    $refundEligibleStatuses = ['confirmed', 'preparing', 'ready_for_pickup', 'out_for_delivery', 'delivered', 'completed'];
-    $alreadyRefundedStatuses = ['partially_refunded', 'fully_refunded', 'refunded'];
-    $isRefundEligible = in_array($currentOrderStatus, $refundEligibleStatuses, true)
-        && $isPaidState
-        && !in_array($currentOrderStatus, $alreadyRefundedStatuses, true);
-    $isAlreadyRefunded = in_array($currentOrderStatus, $alreadyRefundedStatuses, true);
-    ?>
-    <?php if ($canOrderReject && in_array($currentOrderStatus, $cancelableUnpaidStates, true)): ?>
-      <button type="button" class="btn-back" style="background:#ef4444; color:#fff;" onclick="cancelOrder(<?php echo (int)$order['id']; ?>)">🚫 Cancel Order</button>
-    <?php endif; ?>
-    <?php if ($canRefund && $isRefundEligible): ?>
-      <button type="button" class="btn-back" style="background:#7c3aed; color:#fff;" data-bs-toggle="modal" data-bs-target="#refundModal" onclick="prepRefundModal(<?php echo (int)$order['id']; ?>, <?php echo (float)$order['grand_total']; ?>)">💰 Submit Refund Request</button>
-    <?php elseif ($isAlreadyRefunded): ?>
-      <span style="display:inline-flex;align-items:center;gap:6px;background:#f3f4f6;border:1px solid #d1d5db;padding:6px 14px;border-radius:20px;font-size:12px;font-weight:700;color:<?php echo $currentOrderStatus === 'fully_refunded' ? '#166534' : '#86198f'; ?>">
-        <?php echo $currentOrderStatus === 'fully_refunded' ? '✅ Fully Refunded' : '🔶 Partially Refunded'; ?>
-        <?php if (!empty($order['total_refunded']) && (float)$order['total_refunded'] > 0): ?>
-          &mdash; ₹<?php echo number_format((float)$order['total_refunded'], 2); ?>
-        <?php endif; ?>
-      </span>
-    <?php endif; ?>
-    <?php if (!$canOrderReject && !$canOrderRefund && !$canRefund): ?>
-      <span style="font-size:13px;color:#8b5c67;">No action permissions assigned for this account.</span>
-    <?php endif; ?>
-  </div>
-</div>
-
-<!-- 🔥 ORDER INFO -->
-<div class="container-box">
-  <div class="title">#<?php echo $order['order_number']; ?></div>
-
-  <p><strong><?php echo $order['customer_name']; ?></strong></p>
-  <p>📞 <?php echo $order['customer_phone']; ?></p>
-  <p>📧 <?php echo $order['customer_email']; ?></p>
-  <p>💳 Payment: <strong><?php echo htmlspecialchars((string)$order['payment_method']); ?></strong> | Status: <strong><?php echo htmlspecialchars((string)$order['payment_status']); ?></strong></p>
-  <?php if (!empty($order['payment_proof_url'])): ?>
-    <p>📸 <strong>Payment Screenshot:</strong>
-      <a href="<?php echo htmlspecialchars((string)$order['payment_proof_url']); ?>" target="_blank" rel="noopener">
-        <img src="<?php echo htmlspecialchars((string)$order['payment_proof_url']); ?>" alt="Payment proof" style="display:block;max-width:220px;max-height:160px;margin-top:6px;border-radius:6px;border:1px solid #ddd;box-shadow:0 1px 6px rgba(0,0,0,.1);">
-      </a>
-      <?php if (!empty($order['payment_proof_uploaded_at'])): ?>
-        <small style="color:#888">Uploaded: <?php echo htmlspecialchars((string)$order['payment_proof_uploaded_at']); ?></small>
+    <div class="od-top-actions">
+      <a href="production_plan.php?order_id=<?php echo (int)$orderId; ?>" class="od-btn-link od-btn-link-primary">Production Sheet</a>
+      <?php if ($canGenerateInvoice): ?>
+        <a href="order_invoice.php?id=<?php echo (int)$orderId; ?>" class="od-btn-link od-btn-link-secondary">Invoice</a>
+      <?php else: ?>
+        <span class="od-btn-link od-btn-link-muted" aria-disabled="true">Invoice</span>
       <?php endif; ?>
-    </p>
-  <?php endif; ?>
+      <a href="<?php echo od_h($backHref); ?>" class="od-btn-link od-btn-link-secondary">Back to Orders</a>
+    </div>
+  </section>
 
-  <?php if (!in_array((string)($order['payment_status'] ?? ''), ['paid', 'rejected'], true) && !in_array((string)($order['order_status'] ?? ''), ['cancelled', 'completed', 'delivered'], true)): ?>
-  <div id="payment-action-area" style="margin:12px 0;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
-    <button onclick="adminConfirmPayment(<?php echo (int)$order['id']; ?>)"
-      style="background:#22c55e;color:#fff;border:none;padding:9px 18px;border-radius:6px;font-weight:600;cursor:pointer;font-size:14px;">
-      ✅ Confirm Payment &amp; Reserve Slot
-    </button>
-    <button onclick="adminRejectPayment(<?php echo (int)$order['id']; ?>)"
-      style="background:#ef4444;color:#fff;border:none;padding:9px 18px;border-radius:6px;font-weight:600;cursor:pointer;font-size:14px;">
-      ❌ Reject Payment
-    </button>
-    <span id="payment-action-msg" style="font-size:13px;color:#555;"></span>
-  </div>
-  <script>
-  function adminConfirmPayment(orderId) {
-    var grossText = '<?php echo htmlspecialchars((string)number_format((float)($order['grand_total'] ?? 0), 2, '.', ''), ENT_QUOTES, 'UTF-8'); ?>';
-    var defaultReceived = String(grossText || '0.00');
-    var receivedInput = prompt('Enter amount received (full payment):', defaultReceived);
-    if (receivedInput === null) return;
-    var receivedAmount = parseFloat(String(receivedInput).trim());
-    if (!isFinite(receivedAmount) || receivedAmount <= 0) {
-      alert('Please enter a valid received amount.');
-      return;
-    }
+  <section class="order-summary-strip">
+    <?php foreach ($summaryCards as $card): ?>
+      <article class="od-summary-card order-summary-strip-card">
+        <div class="od-summary-kicker"><span><?php echo od_h($card['icon']); ?></span><span><?php echo od_h($card['title']); ?></span></div>
+        <div class="od-summary-value"><?php echo od_h($card['value']); ?></div>
+        <div class="od-summary-sub"><?php echo od_h($card['sub']); ?></div>
+      </article>
+    <?php endforeach; ?>
+  </section>
 
-    var expectedAmount = parseFloat(defaultReceived);
-    var shortfall = Math.max(0, +(expectedAmount - receivedAmount).toFixed(2));
-    var discountReason = '';
-    var managerOverride = false;
-    if (shortfall > 0) {
-      discountReason = prompt('Shortfall will be adjusted as discount. Enter reason:', 'On-call approved adjustment') || '';
-      if (!confirm('Apply discount ₹' + shortfall.toFixed(2) + ' and confirm payment?')) return;
-      var ratio = expectedAmount > 0 ? (shortfall / expectedAmount) : 0;
-      if (ratio > 0.05) {
-        managerOverride = confirm('Discount exceeds 5%. Confirm manager override?');
-      }
-    } else if (!confirm('Confirm full payment and officially reserve the slot for this order?')) {
-      return;
-    }
+  <section class="od-mobile-summary">
+    <article class="od-mobile-mini">
+      <div class="od-mobile-mini-title">Payment</div>
+      <div class="od-mobile-mini-value"><?php echo od_h(od_status_label($currentPaymentStatus)); ?></div>
+    </article>
+    <article class="od-mobile-mini">
+      <div class="od-mobile-mini-title">Fulfillment</div>
+      <div class="od-mobile-mini-value"><?php echo od_h($fulfilmentLabel); ?></div>
+    </article>
+    <article class="od-mobile-mini">
+      <div class="od-mobile-mini-title">Total</div>
+      <div class="od-mobile-mini-value"><?php echo od_h(od_money((float)($order['grand_total'] ?? 0))); ?></div>
+    </article>
+  </section>
 
-    var btn = document.querySelector('#payment-action-area button');
-    var msg = document.getElementById('payment-action-msg');
-    msg.textContent = 'Processing…';
-    fetch('/api/admin/orders/' + orderId + '/confirm-payment', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
-      credentials: 'same-origin',
-      body: JSON.stringify({
-        received_amount: receivedAmount,
-        discount_reason: discountReason,
-        manager_override: managerOverride
-      })
-    })
-    .then(function(r){ return r.json(); })
-    .then(function(data) {
-      if (data.success) {
-        msg.style.color = '#22c55e';
-        msg.textContent = '✅ ' + data.message;
-        setTimeout(function(){ location.reload(); }, 1500);
-      } else {
-        msg.style.color = '#ef4444';
-        msg.textContent = '❌ ' + (data.message || 'Failed');
-      }
-    })
-    .catch(function(){ msg.style.color='#ef4444'; msg.textContent='Network error'; });
-  }
-  function adminRejectPayment(orderId) {
-    var reason = prompt('Rejection reason (optional):') || '';
-    if (reason === null) return; // cancelled
-    var msg = document.getElementById('payment-action-msg');
-    msg.textContent = 'Processing…';
-    fetch('/api/admin/orders/' + orderId + '/reject-payment', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
-      credentials: 'same-origin',
-      body: JSON.stringify({reason: reason}),
-    })
-    .then(function(r){ return r.json(); })
-    .then(function(data) {
-      if (data.success) {
-        msg.style.color = '#22c55e';
-        msg.textContent = '✅ ' + data.message;
-        setTimeout(function(){ location.reload(); }, 1500);
-      } else {
-        msg.style.color = '#ef4444';
-        msg.textContent = '❌ ' + (data.message || 'Failed');
-      }
-    })
-    .catch(function(){ msg.style.color='#ef4444'; msg.textContent='Network error'; });
-  }
-  </script>
-  <?php endif; ?>
-  <?php if (!empty($order['billing_address_line1']) || !empty($order['billing_city']) || !empty($order['billing_postal_code'])): ?>
-    <p>🏠 <?php echo htmlspecialchars(trim(($order['billing_address_line1'] ?? '') . ' ' . ($order['billing_address_line2'] ?? ''))); ?><br>
-      <?php echo htmlspecialchars(trim(($order['billing_city'] ?? '') . ', ' . ($order['billing_state'] ?? '') . ' ' . ($order['billing_postal_code'] ?? ''))); ?></p>
-  <?php endif; ?>
+  <section class="order-actions-bar">
+    <span class="od-action-title">Actions</span>
+    <?php if ($desktopActions): ?>
+      <?php foreach ($desktopActions as $actionHtml): ?>
+        <?php echo $actionHtml; ?>
+      <?php endforeach; ?>
+    <?php else: ?>
+      <span class="od-pill">No actions for current state</span>
+    <?php endif; ?>
+  </section>
 
- <span class="status <?php echo getStatus($order['order_status']); ?>">
-  <?php echo strtoupper(getStatus($order['order_status'])); ?>
-  </span>
-</div>
+  <section class="od-main-grid">
+    <div class="od-stack">
+      <article class="od-card order-customer-card is-collapsible open">
+        <button type="button" class="od-accordion-toggle" data-od-accordion="1" aria-expanded="true">
+          <span>Customer &amp; Delivery</span>
+          <span data-accordion-icon>Hide</span>
+        </button>
+        <div class="od-accordion-body">
+          <dl class="od-kv">
+            <div class="od-kv-row"><dt>Name</dt><dd><?php echo od_h((string)($order['customer_name'] ?? '-')); ?></dd></div>
+            <div class="od-kv-row"><dt>Phone</dt><dd><?php echo od_h((string)($order['customer_phone'] ?? '-')); ?></dd></div>
+            <div class="od-kv-row"><dt>Email</dt><dd><?php echo od_h((string)($order['customer_email'] ?? '-')); ?></dd></div>
+            <div class="od-kv-row"><dt>Address</dt><dd><?php echo od_h($customerAddress); ?></dd></div>
+            <div class="od-kv-row"><dt>Map</dt><dd><?php if ($mapHref !== ''): ?><a class="od-map-link" href="<?php echo od_h($mapHref); ?>" target="_blank" rel="noopener">Open Map</a><?php else: ?>-<?php endif; ?></dd></div>
+            <div class="od-kv-row"><dt>Delivery Date</dt><dd><?php echo od_h($deliveryDateLabel); ?></dd></div>
+            <div class="od-kv-row"><dt>Time Slot</dt><dd><?php echo od_h($slotLabel !== '' ? $slotLabel : $deliveryTimeLabel); ?></dd></div>
+          </dl>
+        </div>
+      </article>
+    </div>
 
-<!-- 💰 PRICE -->
-<div class="container-box">
-  <div class="title">💰 Price Details</div>
+    <div class="od-stack od-col-wide">
+      <article class="od-card order-items-table-card is-collapsible open">
+        <button type="button" class="od-accordion-toggle" data-od-accordion="1" aria-expanded="true">
+          <span>Items</span>
+          <span data-accordion-icon>Hide</span>
+        </button>
+        <div class="od-accordion-body">
+          <table class="order-items-table">
+            <thead>
+              <tr>
+                <th>Item</th>
+                <th>Qty</th>
+                <th>Variant</th>
+                <th>Topper</th>
+                <th>Cake Message</th>
+                <th>Custom Note</th>
+                <th>Unit Price</th>
+                <th>Line Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              <?php foreach ($itemRows as $itemRow): ?>
+                <?php
+                $itemImage = trim((string)($itemRow['product_image'] ?? ''));
+                $topperText = trim((string)($itemRow['topper_name_snapshot'] ?? ''));
+                $cakeNote = trim((string)($itemRow['cake_message'] ?? ''));
+                $customNote = trim((string)($itemRow['customisation_note'] ?? ''));
+                $variantText = trim((string)($itemRow['variant_snapshot'] ?? ''));
+                ?>
+                <tr>
+                  <td>
+                    <div class="od-item-cell">
+                      <?php if ($itemImage !== ''): ?>
+                        <img class="od-item-thumb" src="<?php echo od_h($itemImage); ?>" alt="<?php echo od_h((string)($itemRow['product_name_snapshot'] ?? 'Item')); ?>">
+                      <?php else: ?>
+                        <span class="od-item-thumb-fallback">I</span>
+                      <?php endif; ?>
+                      <div>
+                        <div class="od-item-name"><?php echo od_h((string)($itemRow['product_name_snapshot'] ?? 'Item')); ?></div>
+                        <div class="od-item-meta"><?php echo od_h($variantText !== '' ? $variantText : 'Standard item'); ?></div>
+                      </div>
+                    </div>
+                  </td>
+                  <td><?php echo (int)($itemRow['quantity'] ?? 0); ?></td>
+                  <td><?php echo od_h($variantText !== '' ? $variantText : '-'); ?></td>
+                  <td><?php echo od_h($topperText !== '' ? $topperText : '-'); ?></td>
+                  <td><?php echo od_h($cakeNote !== '' ? $cakeNote : '-'); ?></td>
+                  <td><?php echo od_h($customNote !== '' ? $customNote : '-'); ?></td>
+                  <td><?php echo od_h(od_money((float)($itemRow['unit_price'] ?? 0))); ?></td>
+                  <td><?php echo od_h(od_money((float)($itemRow['line_total'] ?? 0))); ?></td>
+                </tr>
+              <?php endforeach; ?>
+              <?php if (!$itemRows): ?>
+                <tr>
+                  <td colspan="8">No items recorded for this order.</td>
+                </tr>
+              <?php endif; ?>
+            </tbody>
+          </table>
 
-  <p>Subtotal: ₹<?php echo $order['subtotal']; ?></p>
-  <p>Delivery: ₹<?php echo $order['delivery_fee']; ?></p>
-<p class="price-highlight">Total: ₹<?php echo $order['grand_total']; ?></p>
-</div>
-
-<div class="container-box">
-  <div class="title">🧾 Payment Receipt History</div>
-  <?php if ($receiptHistory): ?>
-    <div style="display:grid;gap:10px;">
-      <?php foreach ($receiptHistory as $receipt): ?>
-        <div style="border:1px solid #ead9df;border-radius:10px;padding:12px;background:#fff8fa;">
-          <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap;">
-            <div>
-              <div style="font-weight:700;color:#5b1f3a;"><?= htmlspecialchars((string)($receipt['receipt_number'] ?? 'NA'), ENT_QUOTES, 'UTF-8') ?></div>
-              <div style="font-size:13px;color:#6b7280;">Issued <?= htmlspecialchars(invoice_format_datetime((string)($receipt['issued_at'] ?? '')), ENT_QUOTES, 'UTF-8') ?></div>
-            </div>
-            <div style="text-align:right;">
-              <div style="font-weight:700;">₹<?= number_format((float)($receipt['amount'] ?? 0), 2) ?></div>
-              <div style="font-size:12px;color:#6b7280;">Balance due: ₹<?= number_format((float)($receipt['balance_due'] ?? 0), 2) ?></div>
-            </div>
-          </div>
-          <div style="margin-top:8px;font-size:13px;color:#374151;display:grid;gap:4px;">
-            <div>Method: <strong><?= htmlspecialchars(invoice_payment_method_label((string)($receipt['payment_method'] ?? ($order['payment_method'] ?? 'NA'))), ENT_QUOTES, 'UTF-8') ?></strong></div>
-            <div>Status Snapshot: <strong><?= htmlspecialchars(strtoupper((string)($receipt['payment_status_snapshot'] ?? 'pending')), ENT_QUOTES, 'UTF-8') ?></strong></div>
-            <div>Issued By: <strong><?= htmlspecialchars((string)($receipt['issued_by_name'] ?? 'System'), ENT_QUOTES, 'UTF-8') ?></strong></div>
-            <?php if (!empty($receipt['financial_transaction_type']) || !empty($receipt['financial_narration'])): ?>
-              <div>Accounting Link: <strong><?= htmlspecialchars((string)($receipt['financial_transaction_type'] ?? 'transaction'), ENT_QUOTES, 'UTF-8') ?></strong><?php if (!empty($receipt['financial_amount'])): ?> · ₹<?= number_format((float)$receipt['financial_amount'], 2) ?><?php endif; ?></div>
-              <div style="color:#6b7280;"><?= htmlspecialchars((string)($receipt['financial_narration'] ?? ''), ENT_QUOTES, 'UTF-8') ?></div>
+          <div class="od-special-instructions">
+            <strong>Special Instructions:</strong>
+            <?php if ($specialInstructions): ?>
+              <?php echo od_h(implode(' | ', $specialInstructions)); ?>
+            <?php else: ?>
+              No special instructions recorded.
             <?php endif; ?>
           </div>
         </div>
-      <?php endforeach; ?>
+      </article>
     </div>
-  <?php else: ?>
-    <p style="margin:0;color:#6b7280;font-size:14px;">No payment receipts have been issued for this order yet.</p>
-  <?php endif; ?>
-</div>
 
-<!-- 🧁 ITEMS -->
-<div class="container-box">
-  <div class="title">🧁 Items</div>
+    <div class="od-stack">
+      <article class="od-card order-price-card is-collapsible open">
+        <button type="button" class="od-accordion-toggle" data-od-accordion="1" aria-expanded="true">
+          <span>Price Summary</span>
+          <span data-accordion-icon>Hide</span>
+        </button>
+        <div class="od-accordion-body">
+          <dl class="od-kv">
+            <div class="od-kv-row"><dt>Subtotal</dt><dd><?php echo od_h(od_money((float)($order['subtotal'] ?? 0))); ?></dd></div>
+            <div class="od-kv-row"><dt>Delivery</dt><dd><?php echo od_h(od_money($deliveryFee)); ?></dd></div>
+            <div class="od-kv-row"><dt>Discount</dt><dd><?php echo od_h(od_money($discountTotal)); ?></dd></div>
+            <div class="od-kv-row"><dt>Tax</dt><dd><?php echo od_h(od_money($taxTotal)); ?></dd></div>
+            <div class="od-kv-row"><dt>Refund</dt><dd><?php echo od_h(od_money($refundAmount)); ?></dd></div>
+            <div class="od-kv-row od-kv-row--total"><dt>Final Total</dt><dd><?php echo od_h(od_money((float)($order['grand_total'] ?? 0))); ?></dd></div>
+          </dl>
+        </div>
+      </article>
 
-  <?php while($item = $items->fetch_assoc()): ?>
-    <div class="item-row">
-      <span><?php echo htmlspecialchars((string)($item['product_name_snapshot'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></span>
-      <span>x<?php echo (int)$item['quantity']; ?></span>
+      <article class="od-card order-payment-card is-collapsible open">
+        <button type="button" class="od-accordion-toggle" data-od-accordion="1" aria-expanded="true">
+          <span>Payment</span>
+          <span data-accordion-icon>Hide</span>
+        </button>
+        <div class="od-accordion-body">
+          <div class="od-chip <?php echo od_h(od_status_class($currentOrderStatus)); ?>"><?php echo od_h(od_status_label($currentPaymentStatus)); ?></div>
+          <dl class="od-kv">
+            <div class="od-kv-row"><dt>Transaction ID</dt><dd><?php echo od_h($paymentReference !== '' ? $paymentReference : '-'); ?></dd></div>
+            <div class="od-kv-row"><dt>Payment Mode</dt><dd><?php echo od_h($paymentMethodLabel); ?></dd></div>
+            <div class="od-kv-row"><dt>Collected By</dt><dd><?php echo od_h($collectedByLabel); ?></dd></div>
+            <div class="od-kv-row"><dt>Receipt</dt><dd><?php echo ($canOpenReceipt || is_array($latestReceipt)) ? '<a class="od-map-link" href="payment_receipt.php?id=' . (int)$orderId . '">Open Receipt</a>' : '-'; ?></dd></div>
+            <?php if (!empty($order['payment_proof_url'])): ?>
+              <div class="od-kv-row"><dt>Proof</dt><dd><a class="od-map-link" href="<?php echo od_h((string)$order['payment_proof_url']); ?>" target="_blank" rel="noopener">View Upload</a></dd></div>
+            <?php endif; ?>
+          </dl>
+        </div>
+      </article>
+
+      <article class="od-card order-timeline-card is-collapsible open">
+        <button type="button" class="od-accordion-toggle" data-od-accordion="1" aria-expanded="true">
+          <span>Order Timeline</span>
+          <span data-accordion-icon>Hide</span>
+        </button>
+        <div class="od-accordion-body">
+          <ul class="order-timeline order-timeline">
+            <?php foreach ($timelineSteps as $timelineIndex => $timelineStep): ?>
+              <?php $stepClass = $timelineIndex < $timelineCurrentIndex ? 'is-done' : ($timelineIndex === $timelineCurrentIndex ? 'is-current' : ''); ?>
+              <li class="<?php echo od_h($stepClass); ?>">
+                <div>
+                  <strong><?php echo od_h($timelineStep['label']); ?></strong><br>
+                  <span><?php echo od_h($timelineStep['note']); ?></span>
+                </div>
+              </li>
+            <?php endforeach; ?>
+          </ul>
+        </div>
+      </article>
     </div>
-    <?php if (!empty($item['variant_snapshot'])): ?>
-      <div style="font-size:12px;color:#7a5060;margin-bottom:4px;">Variant: <?= htmlspecialchars((string)$item['variant_snapshot'], ENT_QUOTES, 'UTF-8') ?></div>
-    <?php endif; ?>
-    <?php if (!empty($item['cake_message'])): ?>
-      <div style="font-size:12px;color:#5b1f3a;background:#fff0f4;border-radius:6px;padding:4px 8px;margin-bottom:4px;">🎂 Note on Cake: <?= htmlspecialchars((string)$item['cake_message'], ENT_QUOTES, 'UTF-8') ?></div>
-    <?php endif; ?>
-    <?php if (!empty($item['topper_name_snapshot']) && $item['topper_name_snapshot'] !== 'No Topper'): ?>
-      <div style="font-size:12px;color:#5b1f3a;background:#fff0f4;border-radius:6px;padding:4px 8px;margin-bottom:4px;">🎀 Topper: <?= htmlspecialchars((string)$item['topper_name_snapshot'], ENT_QUOTES, 'UTF-8') ?><?= (float)($item['topper_price_snapshot'] ?? 0) > 0 ? ' (+₹' . number_format((float)$item['topper_price_snapshot'], 0) . ')' : '' ?></div>
-    <?php endif; ?>
-    <?php if (!empty($item['customisation_note'])): ?>
-      <div style="font-size:12px;color:#5b1f3a;background:#fff8f0;border-radius:6px;padding:4px 8px;margin-bottom:4px;">📝 Note: <?= htmlspecialchars((string)$item['customisation_note'], ENT_QUOTES, 'UTF-8') ?></div>
-    <?php endif; ?>
-  <?php endwhile; ?>
-</div>
+  </section>
 
-<!-- 📍 TIMELINE -->
-<!-- 📍 TIMELINE -->
-<div class="container-box">
-  <div class="title">📍 Order Timeline</div>
+  <?php if ($isRefundEligible && $canRefundApproval): ?>
+    <section id="orderRefundSection" class="od-card">
+      <h2 class="od-card-title">Refund Workflow</h2>
+      <div class="od-refund-fields">
+        <input type="hidden" id="refund-order-id" value="<?php echo (int)$orderId; ?>">
+        <input type="hidden" id="refund-grand-total" value="<?php echo od_h((string)($order['grand_total'] ?? 0)); ?>">
+        <input type="hidden" id="refund-proof-url" value="">
 
-  <ul class="timeline">
-
-    <li>Order Created</li>
-
-    <?php if($order['order_status'] == 'pending_payment'): ?>
-
-      <li>Waiting For Payment Verification</li>
-
-    <?php elseif($order['order_status'] == 'payment_under_review'): ?>
-
-      <li>Payment Under Review</li>
-
-    <?php elseif($order['order_status'] == 'confirmed'): ?>
-
-      <li>Payment Verified</li>
-      <li>Preparing</li>
-
-    <?php elseif($order['order_status'] == 'preparing'): ?>
-
-      <li>Payment Verified</li>
-      <li>Preparing</li>
-      <li>Ready / Dispatching</li>
-
-    <?php elseif($order['order_status'] == 'ready_for_pickup'): ?>
-
-      <li>Payment Verified</li>
-      <li>Prepared</li>
-      <li>Ready For Pickup</li>
-
-    <?php elseif($order['order_status'] == 'out_for_delivery'): ?>
-
-      <li>Payment Verified</li>
-      <li>Prepared</li>
-      <li>Out For Delivery</li>
-
-    <?php elseif($order['order_status'] == 'delivered'): ?>
-
-      <li>Payment Verified</li>
-      <li>Prepared</li>
-      <li>Out for Delivery</li>
-      <li>Delivered</li>
-
-    <?php elseif($order['order_status'] == 'completed'): ?>
-
-      <li>Payment Verified</li>
-      <li>Prepared</li>
-      <li>Delivered</li>
-      <li style="color:#166534;">Order Completed ✓</li>
-
-    <?php elseif($order['order_status'] == 'refund_requested'): ?>
-
-      <li>Payment Verified</li>
-      <li>Prepared / Delivered</li>
-      <li style="color:#9a3412;">Refund Requested</li>
-
-    <?php elseif($order['order_status'] == 'refunded'): ?>
-
-      <li>Payment Verified</li>
-      <li>Delivered</li>
-      <li style="color:#6b21a8;">Refund Processed ✓</li>
-
-    <?php elseif($order['order_status'] == 'partially_refunded'): ?>
-
-      <li>Payment Verified</li>
-      <li>Delivered</li>
-      <li style="color:#86198f;">Partial Refund Processed</li>
-
-    <?php elseif($order['order_status'] == 'fully_refunded'): ?>
-
-      <li>Payment Verified</li>
-      <li>Delivered</li>
-      <li style="color:#166534;">Full Refund Processed ✓</li>
-
-    <?php elseif($order['order_status'] == 'cancelled'): ?>
-
-      <li style="color:red;">Order Cancelled</li>
-
-    <?php elseif($order['order_status'] == 'rejected'): ?>
-
-      <li style="color:red;">Payment Not Received</li>
-      <li style="color:red;">Order Rejected</li>
-
-    <?php endif; ?>
-
-  </ul>
-</div>
-
-<script>
-function cancelOrder(orderId) {
-  const reason = prompt('Enter cancellation reason (optional):', '');
-  if (reason === null) return;
-
-  const form = new FormData();
-  form.append('action', 'cancel');
-  form.append('order_id', orderId);
-  form.append('reason', reason);
-  form.append('redirect_to', window.location.href);
-
-  fetch('/admin/api/order-refund-cancel.php', {
-    method: 'POST',
-    body: form
-  })
-  .then(r => r.json())
-  .then(data => {
-    if (data.success) {
-      alert('✓ Order cancelled successfully');
-      location.reload();
-    } else {
-      alert('✗ ' + (data.error || 'Failed to cancel order'));
-    }
-  })
-  .catch(err => alert('Error: ' + err.message));
-}
-
-// ── Refund Modal helpers ───────────────────────────────────────────────────
-function prepRefundModal(orderId, grandTotal) {
-  document.getElementById('refund-order-id').value = orderId;
-  document.getElementById('refund-grand-total').value = grandTotal;
-  document.getElementById('refund-amount').value = '';
-  document.getElementById('refund-amount').max = grandTotal;
-  document.getElementById('refund-reason').value = '';
-  document.getElementById('refund-notes').value = '';
-  document.getElementById('refund-settlement-ref').value = '';
-  document.getElementById('refund-proof-url').value = '';
-  document.getElementById('refund-proof-filename').textContent = '';
-  document.getElementById('refund-modal-msg').textContent = '';
-  document.getElementById('refund-type-full').checked = false;
-  document.getElementById('refund-type-partial').checked = false;
-  document.getElementById('refund-notes-group').style.display = 'none';
-}
-
-document.addEventListener('DOMContentLoaded', function() {
-  // Auto-fill amount on Full refund selection
-  document.getElementById('refund-type-full').addEventListener('change', function() {
-    if (this.checked) {
-      var gt = parseFloat(document.getElementById('refund-grand-total').value || 0);
-      document.getElementById('refund-amount').value = gt.toFixed(2);
-    }
-  });
-  document.getElementById('refund-type-partial').addEventListener('change', function() {
-    if (this.checked) {
-      document.getElementById('refund-amount').value = '';
-    }
-  });
-
-  // Show/hide notes when reason = OTHER
-  document.getElementById('refund-reason').addEventListener('change', function() {
-    var show = this.value === 'OTHER';
-    document.getElementById('refund-notes-group').style.display = show ? 'block' : 'none';
-    document.getElementById('refund-notes').required = show;
-  });
-
-  // Settlement proof upload
-  document.getElementById('refund-proof-file').addEventListener('change', async function() {
-    var file = this.files[0];
-    if (!file) return;
-    if (file.size > 5 * 1024 * 1024) {
-      alert('File must be under 5 MB');
-      this.value = '';
-      return;
-    }
-    var allowed = ['image/jpeg','image/png','image/webp','application/pdf'];
-    if (!allowed.includes(file.type)) {
-      alert('Only JPEG, PNG, WebP and PDF files are allowed');
-      this.value = '';
-      return;
-    }
-    var form = new FormData();
-    form.append('proof', file);
-    document.getElementById('refund-proof-filename').textContent = 'Uploading…';
-    try {
-      var r = await fetch('/api/admin/refunds/upload-proof', {
-        method: 'POST',
-        body: form,
-        credentials: 'same-origin',
-        headers: {'X-Requested-With': 'XMLHttpRequest'}
-      });
-      var data = await r.json();
-      if (data.success) {
-        document.getElementById('refund-proof-url').value = data.url;
-        document.getElementById('refund-proof-filename').textContent = '✓ ' + file.name;
-      } else {
-        document.getElementById('refund-proof-filename').textContent = '✗ Upload failed';
-      }
-    } catch (e) {
-      document.getElementById('refund-proof-filename').textContent = '✗ Network error';
-    }
-  });
-
-  // Submit refund form
-  document.getElementById('refund-submit-btn').addEventListener('click', async function() {
-    var orderId    = parseInt(document.getElementById('refund-order-id').value, 10);
-    var amount     = parseFloat(document.getElementById('refund-amount').value || 0);
-    var grandTotal = parseFloat(document.getElementById('refund-grand-total').value || 0);
-    var reason     = document.getElementById('refund-reason').value;
-    var notes      = document.getElementById('refund-notes').value.trim();
-    var ref        = document.getElementById('refund-settlement-ref').value.trim();
-    var proofUrl   = document.getElementById('refund-proof-url').value.trim();
-    var msg        = document.getElementById('refund-modal-msg');
-
-    if (!orderId || amount <= 0) { msg.style.color='#dc2626'; msg.textContent='Please enter a valid refund amount.'; return; }
-    if (amount > grandTotal)     { msg.style.color='#dc2626'; msg.textContent='Amount cannot exceed order total ₹' + grandTotal.toFixed(2); return; }
-    if (!reason)                  { msg.style.color='#dc2626'; msg.textContent='Please select a refund reason.'; return; }
-    if (reason === 'OTHER' && !notes) { msg.style.color='#dc2626'; msg.textContent='Internal notes are required for "Other" reason.'; return; }
-
-    msg.style.color = '#555'; msg.textContent = 'Processing…';
-    this.disabled = true;
-
-    try {
-      var r = await fetch('/api/admin/orders/' + orderId + '/refund/process', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json','X-Requested-With':'XMLHttpRequest'},
-        credentials: 'same-origin',
-        body: JSON.stringify({
-          refund_amount: amount,
-          reason_code: reason,
-          reason_notes: notes,
-          settlement_reference: ref,
-          settlement_proof_url: proofUrl
-        })
-      });
-      var data = await r.json();
-      if (data.success) {
-        msg.style.color='#16a34a';
-        msg.textContent = '✅ ' + data.message;
-        setTimeout(function(){ location.reload(); }, 1600);
-      } else {
-        msg.style.color='#dc2626';
-        msg.textContent = '✗ ' + (data.message || 'Failed to submit refund request');
-        document.getElementById('refund-submit-btn').disabled = false;
-      }
-    } catch (e) {
-      msg.style.color='#dc2626';
-      msg.textContent = 'Network error';
-      document.getElementById('refund-submit-btn').disabled = false;
-    }
-  });
-});
-</script>
-
-<!-- ── Refund Modal ──────────────────────────────────────────────────────── -->
-<div class="modal fade" id="refundModal" tabindex="-1" aria-labelledby="refundModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered modal-lg">
-    <div class="modal-content" style="border-radius:16px;overflow:hidden;">
-      <div class="modal-header" style="background:linear-gradient(135deg,#7c3aed,#5b21b6);color:#fff;border:none;">
-        <h5 class="modal-title" id="refundModalLabel">💰 Submit Refund Request</h5>
-        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body" style="padding:24px;">
-        <input type="hidden" id="refund-order-id">
-        <input type="hidden" id="refund-grand-total">
-        <input type="hidden" id="refund-proof-url">
-
-        <div class="mb-3">
-          <label style="font-weight:600;font-size:14px;display:block;margin-bottom:8px;">Refund Type</label>
-          <div style="display:flex;gap:16px;">
-            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
-              <input type="radio" name="refund-type-radio" id="refund-type-full" value="full">
-              <span style="font-size:14px;">Full Refund</span>
-            </label>
-            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
-              <input type="radio" name="refund-type-radio" id="refund-type-partial" value="partial">
-              <span style="font-size:14px;">Partial Refund</span>
-            </label>
+        <div class="od-field">
+          <label>Refund Type</label>
+          <div class="od-inline-actions">
+            <label><input type="radio" name="refund-type-radio" id="refund-type-full" value="full"> Full Refund</label>
+            <label><input type="radio" name="refund-type-radio" id="refund-type-partial" value="partial"> Partial Refund</label>
           </div>
         </div>
 
-        <div class="mb-3">
-          <label for="refund-amount" style="font-weight:600;font-size:14px;display:block;margin-bottom:4px;">Refund Amount (₹)</label>
-          <input type="number" id="refund-amount" min="0.01" step="0.01" placeholder="e.g. 500.00" style="width:100%;padding:9px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;">
+        <div class="od-field">
+          <label for="refund-amount">Refund Amount</label>
+          <input type="number" id="refund-amount" min="0.01" step="0.01" placeholder="Enter amount">
         </div>
 
-        <div class="mb-3">
-          <label for="refund-reason" style="font-weight:600;font-size:14px;display:block;margin-bottom:4px;">Reason</label>
-          <select id="refund-reason" style="width:100%;padding:9px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;">
-            <option value="">— Select reason —</option>
+        <div class="od-field">
+          <label for="refund-reason">Reason</label>
+          <select id="refund-reason">
+            <option value="">Select reason</option>
             <option value="QUALITY_ISSUE">Quality Issue</option>
             <option value="WRONG_ORDER">Wrong Order</option>
             <option value="ITEM_NOT_DELIVERED">Item Not Delivered</option>
@@ -669,28 +613,74 @@ document.addEventListener('DOMContentLoaded', function() {
           </select>
         </div>
 
-        <div class="mb-3" id="refund-notes-group" style="display:none;">
-          <label for="refund-notes" style="font-weight:600;font-size:14px;display:block;margin-bottom:4px;">Internal Notes <span style="color:#dc2626;">*</span></label>
-          <textarea id="refund-notes" rows="3" placeholder="Required when reason is Other" style="width:100%;padding:9px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;resize:vertical;"></textarea>
+        <div class="od-field od-hidden" id="refund-notes-group">
+          <label for="refund-notes">Internal Notes</label>
+          <textarea id="refund-notes" placeholder="Required when reason is Other"></textarea>
         </div>
 
-        <div class="mb-3">
-          <label for="refund-settlement-ref" style="font-weight:600;font-size:14px;display:block;margin-bottom:4px;">Settlement Reference <span style="color:#9ca3af;font-weight:400;">(optional)</span></label>
-          <input type="text" id="refund-settlement-ref" placeholder="UTR / transaction ID" style="width:100%;padding:9px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;">
+        <div class="od-field">
+          <label for="refund-settlement-ref">Settlement Reference</label>
+          <input type="text" id="refund-settlement-ref" placeholder="UTR / transaction reference">
         </div>
 
-        <div class="mb-3">
-          <label style="font-weight:600;font-size:14px;display:block;margin-bottom:4px;">Settlement Proof <span style="color:#9ca3af;font-weight:400;">(optional — image or PDF, max 5 MB)</span></label>
-          <input type="file" id="refund-proof-file" accept="image/jpeg,image/png,image/webp,application/pdf" style="font-size:14px;">
-          <span id="refund-proof-filename" style="display:block;margin-top:4px;font-size:12px;color:#16a34a;"></span>
+        <div class="od-field">
+          <label for="refund-proof-file">Proof Upload</label>
+          <input type="file" id="refund-proof-file" accept="image/jpeg,image/png,image/webp,application/pdf">
+          <div id="refund-proof-filename" class="od-inline-msg"></div>
         </div>
 
-        <div id="refund-modal-msg" style="font-size:13px;min-height:18px;"></div>
+        <div class="od-inline-actions">
+          <button type="button" id="refund-submit-btn" class="od-btn od-btn-primary">Submit Refund Request</button>
+        </div>
+        <div id="refund-modal-msg" class="od-inline-msg"></div>
       </div>
-      <div class="modal-footer" style="border:none;padding:16px 24px;background:#f9fafb;">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-        <button type="button" id="refund-submit-btn" style="background:#7c3aed;color:#fff;border:none;padding:9px 20px;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer;">Submit Request</button>
+    </section>
+  <?php endif; ?>
+
+  <section class="od-card is-collapsible open">
+    <button type="button" class="od-accordion-toggle" data-od-accordion="1" aria-expanded="true">
+      <span>Payment Receipts</span>
+      <span data-accordion-icon>Hide</span>
+    </button>
+    <div class="od-accordion-body">
+      <div class="od-receipts-grid">
+        <?php if ($receiptHistory): ?>
+          <?php foreach ($receiptHistory as $receipt): ?>
+            <article class="order-receipt-card">
+              <div>
+                <div class="od-receipt-id"><?php echo od_h((string)($receipt['receipt_number'] ?? 'NA')); ?></div>
+                <div class="od-receipt-meta"><?php echo od_h(invoice_format_datetime((string)($receipt['issued_at'] ?? ''))); ?></div>
+              </div>
+              <div>
+                <div class="od-receipt-meta">Method: <?php echo od_h(invoice_payment_method_label((string)($receipt['payment_method'] ?? ($order['payment_method'] ?? 'NA')))); ?></div>
+                <div class="od-receipt-meta">Txn: <?php echo od_h(od_first_non_empty((string)($receipt['settlement_reference'] ?? ''), (string)($receipt['financial_transaction_id'] ?? ''), '-')); ?></div>
+                <div class="od-receipt-meta">Status: <?php echo od_h(od_status_label((string)($receipt['payment_status_snapshot'] ?? 'pending'))); ?></div>
+              </div>
+              <div>
+                <div class="od-receipt-amount"><?php echo od_h(od_money((float)($receipt['amount'] ?? 0))); ?></div>
+                <div class="od-receipt-meta od-receipt-right">Issued by <?php echo od_h((string)($receipt['issued_by_name'] ?? 'System')); ?></div>
+              </div>
+            </article>
+          <?php endforeach; ?>
+        <?php else: ?>
+          <div class="od-inline-msg">No payment receipts have been issued for this order yet.</div>
+        <?php endif; ?>
       </div>
     </div>
-  </div>
+  </section>
+
+  <section class="od-mobile-sticky-actions">
+    <?php echo $stickyPrimary; ?>
+    <?php echo $stickyInvoice; ?>
+    <?php echo $stickyRefund; ?>
+  </section>
 </div>
+
+<script src="/client/assets/js/scroll-preserve.js?v=<?php echo (int) (@filemtime(__DIR__ . '/../client/assets/js/scroll-preserve.js') ?: time()); ?>"></script>
+<script src="assets/js/admin-order-details.js?v=<?php echo (int)$orderDetailsJsVersion; ?>"></script>
+
+</div>
+</div>
+
+</body>
+</html>

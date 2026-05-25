@@ -1,36 +1,23 @@
 <?php /* Cakeouflage — Wishlist Page */ ?>
-<main class="section" data-page="wishlist">
-  <div class="container">
-    <div class="page-inner-header">
-      <div>
-        <h1 class="page-inner-title">My Wishlist</h1>
-        <p class="page-inner-desc">Your saved favourites — move them to cart when you're ready.</p>
-      </div>
-      <a href="/category" class="btn btn--outline">Continue Shopping</a>
+<main class="customer-wishlist" data-page="customer-wishlist">
+  <header class="customer-topbar customer-panel">
+    <div>
+      <h1>My Wishlist</h1>
+      <p>Curated favorites ready for quick add-to-cart when your celebration date is near.</p>
     </div>
+    <div class="customer-topbar__actions">
+      <a class="customer-btn customer-btn--ghost" href="/category">Continue Shopping</a>
+      <a class="customer-btn customer-btn--ghost" href="/account">Dashboard</a>
+    </div>
+  </header>
 
-    <!-- Auth gate -->
-    <div class="account-gate" id="wishlistAuthGate" style="display:none">
-      <div class="account-gate__inner">
-        <span class="account-gate__icon">❤️</span>
-        <h2>Save Your Favourites</h2>
-        <p>Sign in to view and manage your wishlist.</p>
-     <a href="/login" class="btn btn--primary btn--lg">Sign In</a>
-        <p>New here? <a href="/register" class="link">Create an account →</a></p>
-      </div>
-    </div>
+  <section id="customerWishlistAuthGate" class="customer-panel" hidden style="margin-top:12px;">
+    <h2>Please sign in</h2>
+    <p class="address-card__line">Login to save and manage your wishlist across devices.</p>
+    <a class="customer-btn customer-btn--primary" href="/login">Go to Login</a>
+  </section>
 
-    <!-- Empty state -->
-    <div class="empty-state" id="wishlistEmpty" style="display:none">
-      <span class="empty-state__icon">❤️</span>
-      <h3>Your wishlist is empty</h3>
-      <p>Browse our cakes and tap the heart icon to save your favourites.</p>
-      <a href="/category" class="btn btn--primary">Explore Cakes</a>
-    </div>
-
-    <!-- Wishlist grid -->
-    <div class="product-grid" id="wishlistGrid">
-      <!-- Populated by wishlist.js -->
-    </div>
-  </div>
+  <section class="customer-panel" style="margin-top:12px;">
+    <div id="customerWishlistGrid" class="customer-grid"></div>
+  </section>
 </main>

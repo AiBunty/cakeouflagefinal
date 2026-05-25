@@ -91,6 +91,17 @@ $paymentChipClass = $paymentClassMap[$pstatus] ?? 'chip-payment-unpaid';
       <a href="order_invoice.php?id=<?php echo $oid; ?>" class="btnx btnx-secondary-desktop btnx-muted">Invoice</a>
     <?php endif; ?>
 
+    <?php if ($canOrderDelete): ?>
+      <?php if ($isArchived): ?>
+        <button type="button" class="btnx btnx-outline" onclick="ordersRunDestructiveAction(<?php echo $oid; ?>, 'restore', '<?php echo htmlspecialchars((string)$row['order_number'], ENT_QUOTES, 'UTF-8'); ?>')">Restore</button>
+      <?php else: ?>
+        <button type="button" class="btnx btnx-outline" onclick="ordersRunDestructiveAction(<?php echo $oid; ?>, 'archive', '<?php echo htmlspecialchars((string)$row['order_number'], ENT_QUOTES, 'UTF-8'); ?>')">Archive</button>
+      <?php endif; ?>
+      <?php if ($isSuperAdmin): ?>
+        <button type="button" class="btnx btnx-danger" onclick="ordersRunDestructiveAction(<?php echo $oid; ?>, 'force_purge', '<?php echo htmlspecialchars((string)$row['order_number'], ENT_QUOTES, 'UTF-8'); ?>')">Delete</button>
+      <?php endif; ?>
+    <?php endif; ?>
+
     <div class="order-more">
       <button type="button" class="btnx btnx-outline" onclick="ordersToggleMore(this)">⋮</button>
       <div class="order-more-menu">
@@ -100,6 +111,16 @@ $paymentChipClass = $paymentClassMap[$pstatus] ?? 'chip-payment-unpaid';
         <?php endif; ?>
         <?php if ((string)$pstatus === 'paid'): ?>
           <a href="order_invoice.php?id=<?php echo $oid; ?>" class="btnx btnx-outline">Invoice</a>
+        <?php endif; ?>
+        <?php if ($canOrderDelete): ?>
+          <?php if ($isArchived): ?>
+            <button type="button" class="btnx btnx-outline" onclick="ordersRunDestructiveAction(<?php echo $oid; ?>, 'restore', '<?php echo htmlspecialchars((string)$row['order_number'], ENT_QUOTES, 'UTF-8'); ?>')">Restore</button>
+          <?php else: ?>
+            <button type="button" class="btnx btnx-outline" onclick="ordersRunDestructiveAction(<?php echo $oid; ?>, 'archive', '<?php echo htmlspecialchars((string)$row['order_number'], ENT_QUOTES, 'UTF-8'); ?>')">Archive</button>
+          <?php endif; ?>
+          <?php if ($isSuperAdmin): ?>
+            <button type="button" class="btnx btnx-danger" onclick="ordersRunDestructiveAction(<?php echo $oid; ?>, 'force_purge', '<?php echo htmlspecialchars((string)$row['order_number'], ENT_QUOTES, 'UTF-8'); ?>')">Delete</button>
+          <?php endif; ?>
         <?php endif; ?>
       </div>
     </div>

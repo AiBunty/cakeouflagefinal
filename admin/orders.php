@@ -39,7 +39,7 @@ $allowedPaymentStatuses = ['pending', 'under_review', 'paid', 'credit', 'refund_
 $allowedPaymentMethods = ['upi_manual', 'cod', 'gateway', 'credit'];
 $allowedFulfilmentModes = ['delivery', 'pickup', 'custom_delivery'];
 $allowedSourceChannels = ['online', 'manual'];
- $allowedOrderSegments = ['operational', 'historical', 'all'];
+$allowedOrderSegments = ['operational', 'historical', 'archived', 'all'];
 
 $q = trim((string)($_GET['q'] ?? ''));
 $dateFrom = trim((string)($_GET['date_from'] ?? ''));
@@ -189,9 +189,16 @@ if ($orderSegment === 'operational') {
   }
 } elseif ($orderSegment === 'historical') {
   if ($hasArchivedColumn) {
-    $conditions[] = '(o.order_status IN ("delivered", "completed", "cancelled", "refunded", "partially_refunded", "fully_refunded", "rejected") OR COALESCE(o.is_archived, 0) = 1)';
+    $conditions[] = 'o.order_status IN ("delivered", "completed", "cancelled", "refunded", "partially_refunded", "fully_refunded", "rejected")';
+    $conditions[] = 'COALESCE(o.is_archived, 0) = 0';
   } else {
     $conditions[] = 'o.order_status IN ("delivered", "completed", "cancelled", "refunded", "partially_refunded", "fully_refunded", "rejected")';
+  }
+} elseif ($orderSegment === 'archived') {
+  if ($hasArchivedColumn) {
+    $conditions[] = 'COALESCE(o.is_archived, 0) = 1';
+  } else {
+    $conditions[] = '1 = 0';
   }
 }
 if ($amountMin !== null) {
@@ -550,6 +557,21 @@ $showAdvancedOnLoad = !empty($activeFilters);
       </div>
 
       <div class="orders-filters">
+        <div class="orders-quick-row" style="padding-bottom:8px;border-bottom:1px solid rgba(128,0,31,.08);margin-bottom:10px;">
+          <div class="orders-chip-row">
+            <a href="orders.php?<?php echo orders_query_string($filtersState, ['order_segment' => 'operational', 'page' => 1]); ?>" class="<?php echo $orderSegment === 'operational' ? 'active' : ''; ?>">Operational</a>
+            <a href="orders.php?<?php echo orders_query_string($filtersState, ['order_segment' => 'historical', 'page' => 1]); ?>" class="<?php echo $orderSegment === 'historical' ? 'active' : ''; ?>">Historical</a>
+            <a href="orders.php?<?php echo orders_query_string($filtersState, ['order_segment' => 'archived', 'page' => 1]); ?>" class="<?php echo $orderSegment === 'archived' ? 'active' : ''; ?>">Archived</a>
+            <a href="orders.php?<?php echo orders_query_string($filtersState, ['order_segment' => 'all', 'page' => 1]); ?>" class="<?php echo $orderSegment === 'all' ? 'active' : ''; ?>">All</a>
+          </div>
+        </div>
+
+        <?php if ($orderSegment === 'archived' && !$hasArchivedColumn): ?>
+          <div class="orders-quick-row" style="padding-top:0;">
+            <span class="orders-meta" style="color:#9f1239;">Archive governance columns are not available in this database yet. Run the destructive-governance migration to use Archived orders.</span>
+          </div>
+        <?php endif; ?>
+
         <div class="orders-quick-row">
           <div class="orders-chip-row">
             <a href="orders.php?<?php echo orders_query_string($filtersState, ['page' => 1]); ?>" class="<?php echo $orderStatus === '' ? 'active' : ''; ?>">All Orders</a>
@@ -620,6 +642,7 @@ $showAdvancedOnLoad = !empty($activeFilters);
           <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
             <button type="submit" class="btnx btnx-primary">Apply Filters</button>
             <a class="btnx btnx-outline" href="orders.php">Reset</a>
+            <input type="hidden" name="order_segment" value="<?php echo htmlspecialchars($orderSegment, ENT_QUOTES, 'UTF-8'); ?>">
             <input type="hidden" name="per_page" value="<?php echo (int)$orderPerPage; ?>">
             <input type="hidden" name="page" value="1">
           </div>
@@ -675,6 +698,7 @@ $showAdvancedOnLoad = !empty($activeFilters);
   </aside>
 </div>
 
+<script src="/client/assets/js/scroll-preserve.js?v=<?php echo (int) (@filemtime(__DIR__ . '/../client/assets/js/scroll-preserve.js') ?: time()); ?>"></script>
 <script src="assets/js/orders.js?v=<?php echo (int)$ordersJsVersion; ?>"></script>
 
 </div>
