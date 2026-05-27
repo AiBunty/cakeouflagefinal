@@ -1,0 +1,17 @@
+HTTP/1.1 401 Unauthorized
+date: Tue, 26 May 2026 16:06:38 GMT
+content-type: application/json; charset=utf-8
+transfer-encoding: chunked
+server: Apache
+x-powered-by: PHP/8.2.31
+expires: Thu, 19 Nov 1981 08:52:00 GMT
+cache-control: no-store, no-cache, must-revalidate
+pragma: no-cache
+set-cookie: cakeouflage_sid=552fe990caca401705b89c09432b1f13; expires=Tue, 26 May 2026 18:06:44 GMT; Max-Age=7200; path=/; secure; HttpOnly; SameSite=Lax
+x-provided-by: StackCDN
+access-control-allow-methods: GET, POST, PUT, DELETE, OPTIONS
+access-control-allow-headers: Content-Type, Authorization, X-Requested-With
+x-origin-cache-status: MISS
+x-cdn-cache-status: MISS
+x-via: SIN1
+

@@ -1,0 +1,9 @@
+[2026-05-27T11:40:41] Release id=20260527114041-03e71c7
+[2026-05-27T11:40:41] Git branch=hotfix/live-runtime-stabilization-v3 commit=03e71c7 dirty=True
+[2026-05-27T11:40:41] WhatIf=True RunMigration=False RunValidation=False
+[2026-05-27T11:40:41] Running pre-deploy validation gate
+[2026-05-27T11:41:27] Pre-deploy validation gate PASS
+[2026-05-27T11:41:28] Starting file sync via WinSCP at C:\Users\ventu\AppData\Local\\Programs\\WinSCP\\WinSCP.com
+[2026-05-27T11:41:28] WHATIF WinSCP script prepared: C:\Users\ventu\AppData\Local\Temp\winscp-sync-9085c51040fe40dbafa5a3d310475453.txt
+[2026-05-27T11:41:28] File sync complete
+[2026-05-27T11:41:28] Deployment completed successfully

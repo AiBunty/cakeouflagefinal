@@ -6,7 +6,7 @@ require_once __DIR__ . '/includes/db.php';
 
 use App\Services\FinanceReportService;
 
-if (!isset($_SESSION['admin'])) {
+if (!isset($_SESSION['admin']) || empty($_SESSION['admin_otp_verified'])) {
     header('Location: login.php');
     exit;
 }

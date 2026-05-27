@@ -191,8 +191,8 @@ if (!function_exists('byoc_resolve_fallback_product_id')) {
       }
     }
 
-    // Handle schemas that use availability_status + deleted_at rather than is_active.
-    $statusRes = $conn->query('SELECT id FROM products WHERE (deleted_at IS NULL OR deleted_at = "0000-00-00 00:00:00") AND availability_status IN ("in_stock", "preorder") ORDER BY id ASC LIMIT 1');
+    // Strict-mode safe: avoid direct zero-date literal comparisons.
+    $statusRes = $conn->query('SELECT id FROM products WHERE deleted_at IS NULL AND availability_status IN ("in_stock", "preorder") ORDER BY id ASC LIMIT 1');
     if ($statusRes) {
       $statusRow = $statusRes->fetch_assoc();
       $statusId = (int)($statusRow['id'] ?? 0);
@@ -232,7 +232,7 @@ $flash = '';
 $flashType = 'success';
 
 $defaultEmailSubject = 'Your Custom Cake Quote from Cakeouflage';
-$defaultEmailBody = "Hi {{first_name}},\n\nThank you for your Build Your Own Cake inquiry.\n\nQuote: {{quote_subject}}\n\n{{quote_message}}\n\nQuote Amount: INR {{quote_amount}}\n\nAccept your quote: {{quote_accept_link}}\n\nEvent: {{event_information}}\nEvent Date: {{event_date}}\nGuests: {{number_of_servings_guests}}\nBudget: {{budget_range}}\nDiet: {{diet_preference}}\n\nRegards,\nCakeouflage Team";
+$defaultEmailBody = "Hi {{first_name}},\n\nThank you for your Build Your Own Cake inquiry.\n\nQuote: {{quote_subject}}\n\n{{quote_message}}\n\nQuote Amount: INR {{quote_amount}}\n\nAccept your quote: {{quote_accept_link}}\n\nEvent: {{event_information}}\nEvent Date: {{event_date}}\nGuests: {{number_of_servings_guests}}\n\nRegards,\nCakeouflage Team";
 
 $tplStmt = $conn->prepare('INSERT IGNORE INTO communication_templates (channel, event_key, subject, body_template, is_active) VALUES ("email", "build_your_cake_quote_email", ?, ?, 1)');
 if ($tplStmt) {
@@ -249,7 +249,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($action === 'save_whatsapp_toggle') {
             $newWaVal = ($_POST['byoc_whatsapp_enabled'] ?? '1') === '0' ? '0' : '1';
             $adminId = (int)($_SESSION['admin_id'] ?? 0);
-            $upsertWa = $conn->prepare('INSERT INTO settings (setting_key, setting_value, updated_by_admin_id, updated_at) VALUES ("byoc_whatsapp_enabled", ?, ?, NOW()) AS new ON DUPLICATE KEY UPDATE setting_value = new.setting_value, updated_by_admin_id = new.updated_by_admin_id, updated_at = NOW()');
+            $upsertWa = $conn->prepare('INSERT INTO settings (setting_key, setting_value, updated_by_admin_id, updated_at) VALUES ("byoc_whatsapp_enabled", ?, ?, NOW()) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_by_admin_id = VALUES(updated_by_admin_id), updated_at = NOW()');
             if ($upsertWa) {
                 $upsertWa->bind_param('si', $newWaVal, $adminId);
                 $upsertWa->execute();
@@ -365,8 +365,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'event_information' => (string)($meta['event_information'] ?? ''),
                 'event_date' => (string)($meta['event_date'] ?? ''),
                 'number_of_servings_guests' => (string)($meta['number_of_servings_guests'] ?? ''),
-                'budget_range' => (string)($meta['budget_range'] ?? ''),
-                'diet_preference' => (string)($meta['diet_preference'] ?? ''),
                 'design_breif_notes' => (string)($meta['design_breif_notes'] ?? ''),
                 'reference_file' => (string)($lead['reference_file'] ?? ''),
                 'quote_subject' => $quoteSubject,
@@ -738,8 +736,6 @@ if ($tres = $conn->query('SELECT id, name, price FROM cake_toppers WHERE is_acti
               <div><strong><?= htmlspecialchars((string)($meta['event_information'] ?? '-')) ?></strong></div>
               <div class="byoc-meta">Date: <?= htmlspecialchars((string)($meta['event_date'] ?? '-')) ?></div>
               <div class="byoc-meta">Guests: <?= htmlspecialchars((string)($meta['number_of_servings_guests'] ?? '-')) ?></div>
-              <div class="byoc-meta">Budget: <?= htmlspecialchars((string)($meta['budget_range'] ?? '-')) ?></div>
-              <div class="byoc-meta">Diet: <?= htmlspecialchars((string)($meta['diet_preference'] ?? '-')) ?></div>
               <?php if (!empty($row['reference_file'])): ?>
                 <div class="byoc-meta"><a href="<?= htmlspecialchars((string)$row['reference_file']) ?>" target="_blank" rel="noopener noreferrer">View image</a></div>
               <?php endif; ?>

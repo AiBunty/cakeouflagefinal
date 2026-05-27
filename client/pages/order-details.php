@@ -9,7 +9,7 @@ if (isset($_SESSION['user_id'])) {
 }
 
 if (!$currentUser) {
-    header('Location: /auth/login.php');
+    header('Location: /account/login.php');
     exit;
 }
 
@@ -18,7 +18,7 @@ $conn = $db->getConnection();
 
 $orderId = (int)($_GET['id'] ?? 0);
 if ($orderId <= 0) {
-    header('Location: /account/orders.php');
+    header('Location: /orders');
     exit;
 }
 
@@ -29,7 +29,7 @@ $orderResult = $stmt->get_result();
 $order = $orderResult ? $orderResult->fetch_assoc() : null;
 
 if (!$order) {
-    header('Location: /account/orders.php');
+    header('Location: /orders');
     exit;
 }
 
@@ -106,7 +106,7 @@ $items = $itemsResult ? $itemsResult->fetch_all(MYSQLI_ASSOC) : array();
     </div>
     
     <div class="container">
-        <a href="/account/orders.php" class="back-link">← My Orders</a>
+        <a href="/orders" class="back-link">← My Orders</a>
         
         <!-- Order Header -->
         <div class="order-header">
@@ -225,7 +225,7 @@ $items = $itemsResult ? $itemsResult->fetch_all(MYSQLI_ASSOC) : array();
         <!-- Actions -->
         <div class="cta-buttons">
             <a href="/" class="btn btn-primary">Continue Shopping</a>
-            <a href="/account/orders.php" class="btn btn-secondary">View All Orders</a>
+            <a href="/orders" class="btn btn-secondary">View All Orders</a>
         </div>
     </div>
 </body>

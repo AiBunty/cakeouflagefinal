@@ -1,0 +1,32 @@
+{
+  "flow": "online",
+  "order_number": "CKF-20260526-449234",
+  "order_id": 28,
+  "customer_login_status": 200,
+  "add_item_status": 200,
+  "coupon_status": 200,
+  "preview_status": 200,
+  "place_status": 201,
+  "confirm_payment_status": 200,
+  "preparing_status": 200,
+  "delivered_status": 200,
+  "confirm_payment_response": {
+    "success": true,
+    "message": "Payment confirmed. Slot reserved. Customer will be notified.",
+    "slot": {
+      "success": true,
+      "message": "Slot confirmed successfully.",
+      "slot_label": "10:00 AM – 12:00 PM"
+    },
+    "data": {
+      "received_amount": 801.9,
+      "discount_amount": 0,
+      "discount_reason": "",
+      "payment_method": "upi_manual"
+    }
+  },
+  "delivered_response": {
+    "success": true,
+    "message": "Order updated"
+  }
+}

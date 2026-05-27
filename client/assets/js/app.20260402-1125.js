@@ -99,6 +99,34 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   };
 
+  const showUiToast = (message, type = "info") => {
+    if (typeof utils.showToast === "function") {
+      utils.showToast(message, { type });
+      return;
+    }
+    if (type === "error") {
+      window.alert(message);
+    }
+  };
+
+  const setQuickAddBusy = (button, busy, label) => {
+    if (!(button instanceof HTMLButtonElement)) {
+      return;
+    }
+    if (busy) {
+      button.dataset.defaultLabel = button.dataset.defaultLabel || button.textContent || "Quick Add";
+      button.dataset.busy = "1";
+      button.disabled = true;
+      button.setAttribute("aria-busy", "true");
+      button.textContent = label || "Adding...";
+      return;
+    }
+    button.disabled = false;
+    button.removeAttribute("aria-busy");
+    button.dataset.busy = "0";
+    button.textContent = button.dataset.defaultLabel || "Quick Add";
+  };
+
   const renderShop = async () => {
     const page = document.querySelector('[data-page="shop"]');
     if (!page) {
@@ -356,6 +384,8 @@ document.addEventListener("DOMContentLoaded", () => {
         })
         .join("");
 
+      utils.bindImageFallbacks?.(grid);
+
       renderActiveFilters();
     };
 
@@ -490,30 +520,38 @@ document.addEventListener("DOMContentLoaded", () => {
 
     grid.addEventListener("click", async (event) => {
       const target = event.target;
-      if (!(target instanceof HTMLElement)) {
+      if (!(target instanceof Element)) {
         return;
       }
 
-      const productId = Number(target.dataset.addProduct || 0);
+      const button = target.closest("button[data-add-product]");
+      if (!(button instanceof HTMLButtonElement)) {
+        return;
+      }
+
+      if (button.dataset.busy === "1") {
+        return;
+      }
+
+      const productId = Number(button.dataset.addProduct || 0);
       if (!productId) {
         return;
       }
 
-      const variantId = Number(target.dataset.addVariant || 0);
+      const variantId = Number(button.dataset.addVariant || 0);
       try {
-        target.setAttribute("aria-busy", "true");
-        target.textContent = "Adding...";
+        setQuickAddBusy(button, true, "Adding...");
         await window.CakeouflageCart?.addItem(productId, variantId || null, 1);
-        target.textContent = "Added";
+        showUiToast("Added to cart", "success");
+        button.textContent = "Added";
         setTimeout(() => {
-          target.textContent = "Quick Add";
-          target.removeAttribute("aria-busy");
+          setQuickAddBusy(button, false);
         }, 1200);
         syncMobileCartCount();
       } catch (error) {
-        target.textContent = "Quick Add";
-        target.removeAttribute("aria-busy");
-        alert(error.message);
+        const message = String(error && error.message ? error.message : "Could not add to cart");
+        setQuickAddBusy(button, false);
+        showUiToast(message, "error");
       }
     });
 
@@ -820,24 +858,27 @@ document.addEventListener("DOMContentLoaded", () => {
       const categoryGrid = document.getElementById("shopGrid");
       categoryGrid?.addEventListener("click", async (event) => {
         const target = event.target;
-        if (!(target instanceof HTMLElement)) return;
-        const productId = Number(target.dataset.addProduct || 0);
+        if (!(target instanceof Element)) return;
+        const button = target.closest("button[data-add-product]");
+        if (!(button instanceof HTMLButtonElement)) return;
+        if (button.dataset.busy === "1") return;
+
+        const productId = Number(button.dataset.addProduct || 0);
         if (!productId) return;
-        const variantId = Number(target.dataset.addVariant || 0);
+        const variantId = Number(button.dataset.addVariant || 0);
         try {
-          target.setAttribute("aria-busy", "true");
-          target.textContent = "Adding...";
+          setQuickAddBusy(button, true, "Adding...");
           await window.CakeouflageCart?.addItem(productId, variantId || null, 1);
-          target.textContent = "Added";
+          showUiToast("Added to cart", "success");
+          button.textContent = "Added";
           setTimeout(() => {
-            target.textContent = "Quick Add";
-            target.removeAttribute("aria-busy");
+            setQuickAddBusy(button, false);
           }, 1200);
           syncMobileCartCount();
         } catch (error) {
-          target.textContent = "Quick Add";
-          target.removeAttribute("aria-busy");
-          alert(error.message);
+          const message = String(error && error.message ? error.message : "Could not add to cart");
+          setQuickAddBusy(button, false);
+          showUiToast(message, "error");
         }
       });
     }
@@ -862,7 +903,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const addBtn = document.getElementById("addToCartButton");
 
     if (!slug) {
-      titleEl.textContent = "Product unavailable";
+      if (titleEl) titleEl.textContent = "Product unavailable";
       return;
     }
 
@@ -872,36 +913,45 @@ document.addEventListener("DOMContentLoaded", () => {
       const variants = payload.data?.variants || [];
       const related = payload.data?.related_products || [];
 
-      titleEl.textContent = product.name;
-      shortEl.textContent = product.short_description;
-      noteEl.textContent = product.customisation_note || "";
+      if (titleEl) titleEl.textContent = product.name;
+      if (shortEl) shortEl.textContent = product.short_description;
+      if (noteEl) noteEl.textContent = product.customisation_note || "";
 
-      variantEl.innerHTML = variants
-        .map((variant) => {
-          const displayPrice = Number(variant.discount_price || variant.price || 0);
-          return `<option value="${variant.id}">${variant.variant_label} - ${utils.formatInr(displayPrice)}</option>`;
-        })
-        .join("");
+      if (variantEl) {
+        variantEl.innerHTML = variants
+          .map((variant) => {
+            const displayPrice = Number(variant.discount_price || variant.price || 0);
+            return `<option value="${variant.id}">${variant.variant_label} - ${utils.formatInr(displayPrice)}</option>`;
+          })
+          .join("");
 
-      const setPriceFromSelectedVariant = () => {
-        const selected = variants.find((variant) => String(variant.id) === String(variantEl.value));
-        const displayPrice = Number(selected?.discount_price || selected?.price || product.starting_price || 0);
+        const setPriceFromSelectedVariant = () => {
+          const selected = variants.find((variant) => String(variant.id) === String(variantEl.value));
+          const displayPrice = Number(selected?.discount_price || selected?.price || product.starting_price || 0);
+          if (priceEl) priceEl.textContent = utils.formatInr(displayPrice);
+        };
+        setPriceFromSelectedVariant();
+        variantEl.addEventListener("change", setPriceFromSelectedVariant);
+      } else if (priceEl) {
+        const displayPrice = Number(variants[0]?.discount_price || variants[0]?.price || product.starting_price || 0);
         priceEl.textContent = utils.formatInr(displayPrice);
-      };
-      setPriceFromSelectedVariant();
-      variantEl.addEventListener("change", setPriceFromSelectedVariant);
+      }
 
-      relatedEl.innerHTML = related
-        .map((item) => {
-          const imageUrl = utils.safeImage(item.image || item.featured_image || "", utils.productPlaceholder);
-          return `<article class="product-card"><a class="product-card__image-wrap" href="/Cakeouflage-E-commerce/product/${item.slug}"><img class="product-card__image" src="${imageUrl}" alt="${item.name}" loading="lazy" width="400" height="400" onerror="this.onerror=null;this.src='${utils.productPlaceholder}'" /></a><h3>${item.name}</h3><p>${utils.formatInr(item.starting_price)}</p><a class="btn btn--secondary" href="/Cakeouflage-E-commerce/product/${item.slug}">View</a></article>`;
-        })
-        .join("");
+      if (relatedEl) {
+        relatedEl.innerHTML = related
+          .map((item) => {
+            const imageUrl = utils.safeImage(item.image || item.featured_image || "", utils.productPlaceholder);
+            return `<article class="product-card"><a class="product-card__image-wrap" href="/Cakeouflage-E-commerce/product/${item.slug}"><img class="product-card__image" src="${imageUrl}" alt="${item.name}" loading="lazy" width="400" height="400" onerror="this.onerror=null;this.src='${utils.productPlaceholder}'" /></a><h3>${item.name}</h3><p>${utils.formatInr(item.starting_price)}</p><a class="btn btn--secondary" href="/Cakeouflage-E-commerce/product/${item.slug}">View</a></article>`;
+          })
+          .join("");
+        utils.bindImageFallbacks?.(relatedEl);
+      }
 
       addBtn?.addEventListener("click", async () => {
         try {
-          await window.CakeouflageCart?.addItem(Number(product.id), Number(variantEl.value || 0), 1);
-          addBtn.textContent = "Added To Cart";
+          const variantId = variantEl ? Number(variantEl.value || 0) : 0;
+          await window.CakeouflageCart?.addItem(Number(product.id), variantId, 1);
+          if (addBtn) addBtn.textContent = "Added To Cart";
         } catch (error) {
           alert(error.message);
         }
@@ -917,8 +967,8 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       });
     } catch (error) {
-      titleEl.textContent = "Product unavailable";
-      shortEl.textContent = error.message;
+      if (titleEl) titleEl.textContent = "Product unavailable";
+      if (shortEl) shortEl.textContent = error.message;
     }
   };
 
@@ -1559,8 +1609,8 @@ if (params.get("success") === "1" && successOrderId) {
         const payload = Object.fromEntries(new FormData(loginForm).entries());
         try {
           await utils.apiPost("/api/auth/login", payload);
-          loginStatus.textContent = "Login successful. Redirecting to account...";
-          window.location.href = "/account";
+          loginStatus.textContent = "Login successful. Redirecting to dashboard...";
+          window.location.href = "/account/dashboard.php";
         } catch (error) {
           loginStatus.textContent = error.message;
         }
@@ -1577,8 +1627,8 @@ if (params.get("success") === "1" && successOrderId) {
         const payload = Object.fromEntries(new FormData(registerForm).entries());
         try {
           await utils.apiPost("/api/auth/register", payload);
-          registerStatus.textContent = "Registration successful. Redirecting to account...";
-          window.location.href = "/account";
+          registerStatus.textContent = "Registration successful. Redirecting to dashboard...";
+          window.location.href = "/account/dashboard.php";
         } catch (error) {
           registerStatus.textContent = error.message;
         }

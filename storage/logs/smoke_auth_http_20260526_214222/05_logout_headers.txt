@@ -1,0 +1,16 @@
+HTTP/1.1 200 OK
+date: Tue, 26 May 2026 16:12:30 GMT
+server: Apache
+x-powered-by: PHP/8.2.31
+expires: Thu, 19 Nov 1981 08:52:00 GMT
+cache-control: no-store, no-cache, must-revalidate
+pragma: no-cache
+set-cookie: cakeouflage_sid=deleted; expires=Thu, 01 Jan 1970 00:00:01 GMT; Max-Age=0; path=/; secure; HttpOnly; SameSite=Lax
+x-provided-by: StackCDN
+vary: Accept-Encoding
+access-control-allow-methods: GET, POST, PUT, DELETE, OPTIONS
+access-control-allow-headers: Content-Type, Authorization, X-Requested-With
+content-type: application/json; charset=utf-8
+x-via: SIN1
+transfer-encoding: chunked
+

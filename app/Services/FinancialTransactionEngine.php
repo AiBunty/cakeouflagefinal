@@ -106,7 +106,7 @@ final class FinancialTransactionEngine
             return ['success' => false, 'posted' => false, 'message' => 'Financial engine schema not ready'];
         }
 
-        $creditAccount = in_array($paymentMethod, ['upi_manual', 'gateway'], true) ? self::ACCOUNT_BANK : self::ACCOUNT_CASH;
+        $creditAccount = $this->resolveRefundCreditAccount($paymentMethod);
 
         return $this->postTransaction([
             'transaction_type' => self::TX_TYPE_REFUND_PROCESSED,
@@ -135,7 +135,9 @@ final class FinancialTransactionEngine
                     'account_code' => $creditAccount,
                     'debit_amount' => 0.0,
                     'credit_amount' => $amount,
-                    'line_narration' => 'Refund payout channel',
+                    'line_narration' => $creditAccount === self::ACCOUNT_AR
+                        ? 'Accounts receivable reversal'
+                        : 'Refund payout channel',
                 ],
             ],
         ]);
@@ -329,7 +331,18 @@ final class FinancialTransactionEngine
         if ($startedLocalTransaction) {
             $pdo->beginTransaction();
         }
+
+        $lockName = 'fte:' . substr(hash('sha256', (string)$payload['idempotency_key']), 0, 48);
+        $lockAcquired = false;
         try {
+            $lockAcquired = $this->acquireIdempotencyLock($pdo, $lockName);
+            if (!$lockAcquired) {
+                if ($startedLocalTransaction && $pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
+                return ['success' => false, 'posted' => false, 'message' => 'Could not acquire posting lock'];
+            }
+
             $existingId = $this->db->fetchScalar(
                 'SELECT id FROM financial_transactions WHERE idempotency_key = :k LIMIT 1',
                 ['k' => (string)$payload['idempotency_key']]
@@ -451,6 +464,10 @@ final class FinancialTransactionEngine
             }
             error_log('[FinancialTransactionEngine] ' . $e->getMessage());
             return ['success' => false, 'posted' => false, 'message' => 'Posting failed: ' . $e->getMessage()];
+        } finally {
+            if ($lockAcquired) {
+                $this->releaseIdempotencyLock($pdo, $lockName);
+            }
         }
     }
 
@@ -489,5 +506,38 @@ final class FinancialTransactionEngine
         return in_array($paymentMethod, ['upi_manual', 'gateway'], true)
             ? self::ACCOUNT_BANK
             : self::ACCOUNT_CASH;
+    }
+
+    private function resolveRefundCreditAccount(string $paymentMethod): string
+    {
+        if ($paymentMethod === 'credit') {
+            return self::ACCOUNT_AR;
+        }
+
+        return in_array($paymentMethod, ['upi_manual', 'gateway'], true)
+            ? self::ACCOUNT_BANK
+            : self::ACCOUNT_CASH;
+    }
+
+    private function acquireIdempotencyLock(PDO $pdo, string $lockName): bool
+    {
+        try {
+            $stmt = $pdo->prepare('SELECT GET_LOCK(:lock_name, 5)');
+            $stmt->execute(['lock_name' => $lockName]);
+            return (int)$stmt->fetchColumn() === 1;
+        } catch (\Throwable $e) {
+            error_log('[FinancialTransactionEngine] acquire lock failed: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    private function releaseIdempotencyLock(PDO $pdo, string $lockName): void
+    {
+        try {
+            $stmt = $pdo->prepare('SELECT RELEASE_LOCK(:lock_name)');
+            $stmt->execute(['lock_name' => $lockName]);
+        } catch (\Throwable $e) {
+            error_log('[FinancialTransactionEngine] release lock failed: ' . $e->getMessage());
+        }
     }
 }

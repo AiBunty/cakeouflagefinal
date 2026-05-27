@@ -12,7 +12,7 @@ if ($requestPath !== '/') {
 }
 $isCategoryRoute = $requestPath === '/category' || strpos($requestPath, '/category/') === 0;
 ?>
-<?php $assetVersion = '20260519-d'; ?>
+<?php $assetVersion = '20260526-search1'; ?>
 
 <script src="<?=$baseUrl?>/client/assets/js/utils.20260402-1125.js?v=<?= $assetVersion ?>" defer></script>
 <script src="<?=$baseUrl?>/client/assets/js/scroll-preserve.js?v=<?= @filemtime(__DIR__ . '/../../../client/assets/js/scroll-preserve.js') ?: $assetVersion ?>" defer></script>
@@ -20,6 +20,7 @@ $isCategoryRoute = $requestPath === '/category' || strpos($requestPath, '/catego
 <script src="<?=$baseUrl?>/client/assets/js/cart.js?v=<?= $assetVersion ?>" defer></script>
 <script src="<?=$baseUrl?>/client/assets/js/modal.js?v=<?= $assetVersion ?>" defer></script>
 <script src="<?=$baseUrl?>/client/assets/js/app.20260402-1125.js?v=<?= $assetVersion ?>" defer></script>
+<script src="<?=$baseUrl?>/client/assets/js/live-search.js?v=<?= @filemtime(__DIR__ . '/../../../client/assets/js/live-search.js') ?: $assetVersion ?>" defer></script>
 <?php if ($isCategoryRoute): ?>
 <script src="<?=$baseUrl?>/client/assets/js/category-hero-v2.js?v=<?= filemtime(__DIR__ . '/../../../client/assets/js/category-hero-v2.js') ?>" defer></script>
 <script src="<?=$baseUrl?>/client/category/category.js?v=<?= filemtime(__DIR__ . '/../../../client/category/category.js') ?>" defer></script>

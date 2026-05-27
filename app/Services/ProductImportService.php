@@ -233,9 +233,8 @@ class ProductImportService
         $fullSnap = $this->pdo->prepare("
             INSERT INTO product_import_snapshots (run_id, snapshot_json, created_at)
             VALUES (?, ?, NOW())
-            AS new
-            ON DUPLICATE KEY UPDATE snapshot_json = new.snapshot_json
-        ");
+            ON DUPLICATE KEY UPDATE snapshot_json = VALUES(snapshot_json)
+            ");
         $fullSnap->execute([$runId, json_encode($catalogItems)]);
 
         return count($products);

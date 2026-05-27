@@ -1,0 +1,47 @@
+PDO Runtime Diagnostic
+PHP: 8.2.31
+pdo_mysql loaded: yes
+Configured host: sdb-62.hosting.stackcp.net
+Configured port: 3306
+Configured database: cakeouflageweb-353032394d0c
+
+Attempt #1
+Label: configured env
+Host: sdb-62.hosting.stackcp.net
+Port: 3306
+Success: yes
+Server hostname: shareddb36.lhr.stackcp.net
+
+Attempt #2
+Label: stackcp server host
+Host: sdb-77.hosting.stackcp.net
+Port: 3306
+Success: no
+Exception: PDOException
+Message: SQLSTATE[HY000] [1045] Access denied for user 'cakeouflageweb-353032394d0c'@'10.3.5.18' (using password: YES)
+
+Attempt #3
+Label: stackcp remote host
+Host: mysql.gb.stackcp.com
+Port: 41209
+Success: no
+Exception: PDOException
+Message: SQLSTATE[HY000] [2002] Connection refused
+
+Attempt #4
+Label: loopback tcp
+Host: 127.0.0.1
+Port: 3306
+Success: no
+Exception: PDOException
+Message: SQLSTATE[HY000] [2002] Connection refused
+
+Attempt #5
+Label: localhost tcp
+Host: localhost
+Port: 3306
+Success: no
+Exception: PDOException
+Message: SQLSTATE[HY000] [2002] No such file or directory
+
+

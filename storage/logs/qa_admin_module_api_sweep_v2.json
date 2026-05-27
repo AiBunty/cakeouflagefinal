@@ -1,0 +1,142 @@
+[
+  {
+    "check": "import_template",
+    "status": 0,
+    "ok": false,
+    "login_redirect_like": false,
+    "body_head": "Method invocation failed because [System.Byte] does not contain a method named 'Substring'."
+  },
+  {
+    "check": "products_export",
+    "status": 0,
+    "ok": false,
+    "login_redirect_like": false,
+    "body_head": "Method invocation failed because [System.Byte] does not contain a method named 'Substring'."
+  },
+  {
+    "check": "import_logs",
+    "status": 200,
+    "ok": true,
+    "login_redirect_like": false,
+    "body_head": "{\"success\":true,\"message\":\"ok\",\"data\":{\"items\":[]}}"
+  },
+  {
+    "check": "orders_export",
+    "status": 0,
+    "ok": false,
+    "login_redirect_like": false,
+    "body_head": "Method invocation failed because [System.Byte] does not contain a method named 'Substring'."
+  },
+  {
+    "check": "refund_report",
+    "status": 500,
+    "ok": false,
+    "login_redirect_like": false,
+    "body_head": "Unhandled exception: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'a.first_name' in 'SELECT'\n/var/www/html/app/Controllers/AdminApiController.php:7045\n"
+  },
+  {
+    "check": "communications_logs",
+    "status": 200,
+    "ok": true,
+    "login_redirect_like": false,
+    "body_head": "{\"success\":true,\"message\":\"ok\",\"data\":{\"items\":[{\"id\":219,\"channel\":\"email\",\"event_key\":\"order_delivered_admin\",\"recipient\":\"cakeouflage@gmail.com\",\"status\":\"queued\",\"provider_message_id\":null,\"error_"
+  },
+  {
+    "check": "crm_settings_api_probe",
+    "status": 200,
+    "ok": true,
+    "login_redirect_like": false,
+    "body_head": "{\"success\":true,\"message\":\"ok\",\"data\":{\"retail_orders\":13,\"b2b_orders\":0,\"pending_invoices\":1,\"queued_communications\":15,\"failed_communications\":0,\"whatsapp_approved_templates\":0,\"this_month_collected"
+  },
+  {
+    "check": "reminders_api",
+    "status": 200,
+    "ok": true,
+    "login_redirect_like": false,
+    "body_head": "{\"success\":true,\"message\":\"ok\",\"data\":{\"items\":[{\"id\":1,\"reminder_type\":\"follow_up\",\"title\":\"Quarterly reorder reminder\",\"reminder_on\":\"2026-08-25 16:07:00\",\"status\":\"pending\",\"notes\":\"{\\\"order_id\\\":1"
+  },
+  {
+    "check": "sales_register_page",
+    "status": 200,
+    "ok": false,
+    "login_redirect_like": true,
+    "body_head": "\r\n<!DOCTYPE html>\r\n<html lang=\"en\">\r\n<head>\r\n  <meta charset=\"UTF-8\">\r\n  <title>Admin Login - Cakeouflage</title>\r\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\r\n\r\n  <style>"
+  },
+  {
+    "check": "system_smtp_get",
+    "status": 200,
+    "ok": true,
+    "login_redirect_like": false,
+    "body_head": "{\"success\":true,\"message\":\"ok\",\"data\":{\"settings\":{}}}"
+  },
+  {
+    "check": "system_whatsapp_get",
+    "status": 200,
+    "ok": true,
+    "login_redirect_like": false,
+    "body_head": "{\"success\":true,\"message\":\"ok\",\"data\":{\"settings\":{}}}"
+  },
+  {
+    "check": "media_list",
+    "status": 200,
+    "ok": true,
+    "login_redirect_like": false,
+    "body_head": "{\"success\":true,\"message\":\"ok\",\"data\":{\"items\":[{\"path\":\"/uploads/media/guard-seed-1.webp\",\"url\":\"/uploads/media/guard-seed-1.webp\",\"name\":\"guard-seed-1.webp\",\"size\":75198,\"updated_at\":\"2026-05-24T15:"
+  },
+  {
+    "check": "media_processing_summary",
+    "status": 200,
+    "ok": true,
+    "login_redirect_like": false,
+    "body_head": "{\"success\":true,\"message\":\"Media processing summary\",\"data\":{\"counts\":{\"pending\":25,\"processing\":0,\"completed\":0,\"failed\":0},\"storage\":{\"original_bytes\":0,\"optimized_bytes\":0,\"savings_bytes\":0,\"optimi"
+  },
+  {
+    "check": "coupons_page",
+    "status": 200,
+    "ok": false,
+    "login_redirect_like": true,
+    "body_head": "\r\n<!DOCTYPE html>\r\n<html lang=\"en\">\r\n<head>\r\n  <meta charset=\"UTF-8\">\r\n  <title>Admin Login - Cakeouflage</title>\r\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\r\n\r\n  <style>"
+  },
+  {
+    "check": "toppers_public_api",
+    "status": 200,
+    "ok": true,
+    "login_redirect_like": false,
+    "body_head": "{\"success\":true,\"data\":[{\"id\":1,\"name\":\"No Topper\",\"price\":\"0.00\",\"description\":null},{\"id\":2,\"name\":\"Happy Birthday\",\"price\":\"0.00\",\"description\":null},{\"id\":3,\"name\":\"Happy Anniversary\",\"price\":\"0.0"
+  },
+  {
+    "check": "sub_user_manage_page",
+    "status": 200,
+    "ok": false,
+    "login_redirect_like": true,
+    "body_head": "\r\n<!DOCTYPE html>\r\n<html lang=\"en\">\r\n<head>\r\n  <meta charset=\"UTF-8\">\r\n  <title>Admin Login - Cakeouflage</title>\r\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\r\n\r\n  <style>"
+  },
+  {
+    "check": "business_settings_page",
+    "status": 200,
+    "ok": false,
+    "login_redirect_like": true,
+    "body_head": "\r\n<!DOCTYPE html>\r\n<html lang=\"en\">\r\n<head>\r\n  <meta charset=\"UTF-8\">\r\n  <title>Admin Login - Cakeouflage</title>\r\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\r\n\r\n  <style>"
+  },
+  {
+    "check": "communications_page",
+    "status": 200,
+    "ok": false,
+    "login_redirect_like": true,
+    "body_head": "\r\n<!DOCTYPE html>\r\n<html lang=\"en\">\r\n<head>\r\n  <meta charset=\"UTF-8\">\r\n  <title>Admin Login - Cakeouflage</title>\r\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\r\n\r\n  <style>"
+  },
+  {
+    "check": "crm_settings_page",
+    "status": 200,
+    "ok": false,
+    "login_redirect_like": true,
+    "body_head": "\r\n<!DOCTYPE html>\r\n<html lang=\"en\">\r\n<head>\r\n  <meta charset=\"UTF-8\">\r\n  <title>Admin Login - Cakeouflage</title>\r\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\r\n\r\n  <style>"
+  },
+  {
+    "check": "followups_page",
+    "status": 200,
+    "ok": false,
+    "login_redirect_like": true,
+    "body_head": "\r\n<!DOCTYPE html>\r\n<html lang=\"en\">\r\n<head>\r\n  <meta charset=\"UTF-8\">\r\n  <title>Admin Login - Cakeouflage</title>\r\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\r\n\r\n  <style>"
+  }
+]

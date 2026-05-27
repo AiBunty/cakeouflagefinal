@@ -23,10 +23,16 @@ function ensure_crm_support_settings($conn)
     $requiredKeys = array(
         'online_order_received' => 'Online Order Received',
         'manual_order_received' => 'Manual Order Received',
+        'manual_order_created' => 'Manual Order Created',
+        'byoc_order_created' => 'BYOC Order Created',
         'payment_confirmed' => 'Payment Confirmed',
+        'preparing' => 'Preparing',
         'reject_order' => 'Reject Order',
         'ready_order' => 'Ready Order',
         'order_delivered' => 'Order Delivered',
+        'delivered' => 'Delivered',
+        'refund_started' => 'Refund Started',
+        'refund_completed' => 'Refund Completed',
         'follow_up_review' => 'Follow Up Review',
         'annual_reorder' => 'Annual Reorder'
     );
@@ -41,6 +47,23 @@ function ensure_crm_support_settings($conn)
             $empty = '';
             $insertStmt->bind_param('sss', $settingKey, $empty, $empty);
             $insertStmt->execute();
+        }
+    }
+
+    // Ensure follow-up automation defaults exist in settings for modules that read directly from DB.
+    foreach (crm_follow_up_setting_defaults() as $settingsKey => $settingsValue) {
+        $upsert = $conn->prepare(
+            'INSERT INTO settings (setting_key, setting_value, updated_by_admin_id) VALUES (?, ?, NULL)
+             ON DUPLICATE KEY UPDATE
+               setting_value = CASE
+                   WHEN settings.setting_value IS NULL OR TRIM(settings.setting_value) = "" THEN VALUES(setting_value)
+                   ELSE settings.setting_value
+               END'
+        );
+        if ($upsert) {
+            $upsert->bind_param('ss', $settingsKey, $settingsValue);
+            $upsert->execute();
+            $upsert->close();
         }
     }
 
@@ -89,7 +112,7 @@ function save_crm_follow_up_settings($conn, $settings, $adminId)
     $defaults = crm_follow_up_setting_defaults();
     $allowedKeys = array_keys($defaults);
 
-    $stmt = $conn->prepare('INSERT INTO settings (setting_key, setting_value, updated_by_admin_id) VALUES (?, ?, ?) AS new ON DUPLICATE KEY UPDATE setting_value = new.setting_value, updated_by_admin_id = new.updated_by_admin_id');
+    $stmt = $conn->prepare('INSERT INTO settings (setting_key, setting_value, updated_by_admin_id) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_by_admin_id = VALUES(updated_by_admin_id), updated_at = NOW()');
     foreach ($allowedKeys as $key) {
         $value = isset($settings[$key]) ? (string) $settings[$key] : $defaults[$key];
         $stmt->bind_param('ssi', $key, $value, $adminId);
@@ -339,18 +362,23 @@ function fetch_crm_diagnostics($conn): array
             cpl.error_message,
             cpl.response_time_ms,
             cpl.created_at,
-            SUM(CASE WHEN cpl2.execution_status = \'success\' THEN 1 ELSE 0 END) AS successes_7d,
-            COUNT(cpl2.id) AS total_7d
+            COALESCE(stats.successes_7d, 0) AS successes_7d,
+            COALESCE(stats.total_7d, 0) AS total_7d
         FROM crm_push_logs cpl
         INNER JOIN (
             SELECT trigger_key, MAX(id) AS max_id
             FROM crm_push_logs
             GROUP BY trigger_key
         ) latest ON latest.trigger_key = cpl.trigger_key AND latest.max_id = cpl.id
-        LEFT JOIN crm_push_logs cpl2
-            ON cpl2.trigger_key = cpl.trigger_key
-            AND cpl2.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
-        GROUP BY cpl.id
+        LEFT JOIN (
+            SELECT
+                trigger_key,
+                SUM(CASE WHEN execution_status = \'success\' THEN 1 ELSE 0 END) AS successes_7d,
+                COUNT(*) AS total_7d
+            FROM crm_push_logs
+            WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+            GROUP BY trigger_key
+        ) stats ON stats.trigger_key = cpl.trigger_key
         ORDER BY cpl.created_at DESC
     ';
     $qResult = $conn->query($sql);

@@ -1,0 +1,38 @@
+{
+  "flow": "byoc",
+  "token": "qa-byoc-5a6f92c5c35b43a1ad8d",
+  "order_id": 30,
+  "order_number": "BYOC-20260526-834405",
+  "quote_accept_status": 200,
+  "confirm_payment_status": 200,
+  "preparing_status": 200,
+  "delivered_status": 200,
+  "quote_accept_response": {
+    "success": true,
+    "message": "Order created from quote. Please complete payment to confirm acceptance.",
+    "data": {
+      "order_id": 30,
+      "order_number": "BYOC-20260526-834405",
+      "quote_id": 9,
+      "confirmation_url": "/order-confirmation/BYOC-20260526-834405?t=qa-byoc-5a6f92c5c35b43a1ad8d"
+    }
+  },
+  "confirm_payment_response": {
+    "success": true,
+    "message": "Payment confirmed. Slot reserved. Customer will be notified.",
+    "slot": {
+      "success": true,
+      "message": "No slot reservation to confirm."
+    },
+    "data": {
+      "received_amount": 1299,
+      "discount_amount": 0,
+      "discount_reason": "",
+      "payment_method": "upi_manual"
+    }
+  },
+  "delivered_response": {
+    "success": true,
+    "message": "Order updated"
+  }
+}

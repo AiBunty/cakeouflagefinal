@@ -48,7 +48,7 @@ $sql = '
         OR REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(u.phone, " ", ""), "-", ""), "+", ""), "(", ""), ")", "") LIKE ?
         OR u.phone_e164 LIKE ?
       )
-    GROUP BY u.id
+    GROUP BY u.id, u.full_name, u.email, u.phone, u.phone_e164
     ORDER BY
       CASE
         WHEN REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(u.phone, " ", ""), "-", ""), "+", ""), "(", ""), ")", "") = ? THEN 0

@@ -1,0 +1,207 @@
+Cakeouflage DB Runtime Diagnostic
+Timestamp: 2026-05-26T13:57:26+00:00
+PHP: 8.2.31
+SAPI: fpm-fcgi
+Server: Apache
+Configured host: sdb-62.hosting.stackcp.net
+Configured port: 3306
+Configured database: cakeouflageweb-353032394d0c
+Configured username: ca***********************0c
+Configured password: [masked length=10]
+mysqli.default_socket: /var/lib/mysql/mysql.sock
+pdo_mysql.default_socket: /var/lib/mysql/mysql.sock
+Loaded .env: yes
+
+Attempt #1
+Label: configured external endpoint
+Host: sdb-62.hosting.stackcp.net
+Port: 3306
+Socket: [null]
+Success: yes
+Connect errno: 0
+mysqli error: [empty]
+Thread id: 177003403
+Server info: 10.6.18-MariaDB-log
+
+Attempt #2
+Label: localhost with configured port
+Host: localhost
+Port: 3306
+Socket: [null]
+Success: no
+Connect errno: 2002
+mysqli error: No such file or directory
+
+Attempt #3
+Label: 127.0.0.1 with configured port
+Host: 127.0.0.1
+Port: 3306
+Socket: [null]
+Success: no
+Connect errno: 2002
+mysqli error: Connection refused
+
+Attempt #4
+Label: empty host with configured port
+Host: [empty]
+Port: 3306
+Socket: [null]
+Success: no
+Connect errno: 2002
+mysqli error: No such file or directory
+
+Attempt #5
+Label: localhost without port
+Host: localhost
+Port: [default]
+Socket: [null]
+Success: no
+Connect errno: 2002
+mysqli error: No such file or directory
+
+Attempt #6
+Label: empty host without port
+Host: [empty]
+Port: [default]
+Socket: [null]
+Success: no
+Connect errno: 2002
+mysqli error: No such file or directory
+
+Attempt #7
+Label: socket via localhost
+Host: localhost
+Port: [default]
+Socket: /var/lib/mysql/mysql.sock
+Success: no
+Connect errno: 2002
+mysqli error: No such file or directory
+
+Attempt #8
+Label: socket via empty host
+Host: [empty]
+Port: [default]
+Socket: /var/lib/mysql/mysql.sock
+Success: no
+Connect errno: 2002
+mysqli error: No such file or directory
+
+Attempt #9
+Label: socket via null host
+Host: [null]
+Port: [default]
+Socket: /var/lib/mysql/mysql.sock
+Success: no
+Connect errno: 2002
+mysqli error: No such file or directory
+
+Attempt #10
+Label: socket via localhost
+Host: localhost
+Port: [default]
+Socket: /var/run/mysqld/mysqld.sock
+Success: no
+Connect errno: 2002
+mysqli error: No such file or directory
+
+Attempt #11
+Label: socket via empty host
+Host: [empty]
+Port: [default]
+Socket: /var/run/mysqld/mysqld.sock
+Success: no
+Connect errno: 2002
+mysqli error: No such file or directory
+
+Attempt #12
+Label: socket via null host
+Host: [null]
+Port: [default]
+Socket: /var/run/mysqld/mysqld.sock
+Success: no
+Connect errno: 2002
+mysqli error: No such file or directory
+
+Attempt #13
+Label: socket via localhost
+Host: localhost
+Port: [default]
+Socket: /run/mysqld/mysqld.sock
+Success: no
+Connect errno: 2002
+mysqli error: No such file or directory
+
+Attempt #14
+Label: socket via empty host
+Host: [empty]
+Port: [default]
+Socket: /run/mysqld/mysqld.sock
+Success: no
+Connect errno: 2002
+mysqli error: No such file or directory
+
+Attempt #15
+Label: socket via null host
+Host: [null]
+Port: [default]
+Socket: /run/mysqld/mysqld.sock
+Success: no
+Connect errno: 2002
+mysqli error: No such file or directory
+
+Attempt #16
+Label: socket via localhost
+Host: localhost
+Port: [default]
+Socket: /tmp/mysql.sock
+Success: no
+Connect errno: 2002
+mysqli error: No such file or directory
+
+Attempt #17
+Label: socket via empty host
+Host: [empty]
+Port: [default]
+Socket: /tmp/mysql.sock
+Success: no
+Connect errno: 2002
+mysqli error: No such file or directory
+
+Attempt #18
+Label: socket via null host
+Host: [null]
+Port: [default]
+Socket: /tmp/mysql.sock
+Success: no
+Connect errno: 2002
+mysqli error: No such file or directory
+
+Attempt #19
+Label: socket via localhost
+Host: localhost
+Port: [default]
+Socket: /tmp/mysqld.sock
+Success: no
+Connect errno: 2002
+mysqli error: No such file or directory
+
+Attempt #20
+Label: socket via empty host
+Host: [empty]
+Port: [default]
+Socket: /tmp/mysqld.sock
+Success: no
+Connect errno: 2002
+mysqli error: No such file or directory
+
+Attempt #21
+Label: socket via null host
+Host: [null]
+Port: [default]
+Socket: /tmp/mysqld.sock
+Success: no
+Connect errno: 2002
+mysqli error: No such file or directory
+
+Summary: 1 successful attempt(s) out of 21
+

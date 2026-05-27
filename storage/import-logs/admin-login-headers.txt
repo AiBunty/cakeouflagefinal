@@ -1,0 +1,12 @@
+HTTP/1.1 302 Found
+Date: Wed, 27 May 2026 16:52:37 GMT
+Server: Apache/2.4.67 (Debian)
+X-Powered-By: PHP/8.2.31
+Set-Cookie: cakeouflage_sid=a87f1dddce16505ed64a33aae2e0e95e; expires=Thu, 28 May 2026 16:52:38 GMT; Max-Age=86400; path=/; HttpOnly; SameSite=Lax
+Expires: Thu, 19 Nov 1981 08:52:00 GMT
+Cache-Control: no-store, no-cache, must-revalidate
+Pragma: no-cache
+Location: /admin/login.php
+Content-Length: 0
+Content-Type: text/html; charset=UTF-8
+

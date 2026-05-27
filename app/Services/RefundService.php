@@ -21,6 +21,9 @@ use PDOException;
  */
 final class RefundService
 {
+    /** @var array<string,bool> */
+    private static array $columnPresence = [];
+
     /** Amount above which can_force_refund permission is required. */
     private const HIGH_VALUE_THRESHOLD = 5000.00;
 
@@ -252,22 +255,25 @@ final class RefundService
             return ['success' => false, 'message' => 'Database error while creating refund request'];
         }
 
-        // ── Transition order status via OrderStateManager ─────────────────
+        // ── Transition order status via OrderStateManager (when legal) ─────
         // Done outside the refund_transactions transaction so a state machine
         // failure doesn't silently roll back the audit record.
         $stateManager = new OrderStateManager();
-        $transition = $stateManager->transition($pdo, $orderId, 'refund_requested', $adminId, [
-            'admin_role'        => $adminRole,
-            'admin_permissions' => $adminPermissions,
-            'ip_address'        => $ipAddress,
-            'reason'            => 'Refund request #' . $refundNumber . ': ' . $reasonCode,
-            'metadata'          => ['refund_transaction_id' => $refundId],
-            'skip_permission'   => true, // permission already checked above
-        ]);
+        $allowedTransitions = $stateManager->getAllowedTransitions($orderStatus);
+        if (in_array('refund_requested', $allowedTransitions, true)) {
+            $transition = $stateManager->transition($pdo, $orderId, 'refund_requested', $adminId, [
+                'admin_role'        => $adminRole,
+                'admin_permissions' => $adminPermissions,
+                'ip_address'        => $ipAddress,
+                'reason'            => 'Refund request #' . $refundNumber . ': ' . $reasonCode,
+                'metadata'          => ['refund_transaction_id' => $refundId],
+                'skip_permission'   => true, // permission already checked above
+            ]);
 
-        if (!$transition['success']) {
-            error_log('[RefundService] State machine failed after refund insert for order #' . $orderId . ': ' . $transition['message']);
-            // Non-fatal: refund record exists; admin dashboard will show pending
+            if (!$transition['success']) {
+                error_log('[RefundService] State machine failed after refund insert for order #' . $orderId . ': ' . $transition['message']);
+                // Non-fatal: refund record exists; admin dashboard will show pending
+            }
         }
 
         return [
@@ -425,64 +431,113 @@ final class RefundService
             $newRefundStatus   = $isFullRefund ? 'fully_refunded' : 'partially_refunded';
             $refundNumber      = $this->generateRefundNumber();
 
-            // ── INSERT refund_transactions ─────────────────────────────────
-            $insertStmt = $pdo->prepare(
-                'INSERT INTO refund_transactions
-                     (order_id, refund_number, refund_type, reason_code, reason_notes,
-                      requested_amount, approved_amount, status,
-                      requested_by_admin_id, approved_by_admin_id,
-                      previous_order_status, settlement_reference, settlement_proof_url,
-                      requested_at, approved_at, processed_at)
-                 VALUES
-                     (:order_id, :refund_number, :refund_type, :reason_code, :reason_notes,
-                      :amount, :amount, "processed",
-                      :admin_id, :admin_id,
-                      :previous_status, :settlement_ref, :settlement_proof,
-                      NOW(), NOW(), NOW())'
-            );
-            $insertStmt->execute([
+            // ── INSERT refund_transactions (schema-aware) ─────────────────
+            $refundInsertColumns = [
+                'order_id',
+                'refund_number',
+                'refund_type',
+                'reason_code',
+                'reason_notes',
+                'requested_amount',
+                'approved_amount',
+                'status',
+                'requested_by_admin_id',
+                'approved_by_admin_id',
+                'previous_order_status',
+                'requested_at',
+                'approved_at',
+                'processed_at',
+            ];
+
+            $refundInsertValues = [
+                ':order_id',
+                ':refund_number',
+                ':refund_type',
+                ':reason_code',
+                ':reason_notes',
+                ':requested_amount',
+                ':approved_amount',
+                '"processed"',
+                ':requested_by_admin_id',
+                ':approved_by_admin_id',
+                ':previous_status',
+                'NOW()',
+                'NOW()',
+                'NOW()',
+            ];
+
+            $refundInsertParams = [
                 'order_id'         => $orderId,
                 'refund_number'    => $refundNumber,
                 'refund_type'      => $refundType,
                 'reason_code'      => $reasonCode !== '' ? $reasonCode : 'OTHER',
                 'reason_notes'     => $reasonNotes !== '' ? $reasonNotes : null,
-                'amount'           => $refundAmount,
-                'admin_id'         => $adminId > 0 ? $adminId : null,
+                'requested_amount' => $refundAmount,
+                'approved_amount'  => $refundAmount,
+                'requested_by_admin_id' => $adminId > 0 ? $adminId : null,
+                'approved_by_admin_id'  => $adminId > 0 ? $adminId : null,
                 'previous_status'  => $orderStatus,
-                'settlement_ref'   => $settlementRef !== '' ? $settlementRef : null,
-                'settlement_proof' => $settlementProofUrl !== '' ? $settlementProofUrl : null,
-            ]);
+            ];
+
+            if ($this->tableHasColumn($pdo, 'refund_transactions', 'settlement_reference')) {
+                $refundInsertColumns[] = 'settlement_reference';
+                $refundInsertValues[] = ':settlement_ref';
+                $refundInsertParams['settlement_ref'] = $settlementRef !== '' ? $settlementRef : null;
+            }
+
+            if ($this->tableHasColumn($pdo, 'refund_transactions', 'settlement_proof_url')) {
+                $refundInsertColumns[] = 'settlement_proof_url';
+                $refundInsertValues[] = ':settlement_proof';
+                $refundInsertParams['settlement_proof'] = $settlementProofUrl !== '' ? $settlementProofUrl : null;
+            } elseif ($this->tableHasColumn($pdo, 'refund_transactions', 'settlement_proof')) {
+                $refundInsertColumns[] = 'settlement_proof';
+                $refundInsertValues[] = ':settlement_proof';
+                $refundInsertParams['settlement_proof'] = $settlementProofUrl !== '' ? $settlementProofUrl : null;
+            }
+
+            $insertStmt = $pdo->prepare(
+                'INSERT INTO refund_transactions (' . implode(', ', $refundInsertColumns) . ') VALUES (' . implode(', ', $refundInsertValues) . ')'
+            );
+            $insertStmt->execute($refundInsertParams);
             $refundId = (int)$pdo->lastInsertId();
 
             // ── INSERT audit log ───────────────────────────────────────────
             $this->writeApprovalLog($pdo, $refundId, 'processed', $adminId, $adminRole, $ipAddress, $reasonNotes !== '' ? $reasonNotes : null);
 
             // ── UPDATE orders ──────────────────────────────────────────────
-            $updateOrderStmt = $pdo->prepare(
-                'UPDATE orders
-                 SET total_refunded          = :refund_amount,
-                     refund_amount           = :refund_amount,
-                     refund_status           = :refund_status,
-                     refund_reason           = :reason_code,
-                     refund_notes            = :reason_notes,
-                     refunded_by_admin_id    = :admin_id,
-                     refunded_at             = NOW(),
-                     settlement_reference    = :settlement_ref,
-                     settlement_proof        = :settlement_proof,
-                     payment_status          = :new_payment_status
-                 WHERE id = :id'
-            );
-            $updateOrderStmt->execute([
+            $updateAssignments = [
+                'total_refunded = :refund_amount',
+                'refund_amount = :refund_amount',
+                'refund_status = :refund_status',
+                'refund_reason = :reason_code',
+                'refund_notes = :reason_notes',
+                'refunded_by_admin_id = :admin_id',
+                'refunded_at = NOW()',
+                'payment_status = :new_payment_status',
+            ];
+            $updateParams = [
                 'refund_amount'        => $refundAmount,
                 'refund_status'        => $newRefundStatus,
                 'reason_code'          => $reasonCode !== '' ? $reasonCode : 'OTHER',
                 'reason_notes'         => $reasonNotes !== '' ? $reasonNotes : null,
                 'admin_id'             => $adminId > 0 ? $adminId : null,
-                'settlement_ref'       => $settlementRef !== '' ? $settlementRef : null,
-                'settlement_proof'     => $settlementProofUrl !== '' ? $settlementProofUrl : null,
                 'new_payment_status'   => $newPaymentStatus,
                 'id'                   => $orderId,
-            ]);
+            ];
+
+            if ($this->tableHasColumn($pdo, 'orders', 'settlement_reference')) {
+                $updateAssignments[] = 'settlement_reference = :settlement_ref';
+                $updateParams['settlement_ref'] = $settlementRef !== '' ? $settlementRef : null;
+            }
+            if ($this->tableHasColumn($pdo, 'orders', 'settlement_proof')) {
+                $updateAssignments[] = 'settlement_proof = :settlement_proof';
+                $updateParams['settlement_proof'] = $settlementProofUrl !== '' ? $settlementProofUrl : null;
+            }
+
+            $updateOrderStmt = $pdo->prepare(
+                'UPDATE orders SET ' . implode(', ', $updateAssignments) . ' WHERE id = :id'
+            );
+            $updateOrderStmt->execute($updateParams);
 
             // ── Transition order_status via OrderStateManager ──────────────
             // Run inside the same transaction so a state-machine failure rolls everything back.
@@ -836,7 +891,8 @@ final class RefundService
             // Update orders refund tracking columns
             $updateOrderStmt = $pdo->prepare(
                 'UPDATE orders
-                 SET refund_amount               = :refund_amount,
+                 SET total_refunded              = :total_refunded_amount,
+                     refund_amount               = :refund_amount_snapshot,
                      refund_status               = "processed",
                      payment_status              = :payment_status,
                      refunded_at                 = NOW(),
@@ -844,7 +900,8 @@ final class RefundService
                  WHERE id = :id'
             );
             $updateOrderStmt->execute([
-                'refund_amount'  => $newTotalRefunded,
+                'total_refunded_amount' => $newTotalRefunded,
+                'refund_amount_snapshot' => $newTotalRefunded,
                 'payment_status' => $newPaymentStatus,
                 'admin_id'       => $adminId > 0 ? $adminId : null,
                 'id'             => $orderId,
@@ -988,5 +1045,26 @@ final class RefundService
             return 30;
         }
         return (int)$val;
+    }
+
+    private function tableHasColumn(PDO $pdo, string $table, string $column): bool
+    {
+        $key = $table . '.' . $column;
+        if (array_key_exists($key, self::$columnPresence)) {
+            return self::$columnPresence[$key];
+        }
+
+        $stmt = $pdo->prepare(
+            'SELECT COUNT(*)
+             FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table_name AND COLUMN_NAME = :column_name'
+        );
+        $stmt->execute([
+            'table_name' => $table,
+            'column_name' => $column,
+        ]);
+
+        self::$columnPresence[$key] = ((int)$stmt->fetchColumn()) > 0;
+        return self::$columnPresence[$key];
     }
 }

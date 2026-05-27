@@ -1,0 +1,50 @@
+[
+  {
+    "route": "/",
+    "status": "HTTP/1.1 200 OK",
+    "server_error": false,
+    "has_js_error_marker": false
+  },
+  {
+    "route": "/category",
+    "status": "HTTP/1.1 200 OK",
+    "server_error": false,
+    "has_js_error_marker": false
+  },
+  {
+    "route": "/product/classic-truffle-cake",
+    "status": "HTTP/1.1 301 Moved Permanently",
+    "server_error": [],
+    "has_js_error_marker": []
+  },
+  {
+    "route": "/cart",
+    "status": "HTTP/1.1 200 OK",
+    "server_error": false,
+    "has_js_error_marker": false
+  },
+  {
+    "route": "/checkout",
+    "status": "HTTP/1.1 200 OK",
+    "server_error": false,
+    "has_js_error_marker": true
+  },
+  {
+    "route": "/login",
+    "status": "HTTP/1.1 200 OK",
+    "server_error": false,
+    "has_js_error_marker": false
+  },
+  {
+    "route": "/account",
+    "status": "HTTP/1.1 200 OK",
+    "server_error": false,
+    "has_js_error_marker": false
+  },
+  {
+    "route": "/orders",
+    "status": "HTTP/1.1 200 OK",
+    "server_error": false,
+    "has_js_error_marker": false
+  }
+]

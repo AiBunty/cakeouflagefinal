@@ -54,7 +54,9 @@ set_exception_handler(static function (\Throwable $e): void {
 
     http_response_code(500);
     if (APP_DEBUG) {
-        header('Content-Type: text/plain; charset=UTF-8');
+        if (!headers_sent()) {
+            header('Content-Type: text/plain; charset=UTF-8');
+        }
         echo "Unhandled exception: " . $e->getMessage() . "\n";
         echo $e->getFile() . ':' . $e->getLine() . "\n";
         return;
@@ -123,31 +125,79 @@ spl_autoload_register(static function (string $class): void {
     }
 });
 
+require_once __DIR__ . '/Support/dietary-mode.php';
+
+if (!function_exists('is_https_request')) {
+    function is_https_request(): bool
+    {
+        if (!empty($_SERVER['HTTPS']) && strtolower((string)$_SERVER['HTTPS']) !== 'off') {
+            return true;
+        }
+
+        if ((int)($_SERVER['SERVER_PORT'] ?? 0) === 443) {
+            return true;
+        }
+
+        $forwardedProto = strtolower((string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? ''));
+        return $forwardedProto === 'https';
+    }
+}
+
+if (!function_exists('resolve_session_cookie_domain')) {
+    function resolve_session_cookie_domain(): string
+    {
+        $configured = trim((string)Env::get('SESSION_COOKIE_DOMAIN', ''));
+        if ($configured !== '') {
+            return $configured;
+        }
+
+        $host = strtolower(trim((string)($_SERVER['HTTP_HOST'] ?? '')));
+        $host = preg_replace('/:\\d+$/', '', $host) ?? $host;
+        if ($host === '' || filter_var($host, FILTER_VALIDATE_IP)) {
+            return '';
+        }
+
+        if (substr_count($host, '.') < 1 || strpos($host, 'localhost') !== false) {
+            return '';
+        }
+
+        if (strpos($host, 'www.') === 0) {
+            return '.' . substr($host, 4);
+        }
+
+        return '';
+    }
+}
+
 if (session_status() === PHP_SESSION_NONE) {
-    $secure = Env::get('SESSION_COOKIE_SECURE', Env::get('APP_ENV', 'development') === 'production' ? '1' : '0') === '1';
+    $sessionDir = __DIR__ . '/../storage/sessions';
+    if (!is_dir($sessionDir)) {
+        @mkdir($sessionDir, 0775, true);
+    }
+    @session_save_path($sessionDir);
+
+    $secureByEnv = Env::get('SESSION_COOKIE_SECURE', Env::get('APP_ENV', 'development') === 'production' ? '1' : '0') === '1';
+    $secure = $secureByEnv || is_https_request();
     $sameSite = Env::get('SESSION_COOKIE_SAMESITE', 'Lax') ?: 'Lax';
-    $lifetime = (int)(Env::get('SESSION_COOKIE_LIFETIME', '7200') ?: '7200');
+    $lifetime = (int)(Env::get('SESSION_COOKIE_LIFETIME', '86400') ?: '86400');
+    $cookieDomain = resolve_session_cookie_domain();
 
     if (PHP_VERSION_ID >= 70300) {
         session_set_cookie_params([
             'lifetime' => $lifetime,
             'path' => '/',
+            'domain' => $cookieDomain,
             'secure' => $secure,
             'httponly' => true,
             'samesite' => $sameSite,
         ]);
     } else {
-        session_set_cookie_params($lifetime, '/; samesite=' . $sameSite, '', $secure, true);
+        session_set_cookie_params($lifetime, '/; samesite=' . $sameSite, $cookieDomain, $secure, true);
     }
 
     session_name('cakeouflage_sid');
 
-    // 🔥 ADD THIS BLOCK HERE (IMPORTANT)
-
-session_start();
-
-    // 🔥 ADD THIS ALSO
-    //setcookie('cakeouflage_sid', session_id(), time() + (86400 * 30), "/");
+    session_start();
 
 }
 

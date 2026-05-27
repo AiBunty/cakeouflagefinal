@@ -544,7 +544,7 @@ function media_set_setting(mysqli $conn, string $key, string $value): void
 {
     $adminId = !empty($_SESSION['admin']) ? (int)$_SESSION['admin'] : null;
     $oldValue = media_get_setting($conn, $key, '');
-    $stmt = $conn->prepare('INSERT INTO settings (setting_key, setting_value, updated_by_admin_id) VALUES (?, ?, ?) AS new ON DUPLICATE KEY UPDATE setting_value = new.setting_value, updated_by_admin_id = new.updated_by_admin_id, updated_at = NOW()');
+    $stmt = $conn->prepare('INSERT INTO settings (setting_key, setting_value, updated_by_admin_id) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_by_admin_id = VALUES(updated_by_admin_id), updated_at = NOW()');
     $stmt->bind_param('ssi', $key, $value, $adminId);
     $stmt->execute();
     media_delete_upload_if_unreferenced($conn, $oldValue, $value);

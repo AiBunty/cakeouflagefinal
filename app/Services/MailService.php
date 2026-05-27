@@ -24,6 +24,15 @@ use PHPMailer\PHPMailer\Exception;
 
 class MailService
 {
+    private static function applyDebugOptions(PHPMailer $mail): void
+    {
+        $debug = (string)(Env::get('APP_DEBUG', '0') ?? '0');
+        if ($debug === '1' || strtolower($debug) === 'true') {
+            $mail->SMTPDebug = 2;
+            $mail->Debugoutput = 'error_log';
+        }
+    }
+
     private static function isPlaceholderValue(?string $value): bool
     {
         $normalized = strtolower(trim((string)$value));
@@ -125,6 +134,7 @@ class MailService
         try {
             // SMTP config
             $mail->isSMTP();
+            self::applyDebugOptions($mail);
             $mail->Host = $smtpConfig['host'];
             $mail->SMTPAuth = true;
             $mail->Username = $smtpConfig['username'];
@@ -214,6 +224,7 @@ class MailService
 
         $mail = new PHPMailer(true);
         $mail->isSMTP();
+        self::applyDebugOptions($mail);
         $mail->Host = $config['host'];
         $mail->SMTPAuth = true;
         $mail->Username = $config['username'];

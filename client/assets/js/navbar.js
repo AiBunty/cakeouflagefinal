@@ -79,6 +79,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const closeSearch = () => {
     if (!searchOverlay) return;
 
+    // Clear any autocomplete dropdown
+    const dd = document.getElementById("searchDropdown");
+    if (dd) { dd.hidden = true; dd.innerHTML = ""; }
+
     searchOverlay.classList.remove("is-open");
     searchOverlay.setAttribute("aria-hidden", "true");
     searchOverlay.hidden = true;
@@ -289,4 +293,26 @@ document.addEventListener("DOMContentLoaded", () => {
       showFeedback("Copy failed");
     }
   });
+
+  const liveSearch = window.CakeouflageLiveSearch;
+  const searchDropdown = document.getElementById("searchDropdown");
+  if (liveSearch && searchInput && searchDropdown) {
+    liveSearch.attach(searchInput, {
+      dropdown: searchDropdown,
+      searchPage: "/search",
+      minChars: 2,
+      limit: 8
+    });
+  }
+
+  const shopToolbarSearchInput = document.querySelector("main[data-page='shop'] #shopSearch");
+  const shopToolbarDropdown = document.getElementById("shopToolbarSearchDropdown");
+  if (liveSearch && shopToolbarSearchInput && shopToolbarDropdown) {
+    liveSearch.attach(shopToolbarSearchInput, {
+      dropdown: shopToolbarDropdown,
+      searchPage: "/search",
+      minChars: 2,
+      limit: 8
+    });
+  }
 });

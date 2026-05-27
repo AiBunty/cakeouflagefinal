@@ -1,0 +1,1139 @@
+admins	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+admins	full_name	varchar(120)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		2
+admins	email	varchar(190)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		3
+admins	password_hash	varchar(255)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		4
+admins	role	enum('super_admin','admin','sales_manager','ops_manager','content_manager')	NO	'admin'		utf8mb4	utf8mb4_unicode_ci		5
+admins	department_label	varchar(40)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		6
+admins	is_active	tinyint(1)	NO	1					7
+admins	created_at	datetime	NO	current_timestamp()					8
+admins	updated_at	datetime	NO	current_timestamp()	on update current_timestamp()				9
+admin_action_logs	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+admin_action_logs	admin_id	bigint(20) unsigned	NO	__NULL__					2
+admin_action_logs	action_type	varchar(120)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		3
+admin_action_logs	target_type	varchar(120)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		4
+admin_action_logs	target_id	bigint(20)	YES	NULL					5
+admin_action_logs	entity_type	varchar(120)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		6
+admin_action_logs	entity_id	varchar(60)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		7
+admin_action_logs	metadata_json	longtext	YES	NULL		utf8mb4	utf8mb4_bin		8
+admin_action_logs	created_at	datetime	NO	current_timestamp()					9
+admin_permissions	admin_id	bigint(20) unsigned	NO	__NULL__					1
+admin_permissions	permission_key	varchar(80)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		2
+admin_permissions	created_at	datetime	NO	current_timestamp()					3
+ar_export_lock_audit	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+ar_export_lock_audit	archive_month	char(7)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		2
+ar_export_lock_audit	lock_token	varchar(64)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		3
+ar_export_lock_audit	source	varchar(64)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		4
+ar_export_lock_audit	event_type	enum('issued','validated','exported','failed','expired','missing','invalidated')	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		5
+ar_export_lock_audit	variant	varchar(64)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		6
+ar_export_lock_audit	format	varchar(32)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		7
+ar_export_lock_audit	fingerprint	char(64)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		8
+ar_export_lock_audit	filters_json	longtext	YES	NULL		utf8mb4	utf8mb4_unicode_ci		9
+ar_export_lock_audit	issued_by_admin_id	bigint(20) unsigned	YES	NULL					10
+ar_export_lock_audit	issued_by_name	varchar(120)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		11
+ar_export_lock_audit	request_ip	varchar(64)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		12
+ar_export_lock_audit	user_agent	varchar(255)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		13
+ar_export_lock_audit	created_at	datetime	NO	current_timestamp()					14
+auth_rate_limits	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+auth_rate_limits	scope_key	varchar(80)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		2
+auth_rate_limits	bucket_key	varchar(190)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		3
+auth_rate_limits	attempts	int(11)	NO	0					4
+auth_rate_limits	blocked_until	datetime	YES	NULL					5
+auth_rate_limits	created_at	datetime	NO	current_timestamp()					6
+auth_rate_limits	updated_at	datetime	NO	current_timestamp()	on update current_timestamp()				7
+automation_rules	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+automation_rules	rule_key	varchar(80)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		2
+automation_rules	channel	enum('email','whatsapp','internal')	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		3
+automation_rules	trigger_event	varchar(80)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		4
+automation_rules	template_id	bigint(20) unsigned	YES	NULL					5
+automation_rules	offset_days	int(11)	NO	0					6
+automation_rules	is_active	tinyint(1)	NO	1					7
+automation_rules	created_at	datetime	NO	current_timestamp()					8
+automation_rules	updated_at	datetime	NO	current_timestamp()	on update current_timestamp()				9
+b2b_accounts	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+b2b_accounts	user_id	bigint(20) unsigned	NO	__NULL__					2
+b2b_accounts	company_name	varchar(180)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		3
+b2b_accounts	account_type	enum('corporate_client','business_buyer','reseller','cake_shop_owner')	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		4
+b2b_accounts	gst_number	varchar(40)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		5
+b2b_accounts	company_phone	varchar(25)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		6
+b2b_accounts	company_email	varchar(190)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		7
+b2b_accounts	approval_status	enum('pending','approved','rejected','suspended')	NO	'pending'		utf8mb4	utf8mb4_unicode_ci		8
+b2b_accounts	credit_limit	decimal(12,2)	YES	NULL					9
+b2b_accounts	assigned_admin_id	bigint(20) unsigned	YES	NULL					10
+b2b_accounts	notes	text	YES	NULL		utf8mb4	utf8mb4_unicode_ci		11
+b2b_accounts	created_at	datetime	NO	current_timestamp()					12
+b2b_accounts	updated_at	datetime	NO	current_timestamp()	on update current_timestamp()				13
+b2b_addresses	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+b2b_addresses	b2b_account_id	bigint(20) unsigned	NO	__NULL__					2
+b2b_addresses	address_type	enum('billing','shipping')	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		3
+b2b_addresses	recipient_name	varchar(120)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		4
+b2b_addresses	phone	varchar(25)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		5
+b2b_addresses	line1	varchar(190)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		6
+b2b_addresses	line2	varchar(190)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		7
+b2b_addresses	city	varchar(100)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		8
+b2b_addresses	state	varchar(100)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		9
+b2b_addresses	postal_code	varchar(15)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		10
+b2b_addresses	is_default	tinyint(1)	NO	0					11
+b2b_addresses	created_at	datetime	NO	current_timestamp()					12
+b2b_addresses	updated_at	datetime	NO	current_timestamp()	on update current_timestamp()				13
+b2b_documents	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+b2b_documents	b2b_account_id	bigint(20) unsigned	NO	__NULL__					2
+b2b_documents	document_type	enum('gst_certificate','trade_license','purchase_order','invoice','other')	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		3
+b2b_documents	file_url	varchar(255)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		4
+b2b_documents	uploaded_by	enum('b2b_user','admin')	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		5
+b2b_documents	created_at	datetime	NO	current_timestamp()					6
+b2b_orders	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+b2b_orders	order_number	varchar(40)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		2
+b2b_orders	b2b_account_id	bigint(20) unsigned	NO	__NULL__					3
+b2b_orders	source_quote_id	bigint(20) unsigned	YES	NULL					4
+b2b_orders	fulfilment_mode	enum('delivery','pickup')	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		5
+b2b_orders	order_status	enum('pending','confirmed','in_production','ready','completed','cancelled')	NO	'pending'		utf8mb4	utf8mb4_unicode_ci		6
+b2b_orders	payment_status	enum('pending','paid','part_paid','failed')	NO	'pending'		utf8mb4	utf8mb4_unicode_ci		7
+b2b_orders	subtotal	decimal(10,2)	NO	__NULL__					8
+b2b_orders	discount_total	decimal(10,2)	NO	0.00					9
+b2b_orders	tax_total	decimal(10,2)	NO	0.00					10
+b2b_orders	delivery_fee	decimal(10,2)	NO	0.00					11
+b2b_orders	grand_total	decimal(10,2)	NO	__NULL__					12
+b2b_orders	internal_note	text	YES	NULL		utf8mb4	utf8mb4_unicode_ci		13
+b2b_orders	created_at	datetime	NO	current_timestamp()					14
+b2b_orders	updated_at	datetime	NO	current_timestamp()	on update current_timestamp()				15
+b2b_order_items	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+b2b_order_items	b2b_order_id	bigint(20) unsigned	NO	__NULL__					2
+b2b_order_items	product_id	bigint(20) unsigned	NO	__NULL__					3
+b2b_order_items	variant_id	bigint(20) unsigned	YES	NULL					4
+b2b_order_items	quantity	int(11)	NO	__NULL__					5
+b2b_order_items	unit_price	decimal(10,2)	NO	__NULL__					6
+b2b_order_items	line_total	decimal(10,2)	NO	__NULL__					7
+b2b_order_items	customisation_note	text	YES	NULL		utf8mb4	utf8mb4_unicode_ci		8
+b2b_order_items	created_at	datetime	NO	current_timestamp()					9
+b2b_price_lists	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+b2b_price_lists	b2b_account_id	bigint(20) unsigned	YES	NULL					2
+b2b_price_lists	product_id	bigint(20) unsigned	NO	__NULL__					3
+b2b_price_lists	min_quantity	int(11)	NO	1					4
+b2b_price_lists	wholesale_price	decimal(10,2)	NO	__NULL__					5
+b2b_price_lists	retail_price_snapshot	decimal(10,2)	NO	__NULL__					6
+b2b_price_lists	is_active	tinyint(1)	NO	1					7
+b2b_price_lists	created_at	datetime	NO	current_timestamp()					8
+b2b_price_lists	updated_at	datetime	NO	current_timestamp()	on update current_timestamp()				9
+b2b_quotes	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+b2b_quotes	quote_number	varchar(40)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		2
+b2b_quotes	b2b_account_id	bigint(20) unsigned	NO	__NULL__					3
+b2b_quotes	event_type	varchar(120)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		4
+b2b_quotes	fulfilment_mode	enum('delivery','pickup')	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		5
+b2b_quotes	scheduled_date	date	YES	NULL					6
+b2b_quotes	scheduled_slot_id	bigint(20) unsigned	YES	NULL					7
+b2b_quotes	status	enum('requested','drafted','sent','accepted','rejected','converted_to_order')	NO	'requested'		utf8mb4	utf8mb4_unicode_ci		8
+b2b_quotes	subtotal	decimal(10,2)	NO	0.00					9
+b2b_quotes	discount_total	decimal(10,2)	NO	0.00					10
+b2b_quotes	tax_total	decimal(10,2)	NO	0.00					11
+b2b_quotes	grand_total	decimal(10,2)	NO	0.00					12
+b2b_quotes	admin_note	text	YES	NULL		utf8mb4	utf8mb4_unicode_ci		13
+b2b_quotes	created_at	datetime	NO	current_timestamp()					14
+b2b_quotes	updated_at	datetime	NO	current_timestamp()	on update current_timestamp()				15
+b2b_quote_items	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+b2b_quote_items	quote_id	bigint(20) unsigned	NO	__NULL__					2
+b2b_quote_items	product_id	bigint(20) unsigned	NO	__NULL__					3
+b2b_quote_items	variant_id	bigint(20) unsigned	YES	NULL					4
+b2b_quote_items	quantity	int(11)	NO	__NULL__					5
+b2b_quote_items	unit_price	decimal(10,2)	NO	__NULL__					6
+b2b_quote_items	line_total	decimal(10,2)	NO	__NULL__					7
+b2b_quote_items	customisation_note	text	YES	NULL		utf8mb4	utf8mb4_unicode_ci		8
+b2b_quote_items	created_at	datetime	NO	current_timestamp()					9
+bank_alert_utrs	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+bank_alert_utrs	source	enum('apps_script','customer_submit','admin_manual')	NO	'apps_script'		utf8mb4	utf8mb4_unicode_ci		2
+bank_alert_utrs	parsed_utr	varchar(40)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		3
+bank_alert_utrs	parsed_amount	decimal(12,2)	YES	NULL					4
+bank_alert_utrs	bank_sender	varchar(190)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		5
+bank_alert_utrs	email_subject	varchar(255)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		6
+bank_alert_utrs	alert_message	text	YES	NULL		utf8mb4	utf8mb4_unicode_ci		7
+bank_alert_utrs	event_time	datetime	YES	NULL					8
+bank_alert_utrs	status	enum('pending','matched_auto','confirmed','rejected','duplicate','ignored')	NO	'pending'		utf8mb4	utf8mb4_unicode_ci		9
+bank_alert_utrs	match_confidence	enum('none','weak','strong')	NO	'none'		utf8mb4	utf8mb4_unicode_ci		10
+bank_alert_utrs	customer_user_id	bigint(20) unsigned	YES	NULL					11
+bank_alert_utrs	order_id	bigint(20) unsigned	YES	NULL					12
+bank_alert_utrs	invoice_id	bigint(20) unsigned	YES	NULL					13
+bank_alert_utrs	payment_id	bigint(20) unsigned	YES	NULL					14
+bank_alert_utrs	confirm_note	text	YES	NULL		utf8mb4	utf8mb4_unicode_ci		15
+bank_alert_utrs	confirmed_by_admin_id	bigint(20) unsigned	YES	NULL					16
+bank_alert_utrs	confirmed_at	datetime	YES	NULL					17
+bank_alert_utrs	raw_payload_json	longtext	YES	NULL		utf8mb4	utf8mb4_unicode_ci		18
+bank_alert_utrs	created_at	datetime	NO	current_timestamp()					19
+bank_alert_utrs	updated_at	datetime	NO	current_timestamp()	on update current_timestamp()				20
+banners	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+banners	title	varchar(180)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		2
+banners	subtitle	varchar(260)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		3
+banners	image_url	varchar(255)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		4
+banners	cta_label	varchar(80)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		5
+banners	cta_url	varchar(190)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		6
+banners	starts_at	datetime	YES	NULL					7
+banners	ends_at	datetime	YES	NULL					8
+banners	linked_coupon_id	bigint(20) unsigned	YES	NULL					9
+banners	page_scope	enum('all_pages','exclude_checkout_auth')	NO	'all_pages'		utf8mb4	utf8mb4_unicode_ci		10
+banners	placement	enum('home_hero','home_mid','site_top_offer','home_top_offer','shop_top','course_top','b2b_top')	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		11
+banners	is_active	tinyint(1)	NO	1					12
+banners	sort_order	int(11)	NO	0					13
+banners	created_at	datetime	NO	current_timestamp()					14
+banners	updated_at	datetime	NO	current_timestamp()	on update current_timestamp()				15
+byoc_quotes	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+byoc_quotes	inquiry_id	bigint(20) unsigned	NO	__NULL__					2
+byoc_quotes	quote_number	varchar(50)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		3
+byoc_quotes	quote_subject	varchar(180)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		4
+byoc_quotes	quote_message	text	YES	NULL		utf8mb4	utf8mb4_unicode_ci		5
+byoc_quotes	quote_amount	decimal(10,2)	NO	__NULL__					6
+byoc_quotes	currency	char(3)	NO	'INR'		utf8mb4	utf8mb4_unicode_ci		7
+byoc_quotes	status	enum('sent','accepted','expired','cancelled')	NO	'sent'		utf8mb4	utf8mb4_unicode_ci		8
+byoc_quotes	expires_at	datetime	YES	NULL					9
+byoc_quotes	accepted_at	datetime	YES	NULL					10
+byoc_quotes	order_id	bigint(20) unsigned	YES	NULL					11
+byoc_quotes	created_by_admin_id	bigint(20) unsigned	YES	NULL					12
+byoc_quotes	created_at	datetime	NO	current_timestamp()					13
+byoc_quotes	updated_at	datetime	NO	current_timestamp()	on update current_timestamp()				14
+byoc_quote_links	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+byoc_quote_links	byoc_quote_id	bigint(20) unsigned	NO	__NULL__					2
+byoc_quote_links	token	varchar(120)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		3
+byoc_quote_links	expires_at	datetime	YES	NULL					4
+byoc_quote_links	used_at	datetime	YES	NULL					5
+byoc_quote_links	is_active	tinyint(1)	NO	1					6
+byoc_quote_links	created_at	datetime	NO	current_timestamp()					7
+cake_toppers	id	int(10) unsigned	NO	__NULL__	auto_increment				1
+cake_toppers	name	varchar(100)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		2
+cake_toppers	price	decimal(8,2)	NO	0.00					3
+cake_toppers	description	varchar(200)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		4
+cake_toppers	is_active	tinyint(1)	NO	1					5
+cake_toppers	sort_order	int(11)	NO	0					6
+cake_toppers	created_at	datetime	NO	current_timestamp()					7
+cake_toppers	updated_at	datetime	NO	current_timestamp()	on update current_timestamp()				8
+carts	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+carts	user_id	bigint(20) unsigned	YES	NULL					2
+carts	session_id	varchar(128)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		3
+carts	currency_code	char(3)	NO	'INR'		utf8mb4	utf8mb4_unicode_ci		4
+carts	created_at	datetime	NO	current_timestamp()					5
+carts	updated_at	datetime	NO	current_timestamp()	on update current_timestamp()				6
+cart_items	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+cart_items	cart_id	bigint(20) unsigned	NO	__NULL__					2
+cart_items	product_id	bigint(20) unsigned	NO	__NULL__					3
+cart_items	variant_id	bigint(20) unsigned	YES	NULL					4
+cart_items	quantity	int(11)	NO	__NULL__					5
+cart_items	unit_price	decimal(10,2)	NO	__NULL__					6
+cart_items	line_total	decimal(10,2)	NO	__NULL__					7
+cart_items	created_at	datetime	NO	current_timestamp()					8
+cart_items	updated_at	datetime	NO	current_timestamp()	on update current_timestamp()				9
+cart_items	cake_message	varchar(200)	YES	NULL		utf8mb4	utf8mb4_unicode_ci	Message to write on cake	10
+cart_items	topper_id	int(10) unsigned	YES	NULL				FK to cake_toppers.id	11
+cart_items	topper_name_snapshot	varchar(100)	YES	NULL		utf8mb4	utf8mb4_unicode_ci	Topper name at time of add	12
+cart_items	topper_price	decimal(8,2)	NO	0.00					13
+categories	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+categories	parent_id	bigint(20) unsigned	YES	NULL					2
+categories	name	varchar(120)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		3
+categories	slug	varchar(150)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		4
+categories	description	text	YES	NULL		utf8mb4	utf8mb4_unicode_ci		5
+categories	image	varchar(255)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		6
+categories	banner_image	varchar(255)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		7
+categories	menu_icon	varchar(80)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		8
+categories	sort_order	int(11)	NO	0					9
+categories	show_in_menu	tinyint(1)	NO	1					10
+categories	is_featured	tinyint(1)	NO	0					11
+categories	is_active	tinyint(1)	NO	1					12
+categories	seo_title	varchar(190)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		13
+categories	seo_description	varchar(260)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		14
+categories	created_at	datetime	NO	current_timestamp()					15
+categories	updated_at	datetime	NO	current_timestamp()	on update current_timestamp()				16
+categories	deleted_at	datetime	YES	NULL					17
+communication_logs	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+communication_logs	user_id	bigint(20) unsigned	YES	NULL					2
+communication_logs	b2b_account_id	bigint(20) unsigned	YES	NULL					3
+communication_logs	order_id	bigint(20) unsigned	YES	NULL					4
+communication_logs	invoice_id	bigint(20) unsigned	YES	NULL					5
+communication_logs	whatsapp_template_id	bigint(20) unsigned	YES	NULL					6
+communication_logs	channel	enum('email','whatsapp','internal')	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		7
+communication_logs	event_key	varchar(80)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		8
+communication_logs	recipient	varchar(190)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		9
+communication_logs	status	enum('queued','sent','failed')	NO	'queued'		utf8mb4	utf8mb4_unicode_ci		10
+communication_logs	provider_message_id	varchar(190)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		11
+communication_logs	error_message	varchar(260)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		12
+communication_logs	payload_json	longtext	YES	NULL		utf8mb4	utf8mb4_bin		13
+communication_logs	retry_count	int(11)	NO	0					14
+communication_logs	sent_at	datetime	YES	NULL					15
+communication_logs	created_at	datetime	NO	current_timestamp()					16
+communication_queue	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+communication_queue	communication_log_id	bigint(20) unsigned	YES	NULL					2
+communication_queue	channel	enum('email','whatsapp','internal')	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		3
+communication_queue	queue_status	enum('queued','processing','completed','failed')	NO	'queued'		utf8mb4	utf8mb4_unicode_ci		4
+communication_queue	payload_json	longtext	YES	NULL		utf8mb4	utf8mb4_bin		5
+communication_queue	available_at	datetime	NO	current_timestamp()					6
+communication_queue	attempts	int(11)	NO	0					7
+communication_queue	last_error	varchar(260)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		8
+communication_queue	created_at	datetime	NO	current_timestamp()					9
+communication_queue	updated_at	datetime	NO	current_timestamp()	on update current_timestamp()				10
+communication_templates	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+communication_templates	channel	enum('email','whatsapp')	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		2
+communication_templates	event_key	varchar(80)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		3
+communication_templates	subject	varchar(190)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		4
+communication_templates	body_template	longtext	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		5
+communication_templates	is_active	tinyint(1)	NO	1					6
+communication_templates	created_at	datetime	NO	current_timestamp()					7
+communication_templates	updated_at	datetime	NO	current_timestamp()	on update current_timestamp()				8
+coupons	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+coupons	code	varchar(50)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		2
+coupons	discount_type	enum('flat','percentage')	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		3
+coupons	discount_value	decimal(10,2)	NO	__NULL__					4
+coupons	max_discount	decimal(10,2)	YES	NULL					5
+coupons	min_order_amount	decimal(10,2)	YES	NULL					6
+coupons	usage_limit	int(11)	YES	NULL					7
+coupons	per_user_usage_limit	int(11)	YES	NULL					8
+coupons	usage_count	int(11)	NO	0					9
+coupons	starts_at	datetime	YES	NULL					10
+coupons	ends_at	datetime	NO	__NULL__					11
+coupons	target_mode	enum('all_users','specific_users')	NO	'all_users'		utf8mb4	utf8mb4_unicode_ci		12
+coupons	auto_apply	tinyint(1)	NO	0				1=auto-apply at cart; 0=manual entry only	13
+coupons	applicable_to	varchar(64)	NO	'online'		utf8mb4	utf8mb4_unicode_ci	Comma-delimited modules: online, manual, byoc	14
+coupons	is_active	tinyint(1)	NO	1					15
+coupons	is_deleted	tinyint(1)	NO	0					16
+coupons	deleted_at	datetime	YES	NULL					17
+coupons	created_at	datetime	NO	current_timestamp()					18
+coupons	updated_at	datetime	NO	current_timestamp()	on update current_timestamp()				19
+coupon_redemptions	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+coupon_redemptions	coupon_id	bigint(20) unsigned	NO	__NULL__					2
+coupon_redemptions	order_id	bigint(20) unsigned	NO	__NULL__					3
+coupon_redemptions	user_id	bigint(20) unsigned	YES	NULL					4
+coupon_redemptions	code_snapshot	varchar(50)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		5
+coupon_redemptions	discount_total	decimal(10,2)	NO	0.00					6
+coupon_redemptions	created_at	datetime	NO	current_timestamp()					7
+coupon_target_users	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+coupon_target_users	coupon_id	bigint(20) unsigned	NO	__NULL__					2
+coupon_target_users	user_id	bigint(20) unsigned	NO	__NULL__					3
+coupon_target_users	created_at	datetime	NO	current_timestamp()					4
+courses	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+courses	title	varchar(180)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		2
+courses	slug	varchar(190)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		3
+courses	short_description	varchar(260)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		4
+courses	description	longtext	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		5
+courses	modules	longtext	YES	NULL		utf8mb4	utf8mb4_unicode_ci		6
+courses	duration_text	varchar(120)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		7
+courses	mode	enum('online','offline','hybrid')	NO	'offline'		utf8mb4	utf8mb4_unicode_ci		8
+courses	fee_amount	decimal(10,2)	NO	__NULL__					9
+courses	image_url	varchar(255)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		10
+courses	cta_label	varchar(80)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		11
+courses	cta_url	varchar(190)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		12
+courses	is_active	tinyint(1)	NO	1					13
+courses	created_at	datetime	NO	current_timestamp()					14
+courses	updated_at	datetime	NO	current_timestamp()	on update current_timestamp()				15
+course_batches	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+course_batches	course_id	bigint(20) unsigned	NO	__NULL__					2
+course_batches	batch_name	varchar(120)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		3
+course_batches	starts_on	date	NO	__NULL__					4
+course_batches	ends_on	date	YES	NULL					5
+course_batches	seats_total	int(11)	NO	__NULL__					6
+course_batches	seats_available	int(11)	NO	__NULL__					7
+course_batches	fee_amount	decimal(10,2)	NO	__NULL__					8
+course_batches	is_active	tinyint(1)	NO	1					9
+course_batches	created_at	datetime	NO	current_timestamp()					10
+course_batches	updated_at	datetime	NO	current_timestamp()	on update current_timestamp()				11
+crm_customer_tags	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+crm_customer_tags	user_id	bigint(20) unsigned	NO	__NULL__					2
+crm_customer_tags	tag_key	varchar(60)	NO	__NULL__		utf8mb4	utf8mb4_general_ci		3
+crm_customer_tags	tagged_by_admin_id	bigint(20) unsigned	YES	NULL					4
+crm_customer_tags	created_at	datetime	NO	current_timestamp()					5
+crm_push_logs	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+crm_push_logs	crm_setting_id	bigint(20) unsigned	YES	NULL					2
+crm_push_logs	name	varchar(120)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		3
+crm_push_logs	mobile	varchar(25)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		4
+crm_push_logs	trigger_key	varchar(80)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		5
+crm_push_logs	endpoint	varchar(512)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		6
+crm_push_logs	status	enum('success','fail')	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		7
+crm_push_logs	automation_id	varchar(80)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		8
+crm_push_logs	api_token_masked	varchar(50)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		9
+crm_push_logs	payload_json	longtext	YES	NULL		utf8mb4	utf8mb4_unicode_ci		10
+crm_push_logs	http_status	smallint(6)	YES	NULL					11
+crm_push_logs	execution_status	varchar(40)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		12
+crm_push_logs	error_message	text	YES	NULL		utf8mb4	utf8mb4_unicode_ci		13
+crm_push_logs	response_time_ms	int(10) unsigned	YES	NULL					14
+crm_push_logs	response	text	YES	NULL		utf8mb4	utf8mb4_unicode_ci		15
+crm_push_logs	created_at	datetime	NO	current_timestamp()					16
+crm_settings	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+crm_settings	setting_key	varchar(120)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		2
+crm_settings	endpoint	varchar(500)	NO	''		utf8mb4	utf8mb4_unicode_ci		3
+crm_settings	api_token	varchar(500)	NO	''		utf8mb4	utf8mb4_unicode_ci		4
+crm_settings	is_enabled	tinyint(1)	NO	0					5
+crm_settings	extra_json	longtext	YES	NULL		utf8mb4	utf8mb4_unicode_ci		6
+crm_settings	created_at	datetime	NO	current_timestamp()					7
+crm_settings	updated_at	datetime	NO	current_timestamp()	on update current_timestamp()				8
+customer_profiles	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+customer_profiles	user_id	bigint(20) unsigned	NO	__NULL__					2
+customer_profiles	date_of_birth	date	YES	NULL					3
+customer_profiles	anniversary_date	date	YES	NULL					4
+customer_profiles	celebration_date	date	YES	NULL					5
+customer_profiles	internal_note	text	YES	NULL		utf8mb4	utf8mb4_unicode_ci		6
+customer_profiles	created_at	datetime	NO	current_timestamp()					7
+customer_profiles	updated_at	datetime	NO	current_timestamp()	on update current_timestamp()				8
+customer_tags	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+customer_tags	tag_name	varchar(80)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		2
+customer_tags	tag_slug	varchar(90)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		3
+customer_tags	created_at	datetime	NO	current_timestamp()					4
+customer_tags	updated_at	datetime	NO	current_timestamp()	on update current_timestamp()				5
+customer_tag_map	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+customer_tag_map	user_id	bigint(20) unsigned	NO	__NULL__					2
+customer_tag_map	tag_id	bigint(20) unsigned	NO	__NULL__					3
+customer_tag_map	created_at	datetime	NO	current_timestamp()					4
+delivery_distance_slabs	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+delivery_distance_slabs	slab_label	varchar(60)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		2
+delivery_distance_slabs	min_km	decimal(5,2)	NO	__NULL__					3
+delivery_distance_slabs	max_km	decimal(5,2)	NO	__NULL__					4
+delivery_distance_slabs	delivery_fee	decimal(10,2)	NO	__NULL__					5
+delivery_distance_slabs	is_available	tinyint(1)	NO	1					6
+delivery_distance_slabs	created_at	datetime	NO	current_timestamp()					7
+delivery_distance_slabs	updated_at	datetime	NO	current_timestamp()	on update current_timestamp()				8
+delivery_pincodes	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+delivery_pincodes	postal_code	varchar(15)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		2
+delivery_pincodes	area_name	varchar(120)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		3
+delivery_pincodes	approx_distance_km	decimal(5,2)	NO	__NULL__					4
+delivery_pincodes	is_serviceable	tinyint(1)	NO	1					5
+delivery_pincodes	requires_manual_approval	tinyint(1)	NO	0					6
+delivery_pincodes	created_at	datetime	NO	current_timestamp()					7
+delivery_pincodes	updated_at	datetime	NO	current_timestamp()	on update current_timestamp()				8
+delivery_time_slots	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+delivery_time_slots	slot_label	varchar(80)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		2
+delivery_time_slots	start_time	time	NO	__NULL__					3
+delivery_time_slots	end_time	time	NO	__NULL__					4
+delivery_time_slots	fulfilment_mode	enum('delivery','pickup','both')	NO	'both'		utf8mb4	utf8mb4_unicode_ci		5
+delivery_time_slots	is_same_day_allowed	tinyint(1)	NO	1					6
+delivery_time_slots	is_active	tinyint(1)	NO	1					7
+delivery_time_slots	sort_order	int(11)	NO	0					8
+delivery_time_slots	created_at	datetime	NO	current_timestamp()					9
+delivery_time_slots	updated_at	datetime	NO	current_timestamp()	on update current_timestamp()				10
+events	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+events	title	varchar(190)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		2
+events	slug	varchar(210)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		3
+events	short_description	varchar(280)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		4
+events	full_description	longtext	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		5
+events	banner_image	varchar(255)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		6
+events	instructor_name	varchar(140)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		7
+events	starts_at	datetime	NO	__NULL__					8
+events	ends_at	datetime	YES	NULL					9
+events	event_type	enum('webinar','event')	NO	'event'		utf8mb4	utf8mb4_unicode_ci		10
+events	event_category	varchar(120)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		11
+events	event_status	enum('draft','scheduled','live','completed','cancelled')	NO	'scheduled'		utf8mb4	utf8mb4_unicode_ci		12
+events	location_text	varchar(190)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		13
+events	online_link	varchar(255)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		14
+events	capacity	int(11)	NO	30					15
+events	seats_available	int(11)	NO	30					16
+events	registration_cta_label	varchar(80)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		17
+events	is_published	tinyint(1)	NO	1					18
+events	created_at	datetime	NO	current_timestamp()					19
+events	updated_at	datetime	NO	current_timestamp()	on update current_timestamp()				20
+event_registrations	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+event_registrations	event_id	bigint(20) unsigned	NO	__NULL__					2
+event_registrations	participant_name	varchar(120)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		3
+event_registrations	participant_email	varchar(190)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		4
+event_registrations	participant_phone	varchar(25)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		5
+event_registrations	attendees_count	int(11)	NO	1					6
+event_registrations	registration_status	enum('new','confirmed','cancelled')	NO	'new'		utf8mb4	utf8mb4_unicode_ci		7
+event_registrations	note	text	YES	NULL		utf8mb4	utf8mb4_unicode_ci		8
+event_registrations	created_at	datetime	NO	current_timestamp()					9
+event_registrations	updated_at	datetime	NO	current_timestamp()	on update current_timestamp()				10
+financial_audit_logs	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+financial_audit_logs	financial_transaction_id	bigint(20) unsigned	YES	NULL					2
+financial_audit_logs	batch_id	bigint(20) unsigned	YES	NULL					3
+financial_audit_logs	event_type	varchar(64)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		4
+financial_audit_logs	actor_admin_id	bigint(20) unsigned	YES	NULL					5
+financial_audit_logs	actor_name	varchar(120)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		6
+financial_audit_logs	source_module	varchar(80)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		7
+financial_audit_logs	source_reference	varchar(120)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		8
+financial_audit_logs	metadata_json	longtext	YES	NULL		utf8mb4	utf8mb4_unicode_ci		9
+financial_audit_logs	created_at	datetime	NO	current_timestamp()					10
+financial_transactions	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+financial_transactions	transaction_type	varchar(64)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		2
+financial_transactions	reference_type	varchar(64)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		3
+financial_transactions	reference_id	bigint(20) unsigned	NO	__NULL__					4
+financial_transactions	linked_refund_id	bigint(20) unsigned	YES	NULL					5
+financial_transactions	source_event	varchar(80)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		6
+financial_transactions	transaction_source	varchar(80)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		7
+financial_transactions	source_reference	varchar(120)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		8
+financial_transactions	idempotency_key	varchar(190)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		9
+financial_transactions	payment_mode	varchar(32)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		10
+financial_transactions	amount	decimal(12,2)	NO	0.00					11
+financial_transactions	status	enum('posted','failed','reversed')	NO	'posted'		utf8mb4	utf8mb4_unicode_ci		12
+financial_transactions	narration	text	YES	NULL		utf8mb4	utf8mb4_unicode_ci		13
+financial_transactions	metadata_json	longtext	YES	NULL		utf8mb4	utf8mb4_unicode_ci		14
+financial_transactions	created_by_admin_id	bigint(20) unsigned	YES	NULL					15
+financial_transactions	created_by_name	varchar(120)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		16
+financial_transactions	created_at	datetime	NO	current_timestamp()					17
+general_ledger_entries	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+general_ledger_entries	batch_id	bigint(20) unsigned	NO	__NULL__					2
+general_ledger_entries	financial_transaction_id	bigint(20) unsigned	NO	__NULL__					3
+general_ledger_entries	line_number	int(11)	NO	__NULL__					4
+general_ledger_entries	account_code	varchar(64)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		5
+general_ledger_entries	account_name	varchar(160)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		6
+general_ledger_entries	debit_amount	decimal(12,2)	NO	0.00					7
+general_ledger_entries	credit_amount	decimal(12,2)	NO	0.00					8
+general_ledger_entries	payment_mode	varchar(32)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		9
+general_ledger_entries	narration	text	YES	NULL		utf8mb4	utf8mb4_unicode_ci		10
+general_ledger_entries	reference_type	varchar(64)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		11
+general_ledger_entries	reference_id	bigint(20) unsigned	NO	__NULL__					12
+general_ledger_entries	created_by_admin_id	bigint(20) unsigned	YES	NULL					13
+general_ledger_entries	created_by_name	varchar(120)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		14
+general_ledger_entries	created_at	datetime	NO	current_timestamp()					15
+homepage_media	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+homepage_media	section_key	varchar(64)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		2
+homepage_media	media_type	enum('image','video')	NO	'image'		utf8mb4	utf8mb4_unicode_ci		3
+homepage_media	media_url	varchar(255)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		4
+homepage_media	sort_order	int(10) unsigned	NO	0					5
+homepage_media	is_active	tinyint(1)	NO	1					6
+homepage_media	created_at	datetime	NO	current_timestamp()					7
+homepage_media	updated_at	datetime	NO	current_timestamp()	on update current_timestamp()				8
+inquiries	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+inquiries	inquiry_type	enum('custom_cake','contact','course','event','b2b_registration','quote_request')	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		2
+inquiries	name	varchar(120)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		3
+inquiries	email	varchar(190)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		4
+inquiries	phone	varchar(25)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		5
+inquiries	message	text	YES	NULL		utf8mb4	utf8mb4_unicode_ci		6
+inquiries	reference_file	varchar(255)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		7
+inquiries	status	enum('new','in_review','closed')	NO	'new'		utf8mb4	utf8mb4_unicode_ci		8
+inquiries	created_at	datetime	NO	current_timestamp()					9
+inquiries	updated_at	datetime	NO	current_timestamp()	on update current_timestamp()				10
+invoices	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+invoices	invoice_number	varchar(40)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		2
+invoices	order_id	bigint(20) unsigned	YES	NULL					3
+invoices	b2b_order_id	bigint(20) unsigned	YES	NULL					4
+invoices	user_id	bigint(20) unsigned	YES	NULL					5
+invoices	b2b_account_id	bigint(20) unsigned	YES	NULL					6
+invoices	customer_type	enum('retail','b2b')	NO	'retail'		utf8mb4	utf8mb4_unicode_ci		7
+invoices	invoice_status	enum('draft','pending_payment','part_paid','paid','overdue','payment_under_verification','unpaid_rejected','cancelled','refunded')	NO	'pending_payment'		utf8mb4	utf8mb4_unicode_ci		8
+invoices	payment_method	enum('upi','bank_transfer','cash','pos_card','payment_link')	NO	'upi'		utf8mb4	utf8mb4_unicode_ci		9
+invoices	subtotal	decimal(12,2)	NO	0.00					10
+invoices	discount_total	decimal(12,2)	NO	0.00					11
+invoices	tax_total	decimal(12,2)	NO	0.00					12
+invoices	grand_total	decimal(12,2)	NO	0.00					13
+invoices	paid_amount	decimal(12,2)	NO	0.00					14
+invoices	balance_due	decimal(12,2)	NO	0.00					15
+invoices	due_on	date	YES	NULL					16
+invoices	issued_on	date	YES	NULL					17
+invoices	internal_note	text	YES	NULL		utf8mb4	utf8mb4_unicode_ci		18
+invoices	created_at	datetime	NO	current_timestamp()					19
+invoices	updated_at	datetime	NO	current_timestamp()	on update current_timestamp()				20
+invoice_items	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+invoice_items	invoice_id	bigint(20) unsigned	NO	__NULL__					2
+invoice_items	item_label	varchar(190)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		3
+invoice_items	quantity	int(11)	NO	__NULL__					4
+invoice_items	unit_price	decimal(12,2)	NO	__NULL__					5
+invoice_items	line_total	decimal(12,2)	NO	__NULL__					6
+invoice_items	created_at	datetime	NO	current_timestamp()					7
+ledger_accounts	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+ledger_accounts	account_code	varchar(64)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		2
+ledger_accounts	account_name	varchar(160)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		3
+ledger_accounts	account_type	enum('asset','liability','equity','revenue','contra_revenue','expense')	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		4
+ledger_accounts	normal_side	enum('debit','credit')	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		5
+ledger_accounts	is_active	tinyint(1)	NO	1					6
+ledger_accounts	created_at	datetime	NO	current_timestamp()					7
+ledger_accounts	updated_at	datetime	NO	current_timestamp()	on update current_timestamp()				8
+media_assets	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+media_assets	original_path	varchar(255)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		2
+media_assets	canonical_path	varchar(255)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		3
+media_assets	optimized_path	varchar(255)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		4
+media_assets	thumbnail_path	varchar(255)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		5
+media_assets	original_filename	varchar(255)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		6
+media_assets	mime_type	varchar(120)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		7
+media_assets	media_type	enum('image','video')	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		8
+media_assets	file_size	bigint(20) unsigned	NO	0					9
+media_assets	duration_seconds	decimal(10,2)	YES	NULL					10
+media_assets	resolution	varchar(32)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		11
+media_assets	conversion_status	enum('ready','queued','processing','failed')	NO	'ready'		utf8mb4	utf8mb4_unicode_ci		12
+media_assets	transcoding_status	varchar(32)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		13
+media_assets	conversion_error	varchar(260)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		14
+media_assets	version_token	varchar(40)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		15
+media_assets	uploaded_by_admin_id	bigint(20) unsigned	YES	NULL					16
+media_assets	uploaded_at	datetime	NO	current_timestamp()					17
+media_assets	updated_at	datetime	NO	current_timestamp()	on update current_timestamp()				18
+media_center	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+media_center	media_type	enum('image','video')	NO	'image'		utf8mb4	utf8mb4_unicode_ci		2
+media_center	file_path	varchar(255)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		3
+media_center	title	varchar(255)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		4
+media_center	alt_text	varchar(255)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		5
+media_center	is_active	tinyint(1)	NO	1					6
+media_center	created_at	datetime	NO	current_timestamp()					7
+media_center	updated_at	datetime	NO	current_timestamp()	on update current_timestamp()				8
+media_processing_queue	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+media_processing_queue	module_name	varchar(80)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		2
+media_processing_queue	entity_type	varchar(80)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		3
+media_processing_queue	entity_id	bigint(20) unsigned	NO	0					4
+media_processing_queue	original_path	varchar(255)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		5
+media_processing_queue	optimized_path	varchar(255)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		6
+media_processing_queue	processing_status	enum('pending','processing','completed','failed')	NO	'pending'		utf8mb4	utf8mb4_unicode_ci		7
+media_processing_queue	attempts	int(11)	NO	0					8
+media_processing_queue	last_error	varchar(260)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		9
+media_processing_queue	created_at	datetime	NO	current_timestamp()					10
+media_processing_queue	processed_at	datetime	YES	NULL					11
+media_processing_queue	updated_at	datetime	NO	current_timestamp()	on update current_timestamp()				12
+orders	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+orders	order_number	varchar(40)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		2
+orders	user_id	bigint(20) unsigned	YES	NULL					3
+orders	customer_name	varchar(120)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		4
+orders	customer_email	varchar(190)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		5
+orders	customer_phone	varchar(25)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		6
+orders	customer_phone_e164	varchar(20)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		7
+orders	fulfilment_mode	enum('delivery','pickup','custom_delivery')	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		8
+orders	order_status	varchar(64)	NO	'pending'		utf8mb4	utf8mb4_unicode_ci		9
+orders	payment_status	enum('pending','under_review','paid','credit','refund_pending','partially_refunded','refunded','failed','rejected')	NO	'pending'		utf8mb4	utf8mb4_unicode_ci		10
+orders	refund_status	enum('none','requested','approved','rejected','processed')	NO	'none'		utf8mb4	utf8mb4_unicode_ci		11
+orders	refund_amount	decimal(10,2)	YES	NULL					12
+orders	total_refunded	decimal(10,2)	NO	0.00					13
+orders	refund_reason	varchar(100)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		14
+orders	refund_notes	text	YES	NULL		utf8mb4	utf8mb4_unicode_ci		15
+orders	refunded_by_admin_id	bigint(20) unsigned	YES	NULL					16
+orders	refund_approved_by_admin_id	bigint(20) unsigned	YES	NULL					17
+orders	refund_requested_at	datetime	YES	NULL					18
+orders	refunded_at	datetime	YES	NULL					19
+orders	payment_method	enum('upi_manual','cod','gateway','credit')	NO	'upi_manual'		utf8mb4	utf8mb4_unicode_ci		20
+orders	order_source	enum('retail','byoc_quote')	NO	'retail'		utf8mb4	utf8mb4_unicode_ci		21
+orders	order_mode	enum('ready_pos','scheduled_custom','online','byoc')	YES	NULL		utf8mb4	utf8mb4_unicode_ci	POS mode: ready_pos=counter sale, scheduled_custom=admin booked, online=web, byoc=quote	22
+orders	byoc_quote_id	bigint(20) unsigned	YES	NULL					23
+orders	scheduled_slot	datetime	YES	NULL					24
+orders	scheduled_slot_label	varchar(120)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		25
+orders	slot_id	bigint(20) unsigned	YES	NULL				FK to order_slots.id â€” denormalized for fast fulfillment queries	26
+orders	requires_kitchen_production	tinyint(1)	NO	1				0 for ready_pos orders (cake already made), 1 for all others	27
+orders	production_status	enum('not_required','pending','in_production','decoration_pending','ready','packed','out_for_delivery','delivered')	NO	'pending'		utf8mb4	utf8mb4_unicode_ci	Kitchen production lifecycle	28
+orders	delivery_postal_code	varchar(15)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		29
+orders	billing_address_line1	varchar(190)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		30
+orders	billing_address_line2	varchar(190)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		31
+orders	billing_city	varchar(100)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		32
+orders	billing_state	varchar(100)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		33
+orders	billing_postal_code	varchar(15)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		34
+orders	delivery_street	varchar(255)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		35
+orders	delivery_maps_link	varchar(500)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		36
+orders	delivery_distance_km	decimal(5,2)	YES	NULL					37
+orders	delivery_fee	decimal(10,2)	NO	0.00					38
+orders	subtotal	decimal(10,2)	NO	__NULL__					39
+orders	discount_total	decimal(10,2)	NO	0.00					40
+orders	tax_total	decimal(10,2)	NO	0.00					41
+orders	grand_total	decimal(10,2)	NO	__NULL__					42
+orders	advance_amount	decimal(10,2)	YES	NULL					43
+orders	advance_received_amount	decimal(10,2)	NO	0.00					44
+orders	followup_status	varchar(40)	NO	'no_reminder'		utf8mb4	utf8mb4_unicode_ci		45
+orders	followup_count	int(10) unsigned	NO	0					46
+orders	collection_priority	varchar(20)	NO	'normal'		utf8mb4	utf8mb4_unicode_ci		47
+orders	collection_note	text	YES	NULL		utf8mb4	utf8mb4_unicode_ci		48
+orders	last_followup_at	datetime	YES	NULL					49
+orders	next_followup_at	datetime	YES	NULL					50
+orders	outstanding_amount	decimal(10,2)	NO	0.00					51
+orders	amount_collected	decimal(10,2)	NO	0.00					52
+orders	net_collected_amount	decimal(10,2)	NO	0.00					53
+orders	balance_due_amount	decimal(10,2)	NO	0.00					54
+orders	collection_status	varchar(40)	NO	'payment_pending'		utf8mb4	utf8mb4_unicode_ci		55
+orders	payment_proof_url	varchar(500)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		56
+orders	payment_proof_uploaded_at	datetime	YES	NULL					57
+orders	payment_confirmed_at	datetime	YES	NULL					58
+orders	payment_confirmed_by_admin_id	bigint(20) unsigned	YES	NULL					59
+orders	credit_collected_at	datetime	YES	NULL					60
+orders	credit_collected_by_admin_id	bigint(20) unsigned	YES	NULL					61
+orders	admin_note	text	YES	NULL		utf8mb4	utf8mb4_unicode_ci		62
+orders	created_at	datetime	NO	current_timestamp()					63
+orders	updated_at	datetime	NO	current_timestamp()	on update current_timestamp()				64
+orders	is_archived	tinyint(1)	NO	0					65
+orders	archived_at	datetime	YES	NULL					66
+orders	archived_by_admin_id	bigint(20) unsigned	YES	NULL					67
+orders	archive_reason_code	varchar(64)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		68
+orders	archive_reason_notes	text	YES	NULL		utf8mb4	utf8mb4_unicode_ci		69
+order_audit_logs	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+order_audit_logs	order_id	bigint(20) unsigned	NO	__NULL__					2
+order_audit_logs	action_type	varchar(60)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci	status_transition|payment_status_update|refund_processed|cancel_request|reconciliation_fix|etc	3
+order_audit_logs	previous_status	varchar(40)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		4
+order_audit_logs	new_status	varchar(40)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		5
+order_audit_logs	payment_status	varchar(40)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		6
+order_audit_logs	admin_id	bigint(20) unsigned	YES	NULL					7
+order_audit_logs	admin_role	varchar(40)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		8
+order_audit_logs	ip_address	varchar(45)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		9
+order_audit_logs	message	varchar(255)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		10
+order_audit_logs	metadata	longtext	YES	NULL		utf8mb4	utf8mb4_bin		11
+order_audit_logs	created_at	timestamp	NO	current_timestamp()					12
+order_destructive_logs	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+order_destructive_logs	order_id	bigint(20) unsigned	YES	NULL					2
+order_destructive_logs	action_type	enum('archive','restore','force_purge')	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		3
+order_destructive_logs	reason_code	varchar(64)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		4
+order_destructive_logs	reason_notes	text	YES	NULL		utf8mb4	utf8mb4_unicode_ci		5
+order_destructive_logs	financial_impact_level	enum('none','contains_financial_entries','financial_entries_reversed','financial_entries_purged')	NO	'none'		utf8mb4	utf8mb4_unicode_ci		6
+order_destructive_logs	requires_delete_password	tinyint(1)	NO	1					7
+order_destructive_logs	actor_admin_id	bigint(20) unsigned	YES	NULL					8
+order_destructive_logs	actor_role	varchar(64)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		9
+order_destructive_logs	actor_name	varchar(120)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		10
+order_destructive_logs	ip_address	varchar(64)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		11
+order_destructive_logs	user_agent	varchar(255)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		12
+order_destructive_logs	order_snapshot_json	longtext	YES	NULL		utf8mb4	utf8mb4_unicode_ci		13
+order_destructive_logs	recovery_payload_json	longtext	YES	NULL		utf8mb4	utf8mb4_unicode_ci		14
+order_destructive_logs	created_at	datetime	NO	current_timestamp()					15
+order_items	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+order_items	order_id	bigint(20) unsigned	NO	__NULL__					2
+order_items	product_id	bigint(20) unsigned	NO	__NULL__					3
+order_items	variant_id	bigint(20) unsigned	YES	NULL					4
+order_items	product_name_snapshot	varchar(180)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		5
+order_items	variant_snapshot	varchar(80)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		6
+order_items	unit_price	decimal(10,2)	NO	__NULL__					7
+order_items	quantity	int(11)	NO	__NULL__					8
+order_items	line_total	decimal(10,2)	NO	__NULL__					9
+order_items	customisation_note	text	YES	NULL		utf8mb4	utf8mb4_unicode_ci		10
+order_items	created_at	datetime	NO	current_timestamp()					11
+order_items	cake_message	varchar(200)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		12
+order_items	topper_id	int(10) unsigned	YES	NULL					13
+order_items	topper_name_snapshot	varchar(100)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		14
+order_items	topper_price_snapshot	decimal(8,2)	NO	0.00					15
+order_production_audit_logs	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+order_production_audit_logs	order_id	bigint(20) unsigned	NO	__NULL__					2
+order_production_audit_logs	event_type	enum('exclude','include','override_slot','clear_override')	NO	__NULL__		utf8mb4	utf8mb4_general_ci		3
+order_production_audit_logs	event_note	varchar(500)	YES	NULL		utf8mb4	utf8mb4_general_ci		4
+order_production_audit_logs	changed_by_admin_id	bigint(20) unsigned	YES	NULL					5
+order_production_audit_logs	created_at	datetime	NO	current_timestamp()					6
+order_production_plan	order_id	bigint(20) unsigned	NO	__NULL__					1
+order_production_plan	is_excluded	tinyint(1)	NO	0					2
+order_production_plan	override_slot	datetime	YES	NULL					3
+order_production_plan	override_reason	varchar(255)	YES	NULL		utf8mb4	utf8mb4_general_ci		4
+order_production_plan	override_updated_by_admin_id	bigint(20) unsigned	YES	NULL					5
+order_production_plan	created_at	datetime	NO	current_timestamp()					6
+order_production_plan	updated_at	datetime	NO	current_timestamp()	on update current_timestamp()				7
+order_slots	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+order_slots	slot_type	enum('pickup','delivery')	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		2
+order_slots	slot_name	varchar(120)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci	Internal name e.g. "Morning Pickup"	3
+order_slots	slot_label	varchar(120)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci	Customer-visible label e.g. "10:00 AM – 12:00 PM"	4
+order_slots	start_time	time	NO	__NULL__					5
+order_slots	end_time	time	NO	__NULL__					6
+order_slots	max_orders	smallint(5) unsigned	NO	10				Baseline daily order cap	7
+order_slots	prep_buffer_minutes	smallint(5) unsigned	NO	120				Minimum lead time in minutes before slot start	8
+order_slots	cutoff_hour	tinyint(3) unsigned	NO	20				Hard same-day cutoff (24h hour, e.g. 20 = 8 PM)	9
+order_slots	display_order	smallint(6)	NO	0					10
+order_slots	is_active	tinyint(1)	NO	1					11
+order_slots	is_recommended	tinyint(1)	NO	0				Shows "Recommended" badge in checkout	12
+order_slots	created_at	datetime	NO	current_timestamp()					13
+order_slots	updated_at	datetime	NO	current_timestamp()	on update current_timestamp()				14
+order_slot_exceptions	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+order_slot_exceptions	slot_id	bigint(20) unsigned	NO	__NULL__					2
+order_slot_exceptions	exception_date	date	NO	__NULL__					3
+order_slot_exceptions	override_capacity	smallint(5) unsigned	YES	NULL				NULL = use slot default	4
+order_slot_exceptions	is_closed	tinyint(1)	NO	0				1 = slot completely blocked for this date	5
+order_slot_exceptions	note	varchar(255)	YES	NULL		utf8mb4	utf8mb4_unicode_ci	Admin note e.g. "Diwali closure"	6
+order_slot_exceptions	created_at	datetime	NO	current_timestamp()					7
+order_status_history	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+order_status_history	order_id	bigint(20) unsigned	NO	__NULL__					2
+order_status_history	previous_status	varchar(40)	YES	NULL		utf8mb4	utf8mb4_unicode_ci	NULL for the initial status row on order creation	3
+order_status_history	new_status	varchar(40)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		4
+order_status_history	changed_by_admin_id	bigint(20) unsigned	YES	NULL					5
+order_status_history	admin_role	varchar(40)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		6
+order_status_history	ip_address	varchar(45)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		7
+order_status_history	reason	text	YES	NULL		utf8mb4	utf8mb4_unicode_ci		8
+order_status_history	metadata	longtext	YES	NULL		utf8mb4	utf8mb4_bin	Arbitrary extra data: refund_id, automation trigger, etc.	9
+order_status_history	created_at	timestamp	NO	current_timestamp()					10
+otp_verifications	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+otp_verifications	email	varchar(190)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		2
+otp_verifications	otp	varchar(12)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		3
+otp_verifications	expires_at	datetime	NO	__NULL__					4
+otp_verifications	attempt_count	int(10) unsigned	NO	0					5
+otp_verifications	created_at	datetime	NO	current_timestamp()					6
+pages	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+pages	title	varchar(180)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		2
+pages	slug	varchar(190)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		3
+pages	content	longtext	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		4
+pages	seo_title	varchar(190)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		5
+pages	seo_description	varchar(260)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		6
+pages	is_published	tinyint(1)	NO	1					7
+pages	created_at	datetime	NO	current_timestamp()					8
+pages	updated_at	datetime	NO	current_timestamp()	on update current_timestamp()				9
+password_reset_tokens	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+password_reset_tokens	user_id	bigint(20) unsigned	NO	__NULL__					2
+password_reset_tokens	email	varchar(190)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		3
+password_reset_tokens	token_hash	varchar(255)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		4
+password_reset_tokens	expires_at	datetime	NO	__NULL__					5
+password_reset_tokens	used_at	datetime	YES	NULL					6
+password_reset_tokens	created_at	datetime	NO	current_timestamp()					7
+payments	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+payments	invoice_id	bigint(20) unsigned	NO	__NULL__					2
+payments	payment_method	enum('upi','bank_transfer','cash','pos_card','payment_link')	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		3
+payments	payment_status	enum('submitted','verified','rejected')	NO	'submitted'		utf8mb4	utf8mb4_unicode_ci		4
+payments	amount	decimal(12,2)	NO	__NULL__					5
+payments	payment_reference	varchar(120)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		6
+payments	note	text	YES	NULL		utf8mb4	utf8mb4_unicode_ci		7
+payments	verified_by_admin_id	bigint(20) unsigned	YES	NULL					8
+payments	verified_at	datetime	YES	NULL					9
+payments	created_at	datetime	NO	current_timestamp()					10
+payments	updated_at	datetime	NO	current_timestamp()	on update current_timestamp()				11
+payment_proofs	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+payment_proofs	payment_id	bigint(20) unsigned	NO	__NULL__					2
+payment_proofs	file_url	varchar(255)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		3
+payment_proofs	uploaded_by	enum('customer','b2b_user','admin')	NO	'customer'		utf8mb4	utf8mb4_unicode_ci		4
+payment_proofs	created_at	datetime	NO	current_timestamp()					5
+payment_receipts	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+payment_receipts	order_id	bigint(20) unsigned	NO	__NULL__					2
+payment_receipts	receipt_number	varchar(80)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		3
+payment_receipts	receipt_type	enum('advance','balance','final')	NO	'advance'		utf8mb4	utf8mb4_unicode_ci		4
+payment_receipts	sequence_no	int(10) unsigned	NO	__NULL__					5
+payment_receipts	amount	decimal(12,2)	NO	0.00					6
+payment_receipts	balance_due	decimal(12,2)	NO	0.00					7
+payment_receipts	payment_method	varchar(40)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		8
+payment_receipts	payment_status_snapshot	varchar(60)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		9
+payment_receipts	collection_status_snapshot	varchar(60)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		10
+payment_receipts	source_event	varchar(80)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		11
+payment_receipts	source_reference	varchar(190)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		12
+payment_receipts	financial_transaction_id	bigint(20) unsigned	YES	NULL					13
+payment_receipts	payment_id	bigint(20) unsigned	YES	NULL					14
+payment_receipts	issued_by_admin_id	bigint(20) unsigned	YES	NULL					15
+payment_receipts	receipt_html	longtext	YES	NULL		utf8mb4	utf8mb4_unicode_ci		16
+payment_receipts	metadata_json	longtext	YES	NULL		utf8mb4	utf8mb4_unicode_ci		17
+payment_receipts	issued_at	datetime	NO	current_timestamp()					18
+payment_receipts	created_at	datetime	NO	current_timestamp()					19
+payment_receipts	updated_at	datetime	NO	current_timestamp()	on update current_timestamp()				20
+payment_status_history	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+payment_status_history	invoice_id	bigint(20) unsigned	NO	__NULL__					2
+payment_status_history	from_status	varchar(60)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		3
+payment_status_history	to_status	varchar(60)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		4
+payment_status_history	changed_by_admin_id	bigint(20) unsigned	YES	NULL					5
+payment_status_history	note	text	YES	NULL		utf8mb4	utf8mb4_unicode_ci		6
+payment_status_history	created_at	datetime	NO	current_timestamp()					7
+products	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+products	name	varchar(180)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		2
+products	slug	varchar(220)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		3
+products	short_description	varchar(280)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		4
+products	long_description	text	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		5
+products	flavour_notes	text	YES	NULL		utf8mb4	utf8mb4_unicode_ci		6
+products	texture_notes	text	YES	NULL		utf8mb4	utf8mb4_unicode_ci		7
+products	ingredients_summary	text	YES	NULL		utf8mb4	utf8mb4_unicode_ci		8
+products	packaging_note	text	YES	NULL		utf8mb4	utf8mb4_unicode_ci		9
+products	topper_note	text	YES	NULL		utf8mb4	utf8mb4_unicode_ci		10
+products	sku	varchar(80)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		11
+products	collection_category_id	bigint(20) unsigned	NO	__NULL__					12
+products	subcategory_id	bigint(20) unsigned	YES	NULL					13
+products	child_category_id	bigint(20) unsigned	YES	NULL					14
+products	occasion_tag	varchar(100)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		15
+products	dietary_tag	enum('regular','eggless','vegan','sugar_free')	NO	'regular'		utf8mb4	utf8mb4_unicode_ci		16
+products	is_veg	tinyint(1)	NO	1					17
+products	is_eggless	tinyint(1)	NO	0					18
+products	is_vegan	tinyint(1)	NO	0					19
+products	availability_status	enum('in_stock','out_of_stock','preorder','draft')	NO	'in_stock'		utf8mb4	utf8mb4_unicode_ci		20
+products	lead_time_hours	int(11)	NO	24					21
+products	customisation_note	text	YES	NULL		utf8mb4	utf8mb4_unicode_ci		22
+products	delivery_eligible	tinyint(1)	NO	1					23
+products	pickup_eligible	tinyint(1)	NO	1					24
+products	featured_image	varchar(255)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		25
+products	starting_price	decimal(10,2)	NO	__NULL__					26
+products	base_price	decimal(10,2)	NO	__NULL__					27
+products	discount_price	decimal(10,2)	YES	NULL					28
+products	stock_quantity	int(11)	NO	0					29
+products	is_featured	tinyint(1)	NO	0					30
+products	is_bestseller	tinyint(1)	NO	0					31
+products	is_chef_special	tinyint(1)	NO	0					32
+products	seo_title	varchar(190)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		33
+products	seo_description	varchar(260)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		34
+products	rating_average	decimal(3,2)	NO	0.00					35
+products	review_count	int(11)	NO	0					36
+products	is_b2b_enabled	tinyint(1)	NO	0					37
+products	b2b_minimum_quantity	int(11)	YES	NULL					38
+products	created_at	datetime	NO	current_timestamp()					39
+products	updated_at	datetime	NO	current_timestamp()	on update current_timestamp()				40
+products	deleted_at	datetime	YES	NULL					41
+products	topper_enabled	tinyint(1)	NO	1				1 = allow topper selection on PDP	42
+products	note_enabled	tinyint(1)	NO	1				1 = show Note on the Cake input on PDP, 0 = hide it	43
+product_images	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+product_images	product_id	bigint(20) unsigned	NO	__NULL__					2
+product_images	image_url	varchar(255)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		3
+product_images	alt_text	varchar(190)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		4
+product_images	sort_order	int(11)	NO	0					5
+product_images	created_at	datetime	NO	current_timestamp()					6
+product_import_runs	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+product_import_runs	run_number	int(10) unsigned	NO	__NULL__					2
+product_import_runs	import_type	enum('full','partial')	NO	'full'		utf8mb4	utf8mb4_unicode_ci		3
+product_import_runs	source_file	varchar(255)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		4
+product_import_runs	uploaded_by_admin_id	bigint(20) unsigned	YES	NULL					5
+product_import_runs	total_products_uploaded	int(10) unsigned	YES	0					6
+product_import_runs	products_inserted	int(10) unsigned	YES	0					7
+product_import_runs	products_updated	int(10) unsigned	YES	0					8
+product_import_runs	products_deleted	int(10) unsigned	YES	0					9
+product_import_runs	validation_errors	int(10) unsigned	YES	0					10
+product_import_runs	status	enum('pending','processing','completed','failed','cancelled')	NO	'pending'		utf8mb4	utf8mb4_unicode_ci		11
+product_import_runs	error_message	longtext	YES	NULL		utf8mb4	utf8mb4_unicode_ci		12
+product_import_runs	created_at	timestamp	YES	current_timestamp()					13
+product_import_runs	started_at	timestamp	YES	NULL					14
+product_import_runs	completed_at	timestamp	YES	NULL					15
+product_import_runs	deleted_at	timestamp	YES	NULL					16
+product_import_snapshots	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+product_import_snapshots	run_id	bigint(20) unsigned	NO	__NULL__					2
+product_import_snapshots	snapshot_json	longtext	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		3
+product_import_snapshots	created_at	datetime	NO	current_timestamp()					4
+product_snapshots	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+product_snapshots	run_id	bigint(20) unsigned	NO	__NULL__					2
+product_snapshots	product_id	bigint(20) unsigned	NO	__NULL__					3
+product_snapshots	sku	varchar(100)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		4
+product_snapshots	product_data	longtext	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci	JSON snapshot of complete product record	5
+product_snapshots	operation	enum('insert','update','delete','restore')	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		6
+product_snapshots	sequence_number	int(10) unsigned	NO	__NULL__				Order within the import run	7
+product_snapshots	has_variants	tinyint(1)	YES	0					8
+product_snapshots	variant_count	int(10) unsigned	YES	0					9
+product_snapshots	created_at	timestamp	YES	current_timestamp()					10
+product_snapshots	deleted_at	timestamp	YES	NULL					11
+product_variants	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+product_variants	product_id	bigint(20) unsigned	NO	__NULL__					2
+product_variants	variant_label	varchar(80)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		3
+product_variants	weight_or_size	varchar(50)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		4
+product_variants	flavor	varchar(80)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		5
+product_variants	price	decimal(10,2)	NO	__NULL__					6
+product_variants	discount_price	decimal(10,2)	YES	NULL					7
+product_variants	stock_quantity	int(11)	NO	0					8
+product_variants	sku_suffix	varchar(40)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		9
+product_variants	is_default	tinyint(1)	NO	0					10
+product_variants	is_active	tinyint(1)	NO	1					11
+product_variants	created_at	datetime	NO	current_timestamp()					12
+product_variants	updated_at	datetime	NO	current_timestamp()	on update current_timestamp()				13
+product_variant_snapshots	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+product_variant_snapshots	snapshot_id	bigint(20) unsigned	NO	__NULL__					2
+product_variant_snapshots	run_id	bigint(20) unsigned	NO	__NULL__					3
+product_variant_snapshots	product_id	bigint(20) unsigned	NO	__NULL__					4
+product_variant_snapshots	variant_id	bigint(20) unsigned	NO	__NULL__					5
+product_variant_snapshots	variant_sku	varchar(100)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		6
+product_variant_snapshots	variant_data	longtext	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci	JSON snapshot of variant record	7
+product_variant_snapshots	variant_option_values	varchar(255)	YES	NULL		utf8mb4	utf8mb4_unicode_ci	e.g., "Size: Large, Color: Red"	8
+product_variant_snapshots	variant_price	decimal(10,2)	YES	NULL					9
+product_variant_snapshots	variant_stock	int(10) unsigned	YES	0					10
+product_variant_snapshots	sequence_number	int(10) unsigned	NO	__NULL__					11
+product_variant_snapshots	created_at	timestamp	YES	current_timestamp()					12
+qa_form_test_runs	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+qa_form_test_runs	test_case_id	varchar(60)	NO	__NULL__		utf8mb4	utf8mb4_general_ci		2
+qa_form_test_runs	layer_label	varchar(30)	NO	'second'		utf8mb4	utf8mb4_general_ci		3
+qa_form_test_runs	form_action	varchar(120)	NO	__NULL__		utf8mb4	utf8mb4_general_ci		4
+qa_form_test_runs	expected_outcome	varchar(120)	NO	__NULL__		utf8mb4	utf8mb4_general_ci		5
+qa_form_test_runs	actual_outcome	varchar(120)	NO	__NULL__		utf8mb4	utf8mb4_general_ci		6
+qa_form_test_runs	verdict	enum('pass','fail')	NO	__NULL__		utf8mb4	utf8mb4_general_ci		7
+qa_form_test_runs	evidence_ref	varchar(255)	YES	NULL		utf8mb4	utf8mb4_general_ci		8
+qa_form_test_runs	notes	text	YES	NULL		utf8mb4	utf8mb4_general_ci		9
+qa_form_test_runs	tested_by_admin_id	bigint(20) unsigned	YES	NULL					10
+qa_form_test_runs	created_at	datetime	NO	current_timestamp()					11
+queue_jobs	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+queue_jobs	job_type	varchar(80)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		2
+queue_jobs	payload_json	longtext	YES	NULL		utf8mb4	utf8mb4_bin		3
+queue_jobs	status	enum('queued','processing','completed','failed')	NO	'queued'		utf8mb4	utf8mb4_unicode_ci		4
+queue_jobs	available_at	datetime	NO	current_timestamp()					5
+queue_jobs	attempts	int(11)	NO	0					6
+queue_jobs	last_error	varchar(260)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		7
+queue_jobs	created_at	datetime	NO	current_timestamp()					8
+queue_jobs	updated_at	datetime	NO	current_timestamp()	on update current_timestamp()				9
+refund_approval_logs	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+refund_approval_logs	refund_transaction_id	bigint(20) unsigned	NO	__NULL__					2
+refund_approval_logs	action	enum('submitted','approved','rejected','escalated')	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		3
+refund_approval_logs	performed_by_admin_id	bigint(20) unsigned	YES	NULL					4
+refund_approval_logs	admin_role	varchar(40)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		5
+refund_approval_logs	ip_address	varchar(45)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		6
+refund_approval_logs	notes	text	YES	NULL		utf8mb4	utf8mb4_unicode_ci		7
+refund_approval_logs	created_at	timestamp	NO	current_timestamp()					8
+refund_transactions	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+refund_transactions	order_id	bigint(20) unsigned	NO	__NULL__					2
+refund_transactions	refund_number	varchar(40)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci	Unique human-readable ref, e.g. RFD-20260527-0001	3
+refund_transactions	refund_type	enum('full','partial')	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		4
+refund_transactions	reason_code	varchar(100)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci	Standardised code, e.g. DAMAGED_ITEM, WRONG_ORDER	5
+refund_transactions	reason_notes	text	YES	NULL		utf8mb4	utf8mb4_unicode_ci		6
+refund_transactions	requested_amount	decimal(10,2)	NO	__NULL__				Amount requested by admin; capped at grand_total - delivery_fee	7
+refund_transactions	approved_amount	decimal(10,2)	YES	NULL				Final approved amount; may differ from requested_amount	8
+refund_transactions	processed_amount	decimal(12,2)	YES	NULL					9
+refund_transactions	status	enum('pending_approval','approved','rejected','processed')	NO	'pending_approval'		utf8mb4	utf8mb4_unicode_ci		10
+refund_transactions	refund_status	varchar(40)	NO	'pending_approval'		utf8mb4	utf8mb4_unicode_ci		11
+refund_transactions	requested_by_admin_id	bigint(20) unsigned	YES	NULL					12
+refund_transactions	approved_by_admin_id	bigint(20) unsigned	YES	NULL					13
+refund_transactions	previous_order_status	varchar(40)	YES	NULL		utf8mb4	utf8mb4_unicode_ci	Snapshot of order_status at request time; used to revert on rejection	14
+refund_transactions	fraud_flags	longtext	YES	NULL		utf8mb4	utf8mb4_bin	Array of triggered fraud-check codes, e.g. ["DUPLICATE_REFUND"]	15
+refund_transactions	requested_at	datetime	YES	NULL					16
+refund_transactions	approved_at	datetime	YES	NULL					17
+refund_transactions	processed_at	datetime	YES	NULL					18
+refund_transactions	refund_closed_at	datetime	YES	NULL					19
+refund_transactions	created_at	timestamp	NO	current_timestamp()					20
+refund_transactions	updated_at	timestamp	NO	current_timestamp()	on update current_timestamp()				21
+reminders	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+reminders	user_id	bigint(20) unsigned	YES	NULL					2
+reminders	b2b_account_id	bigint(20) unsigned	YES	NULL					3
+reminders	reminder_type	enum('payment_due','birthday','follow_up','production')	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		4
+reminders	title	varchar(180)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		5
+reminders	reminder_on	datetime	NO	__NULL__					6
+reminders	status	enum('pending','done','cancelled')	NO	'pending'		utf8mb4	utf8mb4_unicode_ci		7
+reminders	notes	text	YES	NULL		utf8mb4	utf8mb4_unicode_ci		8
+reminders	created_by_admin_id	bigint(20) unsigned	YES	NULL					9
+reminders	created_at	datetime	NO	current_timestamp()					10
+reminders	updated_at	datetime	NO	current_timestamp()	on update current_timestamp()				11
+reviews	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+reviews	product_id	bigint(20) unsigned	NO	__NULL__					2
+reviews	user_id	bigint(20) unsigned	NO	__NULL__					3
+reviews	rating	tinyint(3) unsigned	NO	__NULL__					4
+reviews	title	varchar(150)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		5
+reviews	review_text	text	YES	NULL		utf8mb4	utf8mb4_unicode_ci		6
+reviews	status	enum('pending','approved','rejected')	NO	'pending'		utf8mb4	utf8mb4_unicode_ci		7
+reviews	created_at	datetime	NO	current_timestamp()					8
+reviews	updated_at	datetime	NO	current_timestamp()	on update current_timestamp()				9
+settings	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+settings	setting_key	varchar(120)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		2
+settings	setting_value	longtext	YES	NULL		utf8mb4	utf8mb4_unicode_ci		3
+settings	updated_by_admin_id	bigint(20) unsigned	YES	NULL					4
+settings	created_at	datetime	NO	current_timestamp()					5
+settings	updated_at	datetime	NO	current_timestamp()	on update current_timestamp()				6
+slot_booking_logs	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+slot_booking_logs	slot_id	bigint(20) unsigned	YES	NULL					2
+slot_booking_logs	booking_date	date	YES	NULL					3
+slot_booking_logs	order_id	bigint(20) unsigned	YES	NULL					4
+slot_booking_logs	event_type	enum('reserved','released','fallback','over_capacity','exception_closed')	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		5
+slot_booking_logs	booked_count_after	smallint(5) unsigned	YES	NULL					6
+slot_booking_logs	capacity_at_event	smallint(5) unsigned	YES	NULL					7
+slot_booking_logs	note	varchar(500)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		8
+slot_booking_logs	created_at	datetime	NO	current_timestamp()					9
+slot_capacities	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+slot_capacities	slot_id	bigint(20) unsigned	NO	__NULL__					2
+slot_capacities	booking_date	date	NO	__NULL__					3
+slot_capacities	booked_count	smallint(5) unsigned	NO	0					4
+slot_capacities	created_at	datetime	NO	current_timestamp()					5
+slot_capacities	updated_at	datetime	NO	current_timestamp()	on update current_timestamp()				6
+slot_reservations	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+slot_reservations	order_id	bigint(20) unsigned	NO	__NULL__					2
+slot_reservations	slot_id	bigint(20) unsigned	NO	__NULL__					3
+slot_reservations	booking_date	date	NO	__NULL__					4
+slot_reservations	reservation_status	enum('hold','confirmed','released','expired','cancelled')	NO	'hold'		utf8mb4	utf8mb4_unicode_ci		5
+slot_reservations	expires_at	datetime	YES	NULL				Auto-expiry time for hold state	6
+slot_reservations	confirmed_at	datetime	YES	NULL					7
+slot_reservations	released_at	datetime	YES	NULL					8
+slot_reservations	created_at	datetime	NO	current_timestamp()					9
+slot_reservations	updated_at	datetime	NO	current_timestamp()	on update current_timestamp()				10
+smtp_settings	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+smtp_settings	host	varchar(190)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		2
+smtp_settings	port	int(11)	YES	NULL					3
+smtp_settings	username	varchar(190)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		4
+smtp_settings	password_encrypted	text	YES	NULL		utf8mb4	utf8mb4_unicode_ci		5
+smtp_settings	encryption	enum('none','ssl','tls')	NO	'tls'		utf8mb4	utf8mb4_unicode_ci		6
+smtp_settings	from_name	varchar(120)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		7
+smtp_settings	from_email	varchar(190)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		8
+smtp_settings	is_active	tinyint(1)	NO	0					9
+smtp_settings	updated_by_admin_id	bigint(20) unsigned	YES	NULL					10
+smtp_settings	created_at	datetime	NO	current_timestamp()					11
+smtp_settings	updated_at	datetime	NO	current_timestamp()	on update current_timestamp()				12
+transaction_batches	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+transaction_batches	financial_transaction_id	bigint(20) unsigned	NO	__NULL__					2
+transaction_batches	batch_number	varchar(80)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		3
+transaction_batches	source_module	varchar(80)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		4
+transaction_batches	source_reference	varchar(120)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		5
+transaction_batches	debit_total	decimal(12,2)	NO	0.00					6
+transaction_batches	credit_total	decimal(12,2)	NO	0.00					7
+transaction_batches	status	enum('posted','failed','reversed')	NO	'posted'		utf8mb4	utf8mb4_unicode_ci		8
+transaction_batches	posted_at	datetime	YES	NULL					9
+transaction_batches	created_at	datetime	NO	current_timestamp()					10
+users	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+users	full_name	varchar(120)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		2
+users	email	varchar(190)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		3
+users	phone	varchar(25)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		4
+users	phone_e164	varchar(20)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		5
+users	password_hash	varchar(255)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		6
+users	role	enum('customer','b2b_user')	NO	'customer'		utf8mb4	utf8mb4_unicode_ci		7
+users	is_active	tinyint(1)	NO	1					8
+users	email_verified_at	datetime	YES	NULL					9
+users	last_login_at	datetime	YES	NULL					10
+users	created_at	datetime	NO	current_timestamp()					11
+users	updated_at	datetime	NO	current_timestamp()	on update current_timestamp()				12
+users	deleted_at	datetime	YES	NULL					13
+user_addresses	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+user_addresses	user_id	bigint(20) unsigned	NO	__NULL__					2
+user_addresses	label	varchar(60)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		3
+user_addresses	recipient_name	varchar(120)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		4
+user_addresses	phone	varchar(25)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		5
+user_addresses	line1	varchar(190)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		6
+user_addresses	line2	varchar(190)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		7
+user_addresses	landmark	varchar(190)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		8
+user_addresses	city	varchar(100)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		9
+user_addresses	state	varchar(100)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		10
+user_addresses	postal_code	varchar(15)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		11
+user_addresses	latitude	decimal(10,7)	YES	NULL					12
+user_addresses	longitude	decimal(10,7)	YES	NULL					13
+user_addresses	is_default	tinyint(1)	NO	0					14
+user_addresses	created_at	datetime	NO	current_timestamp()					15
+user_addresses	updated_at	datetime	NO	current_timestamp()	on update current_timestamp()				16
+whatsapp_settings	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+whatsapp_settings	provider_name	varchar(120)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		2
+whatsapp_settings	app_id	varchar(190)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		3
+whatsapp_settings	app_secret_encrypted	text	YES	NULL		utf8mb4	utf8mb4_unicode_ci		4
+whatsapp_settings	api_base_url	varchar(255)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		5
+whatsapp_settings	api_key_encrypted	text	YES	NULL		utf8mb4	utf8mb4_unicode_ci		6
+whatsapp_settings	access_token_encrypted	text	YES	NULL		utf8mb4	utf8mb4_unicode_ci		7
+whatsapp_settings	phone_number_id	varchar(120)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		8
+whatsapp_settings	business_account_id	varchar(120)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		9
+whatsapp_settings	webhook_callback_url	varchar(255)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		10
+whatsapp_settings	webhook_verify_token	varchar(120)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		11
+whatsapp_settings	default_language_code	varchar(12)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		12
+whatsapp_settings	default_category	varchar(40)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		13
+whatsapp_settings	namespace_reference	varchar(190)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		14
+whatsapp_settings	is_active	tinyint(1)	NO	0					15
+whatsapp_settings	updated_by_admin_id	bigint(20) unsigned	YES	NULL					16
+whatsapp_settings	created_at	datetime	NO	current_timestamp()					17
+whatsapp_settings	updated_at	datetime	NO	current_timestamp()	on update current_timestamp()				18
+whatsapp_templates	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+whatsapp_templates	internal_name	varchar(180)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		2
+whatsapp_templates	template_key	varchar(120)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		3
+whatsapp_templates	meta_template_name	varchar(180)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		4
+whatsapp_templates	meta_template_id_or_reference	varchar(190)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		5
+whatsapp_templates	waba_id	varchar(120)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		6
+whatsapp_templates	phone_number_id	varchar(120)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		7
+whatsapp_templates	category	enum('utility','marketing','authentication')	NO	'utility'		utf8mb4	utf8mb4_unicode_ci		8
+whatsapp_templates	language_code	varchar(12)	NO	'en_US'		utf8mb4	utf8mb4_unicode_ci		9
+whatsapp_templates	header_type	enum('none','text','image','video','document')	NO	'none'		utf8mb4	utf8mb4_unicode_ci		10
+whatsapp_templates	header_text	varchar(240)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		11
+whatsapp_templates	header_media_example	varchar(255)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		12
+whatsapp_templates	body_text	longtext	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		13
+whatsapp_templates	footer_text	varchar(180)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		14
+whatsapp_templates	buttons_json	longtext	YES	NULL		utf8mb4	utf8mb4_bin		15
+whatsapp_templates	variables_json	longtext	YES	NULL		utf8mb4	utf8mb4_bin		16
+whatsapp_templates	approval_status	enum('draft','ready_to_submit','submitted','in_review','approved','rejected','paused','disabled','archived')	NO	'draft'		utf8mb4	utf8mb4_unicode_ci		17
+whatsapp_templates	approval_reason	varchar(260)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		18
+whatsapp_templates	sync_status	enum('local_only','pending_sync','synced','sync_failed')	NO	'local_only'		utf8mb4	utf8mb4_unicode_ci		19
+whatsapp_templates	last_synced_at	datetime	YES	NULL					20
+whatsapp_templates	mapped_event_key	varchar(120)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		21
+whatsapp_templates	is_active	tinyint(1)	NO	1					22
+whatsapp_templates	created_by	bigint(20) unsigned	YES	NULL					23
+whatsapp_templates	updated_by	bigint(20) unsigned	YES	NULL					24
+whatsapp_templates	created_at	datetime	NO	current_timestamp()					25
+whatsapp_templates	updated_at	datetime	NO	current_timestamp()	on update current_timestamp()				26
+whatsapp_template_approval_logs	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+whatsapp_template_approval_logs	template_id	bigint(20) unsigned	NO	__NULL__					2
+whatsapp_template_approval_logs	previous_status	varchar(40)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		3
+whatsapp_template_approval_logs	new_status	varchar(40)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		4
+whatsapp_template_approval_logs	meta_reason	varchar(260)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		5
+whatsapp_template_approval_logs	response_payload_json	longtext	YES	NULL		utf8mb4	utf8mb4_bin		6
+whatsapp_template_approval_logs	changed_by	bigint(20) unsigned	YES	NULL					7
+whatsapp_template_approval_logs	created_at	datetime	NO	current_timestamp()					8
+whatsapp_template_buttons	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+whatsapp_template_buttons	template_id	bigint(20) unsigned	NO	__NULL__					2
+whatsapp_template_buttons	button_type	enum('quick_reply','url','phone')	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		3
+whatsapp_template_buttons	button_text	varchar(60)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		4
+whatsapp_template_buttons	button_value	varchar(255)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		5
+whatsapp_template_buttons	sort_order	int(11)	NO	0					6
+whatsapp_template_buttons	created_at	datetime	NO	current_timestamp()					7
+whatsapp_template_mappings	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+whatsapp_template_mappings	event_key	varchar(120)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		2
+whatsapp_template_mappings	template_id	bigint(20) unsigned	NO	__NULL__					3
+whatsapp_template_mappings	is_active	tinyint(1)	NO	1					4
+whatsapp_template_mappings	updated_by	bigint(20) unsigned	YES	NULL					5
+whatsapp_template_mappings	created_at	datetime	NO	current_timestamp()					6
+whatsapp_template_mappings	updated_at	datetime	NO	current_timestamp()	on update current_timestamp()				7
+whatsapp_template_sync_logs	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+whatsapp_template_sync_logs	template_id	bigint(20) unsigned	YES	NULL					2
+whatsapp_template_sync_logs	sync_direction	enum('push_to_meta','pull_from_meta')	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		3
+whatsapp_template_sync_logs	status	enum('success','failed','partial')	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		4
+whatsapp_template_sync_logs	request_payload_json	longtext	YES	NULL		utf8mb4	utf8mb4_bin		5
+whatsapp_template_sync_logs	response_payload_json	longtext	YES	NULL		utf8mb4	utf8mb4_bin		6
+whatsapp_template_sync_logs	message	varchar(260)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		7
+whatsapp_template_sync_logs	synced_by	bigint(20) unsigned	YES	NULL					8
+whatsapp_template_sync_logs	created_at	datetime	NO	current_timestamp()					9
+whatsapp_template_variables	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+whatsapp_template_variables	template_id	bigint(20) unsigned	NO	__NULL__					2
+whatsapp_template_variables	variable_key	varchar(120)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		3
+whatsapp_template_variables	variable_label	varchar(120)	NO	__NULL__		utf8mb4	utf8mb4_unicode_ci		4
+whatsapp_template_variables	component_scope	enum('header','body','footer','button')	NO	'body'		utf8mb4	utf8mb4_unicode_ci		5
+whatsapp_template_variables	parameter_order	int(11)	NO	__NULL__					6
+whatsapp_template_variables	fallback_value	varchar(180)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		7
+whatsapp_template_variables	is_required	tinyint(1)	NO	1					8
+whatsapp_template_variables	created_at	datetime	NO	current_timestamp()					9
+whatsapp_template_versions	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+whatsapp_template_versions	template_id	bigint(20) unsigned	NO	__NULL__					2
+whatsapp_template_versions	version_number	int(11)	NO	__NULL__					3
+whatsapp_template_versions	snapshot_json	longtext	NO	__NULL__		utf8mb4	utf8mb4_bin		4
+whatsapp_template_versions	change_note	varchar(260)	YES	NULL		utf8mb4	utf8mb4_unicode_ci		5
+whatsapp_template_versions	created_by	bigint(20) unsigned	YES	NULL					6
+whatsapp_template_versions	created_at	datetime	NO	current_timestamp()					7
+wishlists	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+wishlists	user_id	bigint(20) unsigned	NO	__NULL__					2
+wishlists	created_at	datetime	NO	current_timestamp()					3
+wishlist_items	id	bigint(20) unsigned	NO	__NULL__	auto_increment				1
+wishlist_items	wishlist_id	bigint(20) unsigned	NO	__NULL__					2
+wishlist_items	product_id	bigint(20) unsigned	NO	__NULL__					3
+wishlist_items	created_at	datetime	NO	current_timestamp()					4

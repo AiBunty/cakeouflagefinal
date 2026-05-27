@@ -1,0 +1,11 @@
+{
+  "proof_dir": "storage/logs/smoke_auth_final_20260526_125831",
+  "auth_me_success": null,
+  "orders_success": null,
+  "send_success": null,
+  "auth_me_after_logout_success": null,
+  "logout_success": null,
+  "email": "qa.auth.20260526_125831@cakeouflage.com",
+  "timestamp": "2026-05-26T12:58:36.7562886+05:30",
+  "verify_success": null
+}

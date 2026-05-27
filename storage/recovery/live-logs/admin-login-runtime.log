@@ -1,0 +1,5 @@
+[26-May-2026 05:34:49 Europe/London] PHP Parse error:  syntax error, unexpected '|', expecting '{' in /home/sites/14b/b/bf69cff851/public_html/cakeouflage.com/admin/includes/db.php on line 147
+[26-May-2026 05:34:49 Europe/London] [admin_login_fatal] syntax error, unexpected '|', expecting '{' in /home/sites/14b/b/bf69cff851/public_html/cakeouflage.com/admin/includes/db.php:147
+[26-May-2026 05:36:26 Europe/London] [admin_auth] {"event":"runtime_identity_mutation_skipped","time":"2026-05-26T04:36:26+00:00","reason":"non_dev_environment"}
+[26-May-2026 05:36:43 Europe/London] [admin_auth] {"event":"runtime_identity_mutation_skipped","time":"2026-05-26T04:36:43+00:00","reason":"non_dev_environment"}
+[26-May-2026 05:37:05 Europe/London] [admin_auth] {"event":"runtime_identity_mutation_skipped","time":"2026-05-26T04:37:05+00:00","reason":"non_dev_environment"}

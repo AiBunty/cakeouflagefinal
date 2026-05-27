@@ -1,0 +1,27 @@
+[
+  {
+    "endpoint": "/api/admin/dashboard/summary",
+    "status": 200,
+    "body_head": "{\"success\":true,\"message\":\"ok\",\"data\":{\"orders_total\":13,\"revenue_total\":9007.4,\"revenue_today\":4500.8,\"revenue_month\":9007.4,\"revenue_year\":9007.4,\"customers_total\":1,\"products_total\":244,\"b2b_accounts_total\":0,\"pending"
+  },
+  {
+    "endpoint": "/api/admin/finance/summary",
+    "status": 200,
+    "body_head": "{\"success\":true,\"message\":\"ok\",\"data\":{\"total_invoices\":7,\"paid_invoices\":7,\"unpaid_invoices\":0,\"overdue_invoices\":0,\"part_paid_invoices\":0,\"retail_receivables\":0,\"b2b_receivables\":0,\"total_receivables\":0,\"cash_collectio"
+  },
+  {
+    "endpoint": "/api/admin/reports/summary",
+    "status": 200,
+    "body_head": "{\"success\":true,\"message\":\"ok\",\"data\":{\"retail_orders\":13,\"b2b_orders\":0,\"pending_invoices\":1,\"queued_communications\":15,\"failed_communications\":0,\"whatsapp_approved_templates\":0,\"this_month_collected\":13588.2,\"this_mont"
+  },
+  {
+    "endpoint": "/api/admin/orders?limit=5",
+    "status": 200,
+    "body_head": "{\"success\":true,\"message\":\"ok\",\"data\":{\"items\":[{\"id\":31,\"order_number\":\"MAN-20260526001954\",\"customer_name\":\"Manual QA Customer\",\"customer_email\":\"manual.qa.20260526001954@example.com\",\"customer_phone\":\"9876543210\",\"ful"
+  },
+  {
+    "endpoint": "/api/admin/refunds",
+    "status": 200,
+    "body_head": "{\"success\":true,\"data\":[{\"id\":15,\"refund_number\":\"RFD-20260526-73D1C403\",\"order_id\":31,\"refund_type\":\"partial\",\"reason_code\":\"OTHER\",\"reason_notes\":\"QA refund request flow\",\"requested_amount\":\"100.00\",\"approved_amount\":\""
+  }
+]

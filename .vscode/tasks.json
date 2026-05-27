@@ -1,0 +1,79 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Audit Production",
+      "type": "shell",
+      "command": "pwsh",
+      "args": [
+        "-NoProfile",
+        "-File",
+        "./deploy/deploy-validate.ps1",
+        "-Strict"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Dry Run Deployment",
+      "type": "shell",
+      "command": "pwsh",
+      "args": [
+        "-NoProfile",
+        "-File",
+        "./deploy/deploy-serverbyt.ps1",
+        "-WhatIf"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Deploy Files Only",
+      "type": "shell",
+      "command": "pwsh",
+      "args": [
+        "-NoProfile",
+        "-File",
+        "./deploy/deploy-serverbyt.ps1"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Deploy + Migration",
+      "type": "shell",
+      "command": "pwsh",
+      "args": [
+        "-NoProfile",
+        "-File",
+        "./deploy/deploy-serverbyt.ps1",
+        "-RunMigration",
+        "-RunValidation"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Hotfix Deploy",
+      "type": "shell",
+      "command": "pwsh",
+      "args": [
+        "-NoProfile",
+        "-File",
+        "./deploy/deploy-hotfix.ps1",
+        "-Files",
+        "app/Core/App.php",
+        "-RunValidation"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Post Deploy Validation",
+      "type": "shell",
+      "command": "pwsh",
+      "args": [
+        "-NoProfile",
+        "-File",
+        "./deploy/deploy-validate.ps1",
+        "-Strict"
+      ],
+      "problemMatcher": []
+    }
+  ]
+}

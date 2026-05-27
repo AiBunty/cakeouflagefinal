@@ -3,6 +3,7 @@ $pageTitle = 'Sales Register';
 require_once __DIR__ . '/layout.php';
 require_admin_permission('revenue_report');
 require_once __DIR__ . '/includes/db.php';
+require_once __DIR__ . '/includes/business-settings-helper.php';
 
 use App\Services\FinanceReportService;
 
@@ -34,6 +35,13 @@ $totals = $register['totals'];
 $totalRows = (int)$register['totalRows'];
 $totalPages = (int)$register['totalPages'];
 $page = (int)$register['page'];
+$businessSettings = get_business_settings($conn);
+
+function sr_money(float $amount): string
+{
+  global $businessSettings;
+  return format_money_with_business_currency($amount, $businessSettings ?? null);
+}
 
 function sales_payment_channel_label(string $method): string
 {
@@ -300,14 +308,14 @@ $currentUrl = sales_register_url(['page' => $page]);
     </div>
     <div class="sr-body">
       <div class="sr-grid">
-        <div class="sr-card"><strong>Net Cash</strong><span>Rs <?= number_format((float)($totals['cash_total'] ?? 0), 2) ?></span><small>Settled cash after refunds</small></div>
-        <div class="sr-card"><strong>Net Bank</strong><span>Rs <?= number_format((float)($totals['bank_total'] ?? 0), 2) ?></span><small>UPI and gateway settlements</small></div>
-        <div class="sr-card"><strong>Net Collected</strong><span>Rs <?= number_format((float)($totals['overall_total'] ?? 0), 2) ?></span><small>Collected cash after refund impact</small></div>
-        <div class="sr-card"><strong>Gross Amount</strong><span>Rs <?= number_format((float)($totals['gross_total'] ?? 0), 2) ?></span><small>Total order value in filtered rows</small></div>
-        <div class="sr-card"><strong>Refunded</strong><span>Rs <?= number_format((float)($totals['refunded_total'] ?? 0), 2) ?></span><small><?= (int)($totals['refunded_orders'] ?? 0) ?> refunded orders in view</small></div>
-        <div class="sr-card"><strong>Advance Received</strong><span>Rs <?= number_format((float)($totals['advance_collected'] ?? 0), 2) ?></span><small>Advance payments captured</small></div>
-        <div class="sr-card"><strong>Pending Collection</strong><span>Rs <?= number_format((float)($totals['balance_outstanding'] ?? 0), 2) ?></span><small>Outstanding receivables to collect</small></div>
-        <div class="sr-card"><strong>Credit Outstanding</strong><span>Rs <?= number_format((float)($totals['credit_total'] ?? 0), 2) ?></span><small>Credit channel balance only</small></div>
+        <div class="sr-card"><strong>Net Cash</strong><span><?= htmlspecialchars(sr_money((float)($totals['cash_total'] ?? 0)), ENT_QUOTES, 'UTF-8') ?></span><small>Settled cash after refunds</small></div>
+        <div class="sr-card"><strong>Net Bank</strong><span><?= htmlspecialchars(sr_money((float)($totals['bank_total'] ?? 0)), ENT_QUOTES, 'UTF-8') ?></span><small>UPI and gateway settlements</small></div>
+        <div class="sr-card"><strong>Net Collected</strong><span><?= htmlspecialchars(sr_money((float)($totals['overall_total'] ?? 0)), ENT_QUOTES, 'UTF-8') ?></span><small>Collected cash after refund impact</small></div>
+        <div class="sr-card"><strong>Gross Amount</strong><span><?= htmlspecialchars(sr_money((float)($totals['gross_total'] ?? 0)), ENT_QUOTES, 'UTF-8') ?></span><small>Total order value in filtered rows</small></div>
+        <div class="sr-card"><strong>Refunded</strong><span><?= htmlspecialchars(sr_money((float)($totals['refunded_total'] ?? 0)), ENT_QUOTES, 'UTF-8') ?></span><small><?= (int)($totals['refunded_orders'] ?? 0) ?> refunded orders in view</small></div>
+        <div class="sr-card"><strong>Advance Received</strong><span><?= htmlspecialchars(sr_money((float)($totals['advance_collected'] ?? 0)), ENT_QUOTES, 'UTF-8') ?></span><small>Advance payments captured</small></div>
+        <div class="sr-card"><strong>Pending Collection</strong><span><?= htmlspecialchars(sr_money((float)($totals['balance_outstanding'] ?? 0)), ENT_QUOTES, 'UTF-8') ?></span><small>Outstanding receivables to collect</small></div>
+        <div class="sr-card"><strong>Credit Outstanding</strong><span><?= htmlspecialchars(sr_money((float)($totals['credit_total'] ?? 0)), ENT_QUOTES, 'UTF-8') ?></span><small>Credit channel balance only</small></div>
       </div>
     </div>
   </section>
@@ -448,11 +456,11 @@ $currentUrl = sales_register_url(['page' => $page]);
                   <td><?= htmlspecialchars((string)$row['customer_name'], ENT_QUOTES, 'UTF-8') ?></td>
                   <td><?= htmlspecialchars((string)($row['customer_phone_e164'] ?: $row['customer_phone']), ENT_QUOTES, 'UTF-8') ?></td>
                   <td><?= htmlspecialchars((string)($row['items_summary'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
-                  <td class="sr-amount">Rs <?= number_format((float)($row['gross_amount'] ?? 0), 2) ?></td>
-                  <td class="sr-amount<?= (float)($row['refund_amount'] ?? 0) > 0 ? ' negative' : '' ?>"><?= (float)($row['refund_amount'] ?? 0) > 0 ? '- Rs ' . number_format((float)($row['refund_amount'] ?? 0), 2) : '—' ?></td>
-                  <td class="sr-amount">Rs <?= number_format((float)($row['net_collected_amount'] ?? 0), 2) ?></td>
-                  <td class="sr-amount"><?= (float)($row['advance_collected_amount'] ?? 0) > 0 ? 'Rs ' . number_format((float)($row['advance_collected_amount'] ?? 0), 2) : '—' ?></td>
-                  <td class="sr-amount"><?= (float)($row['balance_due_amount'] ?? 0) > 0 ? 'Rs ' . number_format((float)($row['balance_due_amount'] ?? 0), 2) : '—' ?></td>
+                  <td class="sr-amount"><?= htmlspecialchars(sr_money((float)($row['gross_amount'] ?? 0)), ENT_QUOTES, 'UTF-8') ?></td>
+                  <td class="sr-amount<?= (float)($row['refund_amount'] ?? 0) > 0 ? ' negative' : '' ?>"><?= (float)($row['refund_amount'] ?? 0) > 0 ? ('- ' . htmlspecialchars(sr_money((float)($row['refund_amount'] ?? 0)), ENT_QUOTES, 'UTF-8')) : '—' ?></td>
+                  <td class="sr-amount"><?= htmlspecialchars(sr_money((float)($row['net_collected_amount'] ?? 0)), ENT_QUOTES, 'UTF-8') ?></td>
+                  <td class="sr-amount"><?= (float)($row['advance_collected_amount'] ?? 0) > 0 ? htmlspecialchars(sr_money((float)($row['advance_collected_amount'] ?? 0)), ENT_QUOTES, 'UTF-8') : '—' ?></td>
+                  <td class="sr-amount"><?= (float)($row['balance_due_amount'] ?? 0) > 0 ? htmlspecialchars(sr_money((float)($row['balance_due_amount'] ?? 0)), ENT_QUOTES, 'UTF-8') : '—' ?></td>
                   <td><span class="sr-pill <?= $statusClass ?>"><?= htmlspecialchars((string)($row['collection_status_label'] ?? $row['finance_status_label'] ?? 'Payment Pending'), ENT_QUOTES, 'UTF-8') ?></span></td>
                   <td><span id="payment-status-pill-<?= $rowId ?>" class="sr-pill <?= $statusClass ?>"><?= htmlspecialchars((string)$row['payment_status'], ENT_QUOTES, 'UTF-8') ?></span></td>
                   <td id="order-status-text-<?= $rowId ?>"><?= htmlspecialchars((string)$row['order_status'], ENT_QUOTES, 'UTF-8') ?></td>

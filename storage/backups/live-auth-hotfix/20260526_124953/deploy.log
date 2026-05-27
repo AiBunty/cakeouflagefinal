@@ -1,0 +1,12 @@
+[2026-05-26T12:49:53.5335260+05:30] START auth hotfix deploy
+[2026-05-26T12:49:53.7560956+05:30] BACKUP app/bootstrap.php
+[2026-05-26T12:49:54.0625183+05:30] UPLOAD app/bootstrap.php
+[2026-05-26T12:49:54.1047338+05:30] BACKUP app/Controllers/ApiController.php
+[2026-05-26T12:49:54.1523355+05:30] UPLOAD app/Controllers/ApiController.php
+[2026-05-26T12:49:54.2007678+05:30] BACKUP app/Controllers/WebController.php
+[2026-05-26T12:49:54.2410766+05:30] UPLOAD app/Controllers/WebController.php
+[2026-05-26T12:49:54.2830866+05:30] BACKUP app/Views/pages/account.php
+[2026-05-26T12:49:54.3228337+05:30] UPLOAD app/Views/pages/account.php
+[2026-05-26T12:49:54.4604620+05:30] BACKUP client/assets/js/customer-dashboard.js
+[2026-05-26T12:49:54.5098386+05:30] UPLOAD client/assets/js/customer-dashboard.js
+[2026-05-26T12:49:54.5823116+05:30] COMPLETE auth hotfix deploy

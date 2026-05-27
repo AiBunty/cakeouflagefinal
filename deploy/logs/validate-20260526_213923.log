@@ -1,0 +1,15 @@
+[2026-05-26T21:39:23] Validation start
+[2026-05-26T21:39:23] FTP host=ftp.theboxerp.com user=admin@cakeouflage.com
+[2026-05-26T21:39:23] DB host=mysql.gb.stackcp.com db=cakeouflageweb-353032394d0c
+[2026-05-26T21:39:26] FTP connectivity OK host=ftp.theboxerp.com user=admin@cakeouflage.com
+[2026-05-26T21:39:34] Writable check PASS path=storage
+[2026-05-26T21:39:41] Writable check PASS path=uploads
+[2026-05-26T21:39:49] Writable check PASS path=public/uploads
+[2026-05-26T21:39:51] DB connectivity OK version=10.6.18-MariaDB-log charset=latin1 collation=latin1_swedish_ci
+[2026-05-26T21:39:51] WARNING could not determine production DB server charset from diagnostics payload
+[2026-05-26T21:39:52] HTTP https://cakeouflage.com/ => 200
+[2026-05-26T21:39:53] HTTP https://cakeouflage.com/account => 200
+[2026-05-26T21:39:54] HTTP https://cakeouflage.com/admin/login.php => 200
+[2026-05-26T21:39:54] HTTP https://cakeouflage.com/api/health/db => 200
+[2026-05-26T21:40:04] Auth validation PASS
+[2026-05-26T21:40:04] Validation complete. Log=D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\deploy\logs\validate-20260526_213923.log

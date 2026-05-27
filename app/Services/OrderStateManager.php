@@ -166,6 +166,16 @@ final class OrderStateManager
                 ];
             }
 
+            // Payment decision hard gate: do not allow confirmation until payment is settled.
+            if ($newStatus === 'confirmed' && !in_array($currentPayment, ['paid', 'credit'], true)) {
+                $pdo->rollBack();
+                return [
+                    'success'         => false,
+                    'message'         => 'Cannot confirm order while payment is pending or under review.',
+                    'previous_status' => $previousStatus,
+                ];
+            }
+
             if ($newStatus === 'cancelled' && $this->isPaidState($currentPayment, $previousStatus)) {
                 $pdo->rollBack();
                 return [

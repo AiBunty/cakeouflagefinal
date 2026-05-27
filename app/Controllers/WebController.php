@@ -4,10 +4,13 @@ declare(strict_types=1);
 namespace App\Controllers;
 
 use App\Core\Database;
+use App\Core\CustomerAuthMiddleware;
 use App\Core\Env;
 use App\Core\View;
+use App\Services\AuthManager;
 use App\Services\ByocQuoteExpiryService;
 use App\Services\CategoryService;
+use App\Services\ProductImageService;
 
 final class WebController
 {
@@ -301,30 +304,26 @@ final class WebController
 
     public function login(): void
     {
-        View::render('login', ['title' => 'Login', 'breadcrumbs' => [['label' => 'Login']]]);
+        header('Location: /account/login.php');
+        exit;
     }
 
     public function forgotPassword(): void
     {
-        View::render('forgot-password', [
-            'title' => 'Forgot Password',
-            'breadcrumbs' => [['label' => 'Forgot Password']],
-            'pageTitle' => 'Forgot Password',
-        ]);
+        header('Location: /account/login.php');
+        exit;
     }
 
     public function resetPassword(): void
     {
-        View::render('reset-password', [
-            'title' => 'Reset Password',
-            'breadcrumbs' => [['label' => 'Reset Password']],
-            'pageTitle' => 'Reset Password',
-        ]);
+        header('Location: /account/login.php');
+        exit;
     }
 
     public function register(): void
     {
-        View::render('register', ['title' => 'Register', 'breadcrumbs' => [['label' => 'Register']]]);
+        header('Location: /account/login.php');
+        exit;
     }
 
     public function faq(): void
@@ -397,6 +396,8 @@ final class WebController
             $params[] = $searchLike;
         }
 
+        $foodMode = getDietaryMode();
+
         $dietaryRaw = $_GET['dietary'] ?? [];
         $dietaryValues = is_array($dietaryRaw) ? $dietaryRaw : explode(',', (string)$dietaryRaw);
         $allowedDietary = ['regular', 'eggless', 'vegan', 'sugar_free'];
@@ -412,7 +413,10 @@ final class WebController
         }
 
         $isVegParam = (string)($_GET['is_veg'] ?? '');
-        if ($hasIsVeg && in_array($isVegParam, ['0', '1'], true)) {
+        if ($hasIsVeg && $foodMode === 'veg_only') {
+            $whereSql[] = 'p.is_veg = ?';
+            $params[]   = 1;
+        } elseif ($hasIsVeg && in_array($isVegParam, ['0', '1'], true)) {
             $whereSql[] = 'p.is_veg = ?';
             $params[]   = (int)$isVegParam;
         }
@@ -647,6 +651,8 @@ final class WebController
             $params[] = $searchLike;
         }
 
+        $foodMode = getDietaryMode();
+
         $dietaryRaw = $_GET['dietary'] ?? [];
         $dietaryValues = is_array($dietaryRaw) ? $dietaryRaw : explode(',', (string)$dietaryRaw);
         $allowedDietary = ['regular', 'eggless', 'vegan', 'sugar_free'];
@@ -662,7 +668,10 @@ final class WebController
         }
 
         $isVegParam = (string)($_GET['is_veg'] ?? '');
-        if ($hasIsVeg && in_array($isVegParam, ['0', '1'], true)) {
+        if ($hasIsVeg && $foodMode === 'veg_only') {
+            $whereSql[] = 'p.is_veg = ?';
+            $params[]   = 1;
+        } elseif ($hasIsVeg && in_array($isVegParam, ['0', '1'], true)) {
             $whereSql[] = 'p.is_veg = ?';
             $params[] = (int)$isVegParam;
         }
@@ -866,14 +875,27 @@ final class WebController
             return;
         }
 
+        if (getDietaryMode() === 'veg_only' && (int)($product['is_veg'] ?? 1) !== 1) {
+            http_response_code(404);
+            View::render('errors/404', ['title' => 'Not Found']);
+            return;
+        }
+
         $variants = $db->fetchAll(
             "SELECT * FROM product_variants WHERE product_id = ? AND is_active = 1 AND price > 0 ORDER BY is_default DESC, price",
             [(int)$product['id']]
         );
 
-        $images = $db->fetchAll(
+        $imageRows = $db->fetchAll(
             "SELECT * FROM product_images WHERE product_id = ? ORDER BY sort_order",
             [(int)$product['id']]
+        );
+
+        $images = ProductImageService::getProductGalleryImages(
+            $product,
+            $imageRows,
+            (string)($product['category_slug'] ?? ''),
+            2
         );
 
         // Build breadcrumbs: Home → Grandparent → Parent → Category → Product
@@ -889,21 +911,33 @@ final class WebController
         }
         $breadcrumbs[] = ['label' => $product['name']];
 
-        // Related products (same category, excluding self)
-     $related = $db->fetchAll("
-    SELECT p.*,
-           MIN(pv.price) AS min_price,
-           (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.id ORDER BY pi.sort_order LIMIT 1) AS thumb
-    FROM products p
-    LEFT JOIN product_variants pv ON pv.product_id = p.id
-    WHERE p.subcategory_id = ?
-        AND p.id != ?
-        AND p.deleted_at IS NULL
-        AND p.availability_status != 'draft'
-    GROUP BY p.id
-    ORDER BY RAND()
-    LIMIT 6
-", [(int)$product['subcategory_id'], (int)$product['id']]);
+            // Related products (same category, excluding self) in ONLY_FULL_GROUP_BY-safe form.
+            $related = $db->fetchAll("
+                SELECT
+                    p.*,
+                    pv_min.min_price,
+                    (
+                        SELECT pi.image_url
+                        FROM product_images pi
+                        WHERE pi.product_id = p.id
+                        ORDER BY pi.sort_order ASC, pi.id ASC
+                        LIMIT 1
+                    ) AS thumb
+                FROM products p
+                LEFT JOIN (
+                    SELECT product_id, MIN(price) AS min_price
+                    FROM product_variants
+                    WHERE is_active = 1 AND price > 0
+                    GROUP BY product_id
+                ) pv_min ON pv_min.product_id = p.id
+                WHERE p.subcategory_id = ?
+                    AND p.id != ?
+                    AND p.deleted_at IS NULL
+                    AND p.availability_status != 'draft'
+                    AND (? != 'veg_only' OR p.is_veg = 1)
+                ORDER BY RAND()
+                LIMIT 6
+            ", [(int)$product['subcategory_id'], (int)$product['id'], getDietaryMode()]);
 
         // Load business phone from settings for WhatsApp enquiry link
         $bizPhoneRow  = $db->fetchOne("SELECT setting_value FROM settings WHERE setting_key = 'business_phone' LIMIT 1");
@@ -1036,10 +1070,44 @@ final class WebController
 
     public function account(): void
     {
-        View::render('account', [
-            'title' => 'My Account',
-            'breadcrumbs' => [['label' => 'My Account']],
+        if (AuthManager::isCustomerAuthenticated()) {
+            header('Location: /account/dashboard.php');
+            exit;
+        }
+
+        header('Location: /account/login.php');
+        exit;
+    }
+
+    public function accountLogin(): void
+    {
+        View::render('account-login', [
+            'title' => 'Customer Login',
+            'breadcrumbs' => [['label' => 'Customer Login']],
         ]);
+    }
+
+    public function accountDashboard(): void
+    {
+        if (!CustomerAuthMiddleware::requireAuthenticated('/account/login.php')) {
+            return;
+        }
+
+        View::render('account-dashboard', [
+            'title' => 'My Dashboard',
+            'breadcrumbs' => [['label' => 'My Dashboard']],
+        ]);
+    }
+
+    public function accountLogout(): void
+    {
+        AuthManager::logoutCustomer();
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_destroy();
+        }
+
+        header('Location: /account/login.php');
+        exit;
     }
 
     public function orders(): void

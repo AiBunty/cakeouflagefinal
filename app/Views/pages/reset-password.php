@@ -27,7 +27,7 @@
         <button class="btn btn--primary btn--lg btn--block" type="submit">Reset Password</button>
         <p id="resetPasswordStatus" class="form-feedback" aria-live="polite"></p>
       </form>
-      <p class="auth-card__footer-link"><a href="/login" class="link">← Back to Sign In</a></p>
+      <p class="auth-card__footer-link"><a href="/account/login.php" class="link">← Back to Sign In</a></p>
     </article>
   </div>
 </section>

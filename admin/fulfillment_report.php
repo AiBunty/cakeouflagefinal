@@ -19,14 +19,15 @@ $slotQ = $conn->prepare(
         os.slot_name,
         os.slot_label,
         os.slot_type,
-        os.max_capacity,
+    COALESCE(ose.override_capacity, os.max_orders) AS max_capacity,
         COALESCE(sc.booked_count, 0) AS booked_count
      FROM order_slots os
+   LEFT JOIN order_slot_exceptions ose ON ose.slot_id = os.id AND ose.exception_date = ?
      LEFT JOIN slot_capacities sc ON sc.slot_id = os.id AND sc.booking_date = ?
      WHERE os.is_active = 1
      ORDER BY os.id ASC'
 );
-$slotQ->bind_param('s', $opsDate);
+$slotQ->bind_param('ss', $opsDate, $opsDate);
 $slotQ->execute();
 $slotRes = $slotQ->get_result();
 if ($slotRes) {

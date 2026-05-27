@@ -1,4 +1,8 @@
 <?php /* Cakeouflage — Register */ ?>
+<?php
+$registerBrandLogo = (string)($siteConfig['branding']['navbar_logo_url'] ?? '/client/assets/images/mainlogo.svg');
+$registerBrandFallback = (string)($siteConfig['branding']['navbar_logo_fallback'] ?? '/client/assets/images/mainlogo.svg');
+?>
 <style>
   .section--auth .auth-card { max-width: 560px; }
   .section--auth .form-grid { gap: 12px; }
@@ -110,7 +114,7 @@
     <div class="auth-card">
       <div class="auth-card__brand">
         <a href="/" class="site-logo auth-card__brand-logo" aria-label="Cakeouflage home">
-          <img src="/client/assets/images/mainlogo.svg" alt="Cakeouflage Logo">
+          <img src="<?= htmlspecialchars($registerBrandLogo, ENT_QUOTES, 'UTF-8') ?>" alt="Cakeouflage Logo" onerror="this.onerror=null;this.src='<?= htmlspecialchars($registerBrandFallback, ENT_QUOTES, 'UTF-8') ?>';">
         </a>
         <p class="auth-card__tagline">We bake sweet wonderful happy memories</p>
       </div>
@@ -173,7 +177,7 @@
         <p id="registerStatus" class="form-feedback" aria-live="polite"></p>
       </form>
 
-      <p class="auth-card__footer-link">Already have an account?    <a href="/login" class="link">Sign In →</a></p>
+      <p class="auth-card__footer-link">Already have an account?    <a href="/account/login.php" class="link">Sign In →</a></p>
     </div>
   </div>
 </main>
@@ -439,7 +443,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       statusEl.textContent = "Registration complete. Redirecting...";
       showToast("Account created successfully.", "success");
-      window.location.href = window.BASE_URL + "/account";
+      window.location.href = window.BASE_URL + "/account/dashboard.php";
     } catch (error) {
       statusEl.textContent = "Unable to verify OTP right now.";
       showToast(statusEl.textContent, "error");

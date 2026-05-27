@@ -9,8 +9,11 @@ require_permission_for_current_admin_page();
 require_once __DIR__ . '/includes/db.php';
 require_once __DIR__ . '/includes/image_helpers.php';
 require_once __DIR__ . '/../app/Services/UnifiedMediaService.php';
+require_once __DIR__ . '/../app/Support/dietary-mode.php';
 
 $defaultProductImage = \App\Services\ProductImageService::placeholderForCategory(null);
+$storeFoodMode = getDietaryMode($conn);
+$foodTypeOptions = getDietaryTypeOptions($storeFoodMode);
 
 function add_product_stmt_bind(mysqli_stmt $stmt, string $types, array &$params): bool
 {
@@ -200,9 +203,10 @@ while (true) {
     // INSERT QUERY
     // =========================
 $is_chef_special = isset($_POST['is_chef_special']) ? 1 : 0;
+$dietary_type    = normalizeDietaryType((string)($_POST['dietary_type'] ?? 'veg'), $storeFoodMode);
 $allowedDietary  = add_product_enum_values($conn, 'products', 'dietary_tag', ['regular','eggless','vegan','sugar_free']);
 $dietary_tag     = in_array($_POST['dietary_tag'] ?? '', $allowedDietary, true) ? (string)$_POST['dietary_tag'] : (in_array('regular', $allowedDietary, true) ? 'regular' : (string)($allowedDietary[0] ?? 'regular'));
-$is_veg          = (isset($_POST['is_veg']) && $_POST['is_veg'] === '0') ? 0 : 1;
+$is_veg          = dietaryTypeToIsVeg($dietary_type);
 $topper_enabled  = isset($_POST['topper_enabled']) ? 1 : 0;
 $note_enabled    = isset($_POST['note_enabled']) ? 1 : 0;
 $base_price_str  = (string)(float)$base_price;
@@ -224,10 +228,20 @@ $base_price_str  = (string)(float)$base_price;
         $insertTypes .= 's';
         $insertParams[] = $dietary_tag;
     }
+    if (add_product_column_exists($conn, 'products', 'description')) {
+        $insertColumns[] = 'description';
+        $insertTypes .= 's';
+        $insertParams[] = $description;
+    }
     if (add_product_column_exists($conn, 'products', 'is_veg')) {
         $insertColumns[] = 'is_veg';
         $insertTypes .= 'i';
         $insertParams[] = $is_veg;
+    }
+    if (add_product_column_exists($conn, 'products', 'dietary_type')) {
+        $insertColumns[] = 'dietary_type';
+        $insertTypes .= 's';
+        $insertParams[] = $dietary_type;
     }
     if (add_product_column_exists($conn, 'products', 'topper_enabled')) {
         $insertColumns[] = 'topper_enabled';
@@ -263,26 +277,109 @@ $base_price_str  = (string)(float)$base_price;
        $pi2Stmt->close();
    }
 
-$weights = [1, 1.5, 2, 2.5, 3, 4];
+   $variantNames = $_POST['variant_name'] ?? [];
+   $variantPrices = $_POST['variant_price'] ?? [];
+   $variantUnits = $_POST['variant_unit_type'] ?? [];
+   $variantSkus = $_POST['variant_sku'] ?? [];
+   $variantDefault = (int)($_POST['variant_default'] ?? 0);
 
-foreach ($weights as $index => $weight) {
+   $rows = [];
+   if (is_array($variantNames) && is_array($variantPrices)) {
+       $count = min(count($variantNames), count($variantPrices));
+       for ($i = 0; $i < $count; $i++) {
+           $vName = trim((string)($variantNames[$i] ?? ''));
+           $vPrice = (float)($variantPrices[$i] ?? 0);
+           if ($vName === '' || $vPrice <= 0) {
+               continue;
+           }
+           $rows[] = [
+               'label' => $vName,
+               'name' => $vName,
+               'weight_or_size' => $vName,
+               'unit_type' => trim((string)($variantUnits[$i] ?? 'custom')) ?: 'custom',
+               'price' => round($vPrice, 2),
+               'sku' => trim((string)($variantSkus[$i] ?? '')),
+               'is_default' => ($i === $variantDefault) ? 1 : 0,
+           ];
+       }
+   }
 
-    $variant_price = $base_price * $weight;
+   if ($rows === []) {
+       $rows[] = [
+           'label' => 'Base',
+           'name' => 'Base',
+           'weight_or_size' => 'Base',
+           'unit_type' => 'custom',
+           'price' => round((float)$base_price, 2),
+           'sku' => '',
+           'is_default' => 1,
+       ];
+   }
 
-    $label = $weight . " lb";
+   $hasExplicitDefault = false;
+   foreach ($rows as $rowItem) {
+       if ((int)$rowItem['is_default'] === 1) {
+           $hasExplicitDefault = true;
+           break;
+       }
+   }
+   if (!$hasExplicitDefault) {
+       $rows[0]['is_default'] = 1;
+   }
 
-    $is_default = ($index == 0) ? 1 : 0; // 🔥 first variant default
+   $hasVariantName = add_product_column_exists($conn, 'product_variants', 'variant_name');
+   $hasUnitType = add_product_column_exists($conn, 'product_variants', 'unit_type');
+   $hasSku = add_product_column_exists($conn, 'product_variants', 'sku');
 
-    $varStmt = safePrepare($conn,
-        'INSERT INTO product_variants (product_id, variant_label, weight_or_size, price, stock_quantity, is_default, is_active)
-         VALUES (?, ?, ?, ?, 100, ?, 1)'
-    );
-    $varWeight = (string)$weight;
-    $varPrice  = (string)round($variant_price, 2);
-    $varStmt->bind_param('isssi', $product_id, $label, $varWeight, $varPrice, $is_default);
-    $varStmt->execute();
-    $varStmt->close();
-}
+   foreach ($rows as $rowItem) {
+       $variantColumns = ['product_id', 'variant_label'];
+       $variantValues = [$product_id, $rowItem['label']];
+       $variantTypes = 'is';
+
+       if ($hasVariantName) {
+           $variantColumns[] = 'variant_name';
+           $variantTypes .= 's';
+           $variantValues[] = $rowItem['name'];
+       }
+
+       $variantColumns[] = 'weight_or_size';
+       $variantTypes .= 's';
+       $variantValues[] = $rowItem['weight_or_size'];
+
+       if ($hasUnitType) {
+           $variantColumns[] = 'unit_type';
+           $variantTypes .= 's';
+           $variantValues[] = $rowItem['unit_type'];
+       }
+
+       $variantColumns[] = 'price';
+       $variantTypes .= 'd';
+       $variantValues[] = $rowItem['price'];
+
+       $variantColumns[] = 'stock_quantity';
+       $variantTypes .= 'i';
+       $variantValues[] = 100;
+
+       $variantColumns[] = 'is_default';
+       $variantTypes .= 'i';
+       $variantValues[] = (int)$rowItem['is_default'];
+
+       if ($hasSku) {
+           $variantColumns[] = 'sku';
+           $variantTypes .= 's';
+           $variantValues[] = $rowItem['sku'];
+       }
+
+       $variantColumns[] = 'is_active';
+       $variantTypes .= 'i';
+       $variantValues[] = 1;
+
+       $variantSql = 'INSERT INTO product_variants (' . implode(', ', $variantColumns) . ') VALUES (' . implode(', ', array_fill(0, count($variantColumns), '?')) . ')';
+       $varStmt = safePrepare($conn, $variantSql);
+       add_product_stmt_bind($varStmt, $variantTypes, $variantValues);
+       $varStmt->execute();
+       $varStmt->close();
+   }
         echo "<script>alert('Product Added Successfully'); window.location='products.php';</script>";
     } else {
         error_log('[add-product.php] INSERT failed: ' . $conn->error);
@@ -451,7 +548,7 @@ require_once __DIR__ . '/layout.php';
 </div>
 
 <div class="form-group">
-<label>Base Price (per lb)</label>
+<label>Base Price</label>
 <input class="form-control" type="number" step="0.01" name="base_price" required>
 </div>
 
@@ -466,7 +563,16 @@ require_once __DIR__ . '/layout.php';
 </div>
 
 <div class="form-group">
-<label>Dietary Type</label>
+<label>Food Type</label>
+<select class="form-control" name="dietary_type">
+        <?php foreach ($foodTypeOptions as $foodType): ?>
+            <option value="<?= htmlspecialchars($foodType, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($foodType === 'nonveg' ? 'Non-Veg' : 'Veg', ENT_QUOTES, 'UTF-8') ?></option>
+        <?php endforeach; ?>
+</select>
+</div>
+
+<div class="form-group">
+<label>Dietary Tag</label>
 <select class="form-control" name="dietary_tag">
     <option value="regular">Regular</option>
     <option value="eggless">Eggless</option>
@@ -519,6 +625,15 @@ require_once __DIR__ . '/layout.php';
 </div>
 </div>
 
+<div class="form-section">
+<h3>Variants</h3>
+<p class="form-section__hint">Add explicit variant rows. Leave blank rows removed automatically.</p>
+<div id="variantRows"></div>
+<div class="form-actions" style="margin-top:10px;">
+    <button class="btn btn--secondary" id="addVariantBtn" type="button">+ Add Variant</button>
+</div>
+</div>
+
 <div class="form-actions">
     <button class="btn">Add Product</button>
 </div>
@@ -562,6 +677,73 @@ require_once __DIR__ . '/layout.php';
             productImage2Preview.style.display = 'block';
         });
     }
+
+    const variantRows = document.getElementById('variantRows');
+    const addVariantBtn = document.getElementById('addVariantBtn');
+
+    function addVariantRow(seed) {
+        if (!variantRows) {
+            return;
+        }
+        const rowIndex = variantRows.children.length;
+        const row = document.createElement('div');
+        row.className = 'feature-grid';
+        row.style.marginBottom = '10px';
+        row.innerHTML = `
+            <div class="form-group" style="margin-bottom:0;">
+                <label>Variant Name</label>
+                <input class="form-control" type="text" name="variant_name[]" value="${seed?.name || ''}" placeholder="1 lb / Half Kg / Per Piece">
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+                <label>Price</label>
+                <input class="form-control" type="number" step="0.01" min="0" name="variant_price[]" value="${seed?.price || ''}">
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+                <label>Unit Type</label>
+                <select class="form-control" name="variant_unit_type[]">
+                    <option value="size" ${seed?.unit === 'size' ? 'selected' : ''}>size</option>
+                    <option value="weight" ${seed?.unit === 'weight' ? 'selected' : ''}>weight</option>
+                    <option value="piece" ${seed?.unit === 'piece' ? 'selected' : ''}>piece</option>
+                    <option value="custom" ${!seed || seed?.unit === 'custom' ? 'selected' : ''}>custom</option>
+                </select>
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+                <label>SKU (optional)</label>
+                <input class="form-control" type="text" name="variant_sku[]" value="${seed?.sku || ''}" placeholder="CK-CHOC-1LB">
+            </div>
+            <div class="form-group" style="display:flex;align-items:flex-end;gap:8px;margin-bottom:0;">
+                <label style="display:flex;align-items:center;gap:6px;font-size:0.8rem;margin:0;">
+                    <input type="radio" name="variant_default" value="${rowIndex}" ${seed?.isDefault ? 'checked' : ''}>
+                    Default
+                </label>
+                <button class="btn btn--danger" type="button">Remove</button>
+            </div>
+        `;
+
+        const removeBtn = row.querySelector('.btn--danger');
+        if (removeBtn) {
+            removeBtn.addEventListener('click', function () {
+                row.remove();
+                const defaultInputs = variantRows.querySelectorAll('input[name="variant_default"]');
+                defaultInputs.forEach((input, idx) => {
+                    input.value = String(idx);
+                });
+                if (![...defaultInputs].some((i) => i.checked) && defaultInputs[0]) {
+                    defaultInputs[0].checked = true;
+                }
+            });
+        }
+
+        variantRows.appendChild(row);
+    }
+
+    if (addVariantBtn) {
+        addVariantBtn.addEventListener('click', function () {
+            addVariantRow();
+        });
+    }
+
+    addVariantRow({ name: '1 lb', price: '', unit: 'size', sku: '', isDefault: true });
 </script>
 
 </div>

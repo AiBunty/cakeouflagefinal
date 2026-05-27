@@ -67,7 +67,8 @@ class ExcelService
         // --- Header row ---
         foreach ($headers as $colIdx => $label) {
             $col = $colIdx + 1;
-            $sheet->setCellValueByColumnAndRow($col, 1, $label);
+            $cell = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($col) . '1';
+            $sheet->setCellValue($cell, $label);
         }
 
         // Bold + background on header
@@ -88,7 +89,8 @@ class ExcelService
         foreach ($rows as $rowIdx => $row) {
             $rowNum = $rowIdx + 2;
             foreach (array_values($row) as $colIdx => $value) {
-                $sheet->setCellValueByColumnAndRow($colIdx + 1, $rowNum, $value);
+                $cell = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($colIdx + 1) . (string)$rowNum;
+                $sheet->setCellValue($cell, $value);
             }
         }
 
@@ -133,7 +135,8 @@ class ExcelService
         $slugs = $slugStmt ? $slugStmt->fetchAll(PDO::FETCH_COLUMN) : [];
 
         foreach ($slugs as $i => $slug) {
-            $listsSheet->setCellValueByColumnAndRow(1, $i + 1, $slug);
+            $cell = 'A' . (string)($i + 1);
+            $listsSheet->setCellValue($cell, $slug);
         }
 
         // Hide the Lists sheet
@@ -155,6 +158,7 @@ class ExcelService
             'tags',
             'variant_info',
             'image_url',
+            'dietary_type',
             'is_veg',
         ];
 
@@ -170,6 +174,7 @@ class ExcelService
                 'bestseller|eggless',
                 '500g:500,1kg:900,2kg:1600',
                 '',
+                'veg',
                 '1',
             ],
             [
@@ -183,17 +188,19 @@ class ExcelService
                 'featured|chefs_special',
                 '500g:600,1kg:1100,2kg:2000',
                 '',
+                'veg',
                 '1',
             ],
         ];
 
         // Write headers
         foreach ($headers as $colIdx => $label) {
-            $importSheet->setCellValueByColumnAndRow($colIdx + 1, 1, $label);
+            $cell = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($colIdx + 1) . '1';
+            $importSheet->setCellValue($cell, $label);
         }
 
         // Style headers
-        $importSheet->getStyle('A1:K1')->applyFromArray([
+        $importSheet->getStyle('A1:L1')->applyFromArray([
             'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
             'fill' => [
                 'fillType' => Fill::FILL_SOLID,
@@ -207,12 +214,13 @@ class ExcelService
         foreach ($examples as $rowIdx => $row) {
             $rowNum = $rowIdx + 2;
             foreach ($row as $colIdx => $value) {
-                $importSheet->setCellValueByColumnAndRow($colIdx + 1, $rowNum, $value);
+                $cell = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($colIdx + 1) . (string)$rowNum;
+                $importSheet->setCellValue($cell, $value);
             }
         }
 
         // Column widths
-        $widths = [25, 25, 40, 10, 15, 15, 10, 30, 50, 50, 10];
+        $widths = [25, 25, 40, 10, 15, 15, 10, 30, 50, 50, 14, 10];
         foreach ($widths as $i => $width) {
             $letter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($i + 1);
             $importSheet->getColumnDimension($letter)->setWidth($width);
@@ -259,19 +267,42 @@ class ExcelService
         $variantComment->setWidth('200pt');
         $variantComment->setHeight('90pt');
 
-        // Comment on K1 (is_veg) describing values
-        $vegComment = $importSheet->getComment('K1');
+        // Comment on K1 (dietary_type) describing values
+        $dietaryTypeComment = $importSheet->getComment('K1');
+        $dietaryTypeComment->getText()->createTextRun(
+            "Canonical dietary value.\n" .
+            "Allowed: veg, nonveg\n\n" .
+            "In veg-only stores, nonveg rows are normalized to veg."
+        );
+        $dietaryTypeComment->setWidth('220pt');
+        $dietaryTypeComment->setHeight('80pt');
+
+        // Comment on L1 (is_veg) describing values
+        $vegComment = $importSheet->getComment('L1');
         $vegComment->getText()->createTextRun(
             "1 = Veg (green dot)\n" .
             "0 = Non-Veg (red dot)\n\n" .
-            "Defaults to 1 (Veg) if omitted."
+            "Optional legacy fallback when dietary_type is empty."
         );
         $vegComment->setWidth('160pt');
         $vegComment->setHeight('75pt');
 
-        // Dropdown validation on K2:K1000 — only allow 0 or 1
+        // Dropdown validation on K2:K1000 — only allow veg/nonveg
         for ($row = 2; $row <= 1000; $row++) {
             $validation = $importSheet->getCell('K' . $row)->getDataValidation();
+            $validation->setType(DataValidation::TYPE_LIST);
+            $validation->setErrorStyle(DataValidation::STYLE_STOP);
+            $validation->setAllowBlank(true);
+            $validation->setShowDropDown(true);
+            $validation->setShowErrorMessage(true);
+            $validation->setErrorTitle('Invalid dietary type');
+            $validation->setError('Enter veg or nonveg.');
+            $validation->setFormula1('"veg,nonveg"');
+        }
+
+        // Dropdown validation on L2:L1000 — only allow 0 or 1
+        for ($row = 2; $row <= 1000; $row++) {
+            $validation = $importSheet->getCell('L' . $row)->getDataValidation();
             $validation->setType(DataValidation::TYPE_LIST);
             $validation->setErrorStyle(DataValidation::STYLE_STOP);
             $validation->setAllowBlank(true);

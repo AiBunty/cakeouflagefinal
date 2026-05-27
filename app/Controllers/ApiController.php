@@ -8,6 +8,7 @@ use App\Core\Env;
 use App\Core\Request;
 use App\Core\Response;
 use App\Services\AuthRateLimitService;
+use App\Services\AuthManager;
 use App\Services\ByocQuoteExpiryService;
 use App\Services\OrderAutomationService;
 use App\Services\PasswordResetService;
@@ -133,6 +134,47 @@ final class ApiController
         return (int)($stmt->fetchColumn() ?: 0) > 0;
     }
 
+    public function health(): void
+    {
+        Response::json([
+            'success' => true,
+            'status' => 'ok',
+            'service' => 'api',
+            'timestamp' => gmdate('c'),
+        ]);
+    }
+
+    public function healthDb(): void
+    {
+        $pdo = self::db();
+        if (!$pdo) {
+            return;
+        }
+
+        try {
+            $dbNameStmt = $pdo->query('SELECT DATABASE()');
+            $dbName = (string)($dbNameStmt ? $dbNameStmt->fetchColumn() : '');
+
+            $pingStmt = $pdo->query('SELECT 1');
+            $pingOk = (int)($pingStmt ? $pingStmt->fetchColumn() : 0) === 1;
+
+            Response::json([
+                'success' => true,
+                'status' => $pingOk ? 'ok' : 'degraded',
+                'service' => 'db',
+                'database' => $dbName,
+                'timestamp' => gmdate('c'),
+            ], $pingOk ? 200 : 503);
+        } catch (Throwable $e) {
+            Response::json([
+                'success' => false,
+                'status' => 'down',
+                'service' => 'db',
+                'message' => 'Database health check failed',
+            ], 503);
+        }
+    }
+
     public function banners(): void
     {
         $pdo = self::db();
@@ -220,8 +262,19 @@ final class ApiController
 
         $search = trim((string)($_GET['q'] ?? ''));
         if ($search !== '') {
-            $where[] = '(p.name LIKE :search OR p.short_description LIKE :search OR c.name LIKE :search OR COALESCE(p.flavour_notes, "") LIKE :search OR COALESCE(p.occasion_tag, "") LIKE :search)';
-            $params['search'] = '%' . $search . '%';
+            $where[] = '(
+                p.name LIKE :search_name
+                OR p.short_description LIKE :search_short_description
+                OR c.name LIKE :search_category_name
+                OR COALESCE(p.flavour_notes, "") LIKE :search_flavour_notes
+                OR COALESCE(p.occasion_tag, "") LIKE :search_occasion_tag
+            )';
+            $searchLike = '%' . $search . '%';
+            $params['search_name'] = $searchLike;
+            $params['search_short_description'] = $searchLike;
+            $params['search_category_name'] = $searchLike;
+            $params['search_flavour_notes'] = $searchLike;
+            $params['search_occasion_tag'] = $searchLike;
         }
 
         $category = trim((string)($_GET['category'] ?? ''));
@@ -229,6 +282,8 @@ final class ApiController
             $where[] = 'c.slug = :category';
             $params['category'] = $category;
         }
+
+        $foodMode = getDietaryMode($pdo);
 
         $dietary = trim((string)($_GET['dietary'] ?? ''));
         if ($dietary !== '') {
@@ -258,7 +313,10 @@ final class ApiController
         }
 
         $isVegParam = $_GET['is_veg'] ?? '';
-        if ($hasIsVegColumn && $isVegParam !== '' && in_array((string)$isVegParam, ['0', '1'], true)) {
+        if ($hasIsVegColumn && $foodMode === 'veg_only') {
+            $where[] = 'p.is_veg = :is_veg_forced';
+            $params['is_veg_forced'] = 1;
+        } elseif ($hasIsVegColumn && $isVegParam !== '' && in_array((string)$isVegParam, ['0', '1'], true)) {
             $where[] = 'p.is_veg = :is_veg';
             $params['is_veg'] = (int)$isVegParam;
         }
@@ -421,6 +479,159 @@ final class ApiController
         ]);
     }
 
+    public function search(): void
+    {
+        $query = trim((string)($_GET['q'] ?? ''));
+        $limit = (int)($_GET['limit'] ?? 8);
+        $limit = min(max($limit, 1), 12);
+
+        try {
+            try {
+                $pdo = Database::getConnection();
+            } catch (Throwable $dbError) {
+                error_log('[ApiController::search][db] ' . $dbError->getMessage());
+                Response::json([
+                    'success' => false,
+                    'products' => [],
+                    'categories' => [],
+                    'message' => 'Search temporarily unavailable',
+                    'data' => [
+                        'query' => $query,
+                        'products' => [],
+                        'categories' => [],
+                    ],
+                ], 200);
+                exit;
+            }
+
+            if (strlen($query) < 2) {
+                Response::json([
+                    'success' => true,
+                    'message' => 'ok',
+                    'data' => [
+                        'query' => $query,
+                        'products' => [],
+                        'categories' => [],
+                    ],
+                ]);
+                return;
+            }
+
+            $productsColumns = self::productsColumnMap($pdo);
+            $searchLike = '%' . $query . '%';
+            $searchConditions = [
+                'p.name LIKE :search_name',
+                "COALESCE(p.short_description, '') LIKE :search_short_description",
+                "COALESCE(p.flavour_notes, '') LIKE :search_flavour_notes",
+                "COALESCE(p.occasion_tag, '') LIKE :search_occasion_tag",
+                "COALESCE(c.name, '') LIKE :search_category_name",
+            ];
+            $searchParams = [
+                'search_name' => $searchLike,
+                'search_short_description' => $searchLike,
+                'search_flavour_notes' => $searchLike,
+                'search_occasion_tag' => $searchLike,
+                'search_category_name' => $searchLike,
+            ];
+
+            foreach (['sku', 'tags', 'keywords', 'customisation_note'] as $columnName) {
+                if (isset($productsColumns[$columnName])) {
+                    $paramKey = 'search_' . $columnName;
+                    $searchConditions[] = "COALESCE(p." . $columnName . ", '') LIKE :" . $paramKey;
+                    $searchParams[$paramKey] = $searchLike;
+                }
+            }
+
+            $effectivePriceSql = 'COALESCE(NULLIF(p.starting_price, 0), pv_min.min_price, p.base_price, 0)';
+            $productSql = '
+                SELECT
+                    p.id,
+                    p.name,
+                    p.slug,
+                    p.featured_image,
+                    c.name AS category_name,
+                    c.slug AS category_slug,
+                    ' . $effectivePriceSql . ' AS starting_price
+                FROM products p
+                JOIN categories c ON c.id = p.collection_category_id
+                LEFT JOIN (
+                    SELECT product_id, MIN(COALESCE(discount_price, price)) AS min_price
+                    FROM product_variants
+                    WHERE is_active = 1 AND price > 0
+                    GROUP BY product_id
+                ) pv_min ON pv_min.product_id = p.id
+                WHERE p.deleted_at IS NULL
+                  AND p.availability_status <> \'draft\'
+                  AND (' . implode(' OR ', $searchConditions) . ')
+                ORDER BY
+                  CASE WHEN p.name LIKE :prefix_search THEN 0 ELSE 1 END,
+                  p.created_at DESC
+                LIMIT :limit
+            ';
+
+            $productStmt = $pdo->prepare($productSql);
+            foreach ($searchParams as $paramKey => $paramValue) {
+                $productStmt->bindValue(':' . $paramKey, $paramValue, PDO::PARAM_STR);
+            }
+            $productStmt->bindValue(':prefix_search', $query . '%', PDO::PARAM_STR);
+            $productStmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+            $productStmt->execute();
+            $productRows = $productStmt->fetchAll(PDO::FETCH_ASSOC);
+
+            foreach ($productRows as &$row) {
+                $row['image'] = ProductImageService::resolve((string)($row['featured_image'] ?? ''), (string)($row['category_slug'] ?? ''));
+                $row['price'] = (float)($row['starting_price'] ?? 0);
+                $row['url'] = '/product/' . rawurlencode((string)($row['slug'] ?? ''));
+                unset($row['featured_image'], $row['starting_price']);
+            }
+            unset($row);
+
+            $categoryStmt = $pdo->prepare(
+                'SELECT id, name, slug
+                 FROM categories
+                 WHERE is_active = 1
+                   AND deleted_at IS NULL
+                                     AND (name LIKE :search_name OR slug LIKE :search_slug)
+                 ORDER BY CASE WHEN name LIKE :prefix_search THEN 0 ELSE 1 END, name ASC
+                 LIMIT 4'
+            );
+                        $categoryStmt->bindValue(':search_name', $searchLike, PDO::PARAM_STR);
+                        $categoryStmt->bindValue(':search_slug', $searchLike, PDO::PARAM_STR);
+            $categoryStmt->bindValue(':prefix_search', $query . '%', PDO::PARAM_STR);
+            $categoryStmt->execute();
+            $categoryRows = $categoryStmt->fetchAll(PDO::FETCH_ASSOC);
+
+            foreach ($categoryRows as &$categoryRow) {
+                $categoryRow['url'] = '/category/' . rawurlencode((string)($categoryRow['slug'] ?? ''));
+            }
+            unset($categoryRow);
+
+            Response::json([
+                'success' => true,
+                'message' => 'ok',
+                'data' => [
+                    'query' => $query,
+                    'products' => $productRows,
+                    'categories' => $categoryRows,
+                ],
+            ]);
+        } catch (Throwable $error) {
+            error_log('[ApiController::search] ' . $error->getMessage() . ' @ ' . $error->getFile() . ':' . $error->getLine());
+            Response::json([
+                'success' => false,
+                'products' => [],
+                'categories' => [],
+                'message' => 'Search temporarily unavailable',
+                'data' => [
+                    'query' => $query,
+                    'products' => [],
+                    'categories' => [],
+                ],
+            ], 200);
+            exit;
+        }
+    }
+
     public function product(string $slug): void
     {
         $pdo = self::db(); if (!$pdo) return;
@@ -451,7 +662,7 @@ final class ApiController
         }
 
         $variantStmt = $pdo->prepare(
-            'SELECT id, variant_label, weight_or_size, flavor, price, discount_price, stock_quantity, is_default
+            'SELECT id, variant_label, variant_name, weight_or_size, unit_type, sku, flavor, price, discount_price, stock_quantity, is_default
              FROM product_variants
              WHERE product_id = :product_id AND is_active = 1 AND price > 0
              ORDER BY price ASC'
@@ -466,14 +677,15 @@ final class ApiController
              ORDER BY sort_order ASC'
         );
         $imageStmt->execute(['product_id' => $product['id']]);
-        $images = $imageStmt->fetchAll(PDO::FETCH_ASSOC);
+        $imageRows = $imageStmt->fetchAll(PDO::FETCH_ASSOC);
+        $images = ProductImageService::getProductGalleryImages(
+            $product,
+            $imageRows,
+            (string)($product['category_slug'] ?? ''),
+            2
+        );
 
-        foreach ($images as &$image) {
-            $image['image_url'] = ProductImageService::resolve((string)($image['image_url'] ?? ''), (string)($product['category_slug'] ?? ''));
-        }
-        unset($image);
-
-        $product['featured_image'] = ProductImageService::resolve((string)($product['featured_image'] ?? ''), (string)($product['category_slug'] ?? ''));
+        $product['featured_image'] = (string)($images[0]['image_url'] ?? ProductImageService::resolve((string)($product['featured_image'] ?? ''), (string)($product['category_slug'] ?? '')));
 
         $relatedStmt = $pdo->prepare(
             'SELECT id, name, slug, starting_price, featured_image
@@ -713,185 +925,49 @@ final class ApiController
 
     public function authRegister(): void
     {
-        $input = $this->readJsonInput();
-        $name = trim((string)($input['full_name'] ?? ''));
-        $email = trim((string)($input['email'] ?? ''));
-        $phone = trim((string)($input['phone'] ?? ''));
-        $password = (string)($input['password'] ?? '');
-
-        if ($name === '' || $email === '' || $phone === '' || strlen($password) < 8) {
-            Response::json(['success' => false, 'message' => 'Invalid registration input'], 422);
-            return;
-        }
-
-        $pdo = self::db(); if (!$pdo) return;
-        $exists = $pdo->prepare('SELECT id FROM users WHERE email = :email LIMIT 1');
-        $exists->execute(['email' => $email]);
-        if ($exists->fetch()) {
-            Response::json(['success' => false, 'message' => 'Email already registered'], 409);
-            return;
-        }
-
-        $hash = password_hash($password, PASSWORD_BCRYPT);
-        $stmt = $pdo->prepare(
-            'INSERT INTO users (full_name, email, phone, password_hash, role)
-             VALUES (:full_name, :email, :phone, :password_hash, "customer")'
-        );
-        $stmt->execute([
-            'full_name' => $name,
-            'email' => $email,
-            'phone' => $phone,
-            'password_hash' => $hash,
-        ]);
-
-        $_SESSION['user_id'] = (int)$pdo->lastInsertId();
-        $_SESSION['user_role'] = 'customer';
-
-        Response::json(['success' => true, 'message' => 'Registration successful']);
+        Response::json([
+            'success' => false,
+            'message' => 'Password-based registration is disabled. Use OTP login only.',
+        ], 410);
     }
 
     public function authLogin(): void
     {
-        $input = $this->readJsonInput();
-        $email = trim((string)($input['email'] ?? ''));
-        $password = (string)($input['password'] ?? '');
-
-        if ($email === '' || $password === '') {
-            Response::json(['success' => false, 'message' => 'Email and password are required'], 422);
-            return;
-        }
-
-        $pdo = self::db(); if (!$pdo) return;
-        $rateLimiter = new AuthRateLimitService();
-        $bucketKey = $this->buildRateLimitBucket('customer-login', $email);
-        if ($rateLimiter->isBlocked($pdo, 'customer_login', $bucketKey)) {
-            Response::json(['success' => false, 'message' => 'Too many login attempts. Please try again later.'], 429);
-            return;
-        }
-
-        $stmt = $pdo->prepare('SELECT id, full_name, email, role, password_hash FROM users WHERE email = :email LIMIT 1');
-        $stmt->execute(['email' => $email]);
-        $user = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        if (!$user || !password_verify($password, (string)$user['password_hash'])) {
-            $rateLimiter->hit($pdo, 'customer_login', $bucketKey, 6, 20);
-            Response::json(['success' => false, 'message' => 'Invalid credentials'], 401);
-            return;
-        }
-
-        $rateLimiter->clear($pdo, 'customer_login', $bucketKey);
-
-        $_SESSION['user_id'] = (int)$user['id'];
-        $_SESSION['user_role'] = (string)$user['role'];
-        $_SESSION['otp_verified'] = true;
-
-        $updateStmt = $pdo->prepare('UPDATE users SET last_login_at = NOW() WHERE id = :id');
-        $updateStmt->execute(['id' => $user['id']]);
-
         Response::json([
-            'success' => true,
-            'message' => 'Login successful',
-            'data' => ['user' => [
-                'id' => (int)$user['id'],
-                'full_name' => (string)$user['full_name'],
-                'email' => (string)$user['email'],
-                'role' => (string)$user['role'],
-            ]],
-        ]);
+            'success' => false,
+            'message' => 'Password-based login is disabled. Use OTP login only.',
+        ], 410);
     }
 
     public function authForgotPassword(): void
     {
-        $input = $this->readJsonInput();
-        $email = trim((string)($input['email'] ?? ''));
-        if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            Response::json(['success' => false, 'message' => 'Valid email is required'], 422);
-            return;
-        }
-
-        $pdo = self::db(); if (!$pdo) return;
-        $rateLimiter = new AuthRateLimitService();
-        $bucketKey = $this->buildRateLimitBucket('forgot-password', $email);
-        if ($rateLimiter->isBlocked($pdo, 'forgot_password', $bucketKey)) {
-            Response::json(['success' => false, 'message' => 'Too many reset attempts. Please try again later.'], 429);
-            return;
-        }
-
-        $stmt = $pdo->prepare('SELECT id, full_name, email FROM users WHERE email = :email AND deleted_at IS NULL LIMIT 1');
-        $stmt->execute(['email' => $email]);
-        $user = $stmt->fetch(PDO::FETCH_ASSOC);
-        if (!$user) {
-            $rateLimiter->hit($pdo, 'forgot_password', $bucketKey, 5, 30);
-            Response::json(['success' => true, 'message' => 'If the account exists, a reset link has been queued']);
-            return;
-        }
-
-        $service = new PasswordResetService();
-        $token = $service->createToken($pdo, (int)$user['id'], (string)$user['email']);
-        $resetUrl = rtrim((string)(Env::get('APP_URL', 'http://localhost:8000') ?? 'http://localhost:8000'), '/') . '/reset-password?email=' . rawurlencode($email) . '&token=' . rawurlencode($token['token']);
-
-        $logStmt = $pdo->prepare('INSERT INTO communication_logs (user_id, channel, event_key, recipient, status, payload_json) VALUES (:user_id, "email", "password_reset", :recipient, "queued", :payload_json)');
-        $logStmt->execute([
-            'user_id' => (int)$user['id'],
-            'recipient' => (string)$user['email'],
-            'payload_json' => json_encode([
-                'customer_name' => (string)$user['full_name'],
-                'reset_url' => $resetUrl,
-            ], JSON_UNESCAPED_SLASHES),
-        ]);
-        $logId = (int)$pdo->lastInsertId();
-
-        $queueStmt = $pdo->prepare('INSERT INTO communication_queue (communication_log_id, channel, payload_json) VALUES (:communication_log_id, "email", :payload_json)');
-        $queueStmt->execute([
-            'communication_log_id' => $logId,
-            'payload_json' => json_encode(['log_id' => $logId], JSON_UNESCAPED_SLASHES),
-        ]);
-
-        $jobStmt = $pdo->prepare('INSERT INTO queue_jobs (job_type, payload_json, status, available_at, attempts) VALUES ("send_communication", :payload_json, "queued", NOW(), 0)');
-        $jobStmt->execute([
-            'payload_json' => json_encode(['log_id' => $logId, 'channel' => 'email', 'event_key' => 'password_reset', 'recipient' => (string)$user['email']], JSON_UNESCAPED_SLASHES),
-        ]);
-
-        $rateLimiter->clear($pdo, 'forgot_password', $bucketKey);
-        Response::json(['success' => true, 'message' => 'If the account exists, a reset link has been queued']);
+        Response::json([
+            'success' => false,
+            'message' => 'Password reset is disabled. Use OTP login only.',
+        ], 410);
     }
 
     public function authResetPassword(): void
     {
-        $input = $this->readJsonInput();
-        $email = trim((string)($input['email'] ?? ''));
-        $token = trim((string)($input['token'] ?? ''));
-        $password = (string)($input['password'] ?? '');
-        if ($email === '' || $token === '' || strlen($password) < 8) {
-            Response::json(['success' => false, 'message' => 'email, token, and password are required'], 422);
-            return;
-        }
-
-        $pdo = self::db(); if (!$pdo) return;
-        $rateLimiter = new AuthRateLimitService();
-        $bucketKey = $this->buildRateLimitBucket('reset-password', $email);
-        if ($rateLimiter->isBlocked($pdo, 'reset_password', $bucketKey)) {
-            Response::json(['success' => false, 'message' => 'Too many reset attempts. Please try again later.'], 429);
-            return;
-        }
-
-        $service = new PasswordResetService();
-        $ok = $service->consume($pdo, $email, $token, $password);
-        if (!$ok) {
-            $rateLimiter->hit($pdo, 'reset_password', $bucketKey, 5, 30);
-            Response::json(['success' => false, 'message' => 'Invalid or expired reset token'], 422);
-            return;
-        }
-
-        $rateLimiter->clear($pdo, 'reset_password', $bucketKey);
-        Response::json(['success' => true, 'message' => 'Password reset successful']);
+        Response::json([
+            'success' => false,
+            'message' => 'Password reset is disabled. Use OTP login only.',
+        ], 410);
     }
 
     public function authMe(): void
     {
         $userId = (int)($_SESSION['user_id'] ?? 0);
-        if ($userId <= 0) {
-            Response::json(['success' => false, 'message' => 'Not authenticated'], 401);
+        if (!AuthManager::isCustomerAuthenticated() || $userId <= 0) {
+            $this->clearCustomerSessionState();
+            Response::json([
+                'success' => true,
+                'message' => 'Guest session',
+                'data' => [
+                    'is_authenticated' => false,
+                    'user' => null,
+                ],
+            ]);
             return;
         }
 
@@ -901,21 +977,55 @@ final class ApiController
         $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if (!$user) {
-            Response::json(['success' => false, 'message' => 'User not found'], 404);
+            $this->clearCustomerSessionState();
+            Response::json([
+                'success' => true,
+                'message' => 'Guest session',
+                'data' => [
+                    'is_authenticated' => false,
+                    'user' => null,
+                ],
+            ]);
             return;
         }
 
-        Response::json(['success' => true, 'message' => 'ok', 'data' => ['user' => $user]]);
+        $role = strtolower(trim((string)($user['role'] ?? '')));
+        if ($role !== 'customer') {
+            $this->clearCustomerSessionState();
+            Response::json([
+                'success' => true,
+                'message' => 'Guest session',
+                'data' => [
+                    'is_authenticated' => false,
+                    'user' => null,
+                ],
+            ]);
+            return;
+        }
+
+        // Keep customer session keys canonical across legacy and OTP login flows.
+        $_SESSION['user_role'] = 'customer';
+        $_SESSION['otp_verified'] = true;
+        $_SESSION['logged_in'] = true;
+        $_SESSION['user_email'] = (string)($user['email'] ?? '');
+
+        Response::json([
+            'success' => true,
+            'message' => 'ok',
+            'data' => [
+                'is_authenticated' => true,
+                'user' => $user,
+            ],
+        ]);
     }
 
     public function authLogout(): void
     {
-        $_SESSION = [];
-        if (ini_get('session.use_cookies')) {
-            $params = session_get_cookie_params();
-            setcookie(session_name(), '', time() - 42000, $params['path'], $params['domain'] ?? '', (bool)$params['secure'], (bool)$params['httponly']);
+        AuthManager::logoutCustomer();
+
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_destroy();
         }
-        session_destroy();
 
         Response::json(['success' => true, 'message' => 'Logged out']);
     }
@@ -1368,54 +1478,33 @@ $deliveryFee = ($slab && (int)$slab['is_available'] === 1)
         $input = $this->readJsonInput();
 
         $fulfilmentMode = (string)($input['fulfilment_mode'] ?? 'delivery');
-        $postalCode = trim((string)($input['postal_code'] ?? ''));
+        $postalCode = trim((string)($input['postal_code'] ?? $input['delivery_pincode'] ?? ''));
+        $input['postal_code'] = $postalCode;
 
         $this->maybeAutoApplyBestPublicCoupon($pdo, $cartId);
-        $cart = $this->buildCartResponse($pdo, $cartId);
-        if ((int)$cart['item_count'] <= 0) {
-            Response::json(['success' => false, 'message' => 'Cart is empty'], 422);
+
+        $preview = $this->buildCheckoutPreview($pdo, $cartId, $input);
+        if (!($preview['ok'] ?? false)) {
+            Response::json([
+                'success' => false,
+                'message' => (string)($preview['message'] ?? 'Checkout preview validation failed'),
+                'code' => (string)($preview['code'] ?? 'checkout_preview_invalid'),
+                'field' => (string)($preview['field'] ?? ''),
+                'details' => $preview['details'] ?? null,
+            ], 422);
             return;
         }
 
-        $deliveryFee = 0.0;
-        $distanceKm = null;
-
-        if ($fulfilmentMode === 'delivery' || $fulfilmentMode === 'custom_delivery') {
-            if ($postalCode === '') {
-                Response::json(['success' => false, 'message' => 'postal_code is required for delivery'], 422);
-                return;
-            }
-
-            $pinStmt = $pdo->prepare('SELECT * FROM delivery_pincodes WHERE postal_code = :postal_code LIMIT 1');
-            $pinStmt->execute(['postal_code' => $postalCode]);
-            $pin = $pinStmt->fetch(PDO::FETCH_ASSOC);
-            if (!$pin || (int)$pin['is_serviceable'] !== 1) {
-                Response::json(['success' => false, 'message' => 'Delivery unavailable for this pincode'], 422);
-                return;
-            }
-
-            $distanceKm = (float)$pin['approx_distance_km'];
-            $slabStmt = $pdo->prepare('SELECT * FROM delivery_distance_slabs WHERE :distance >= min_km AND :distance <= max_km LIMIT 1');
-            $slabStmt->execute(['distance' => $distanceKm]);
-            $slab = $slabStmt->fetch(PDO::FETCH_ASSOC);
-            if (!$slab || (int)$slab['is_available'] !== 1) {
-                Response::json(['success' => false, 'message' => 'Delivery outside service radius unless manually approved'], 422);
-                return;
-            }
-
-            $deliveryFee = (float)$slab['delivery_fee'];
-        }
-
-        $grandTotal = round((float)$cart['subtotal'] - (float)$cart['discount_total'] + $deliveryFee, 2);
+        $cart = $this->buildCartResponse($pdo, $cartId);
         Response::json([
             'success' => true,
             'message' => 'ok',
             'data' => [
                 'cart' => $cart,
                 'fulfilment_mode' => $fulfilmentMode,
-                'delivery_fee' => $deliveryFee,
-                'distance_km' => $distanceKm,
-                'grand_total' => $grandTotal,
+                'delivery_fee' => (float)($preview['delivery_fee'] ?? 0),
+                'distance_km' => $preview['distance_km'] ?? null,
+                'grand_total' => (float)($preview['grand_total'] ?? 0),
             ],
         ]);
     }
@@ -1424,7 +1513,7 @@ $deliveryFee = ($slab && (int)$slab['is_available'] === 1)
     {
         $pdo = self::db(); if (!$pdo) return;
         //$cartId = $this->getOrCreateCartId($pdo);
-$userId = (int)($_SESSION['user_id'] ?? 0);
+        $userId = (int)($_SESSION['user_id'] ?? 0);
 
 $stmt = $pdo->prepare("
     SELECT id FROM carts 
@@ -1436,11 +1525,8 @@ $stmt->execute(['user_id' => $userId]);
 $cartId = $stmt->fetchColumn();
 
 if (!$cartId) {
-    Response::json([
-        'success' => false,
-        'message' => 'Cart not found'
-    ], 422);
-    return;
+    // Compatibility fallback: session carts may exist without user_id mapping.
+    $cartId = $this->getOrCreateCartId($pdo);
 }
        $input = $_POST;
 
@@ -1701,7 +1787,7 @@ $orderStmt->execute([
             // Register official slot HOLD now that we have the real orderId
             if (!empty($slotSvc)) {
                 try {
-                    $holdExpiryMins = (int)(getSettingValue($pdo, 'hold_expiry_minutes') ?: 60);
+                    $holdExpiryMins = (int)($this->getSettingValue($pdo, 'hold_expiry_minutes') ?: 60);
                     $slotSvc->holdSlot($slotId, $deliveryDate, $orderId, $holdExpiryMins);
                     // Denormalize slot_id onto order for fast fulfillment queries
                     $pdo->prepare('UPDATE orders SET slot_id = :slot_id WHERE id = :id')
@@ -1862,17 +1948,21 @@ $orderStmt->execute([
                 o.discount_total,
                 o.grand_total,
                 o.created_at,
-                COUNT(oi.id) AS item_count,
-                COALESCE(
+                COALESCE(item_summary.item_count, 0) AS item_count,
+                COALESCE(item_summary.cake_names, "") AS cake_names,
+                COALESCE(coupon_summary.coupon_info, "") AS coupon_info
+             FROM orders o
+             LEFT JOIN (
+                SELECT
+                    oi.order_id,
+                    COUNT(oi.id) AS item_count,
                     GROUP_CONCAT(
                         CONCAT(oi.product_name_snapshot, " x ", oi.quantity)
                         ORDER BY oi.id ASC SEPARATOR ", "
-                    ),
-                    ""
-                ) AS cake_names,
-                COALESCE(coupon_summary.coupon_info, "") AS coupon_info
-             FROM orders o
-             LEFT JOIN order_items oi ON oi.order_id = o.id
+                    ) AS cake_names
+                FROM order_items oi
+                GROUP BY oi.order_id
+             ) item_summary ON item_summary.order_id = o.id
              LEFT JOIN (
                 SELECT order_id,
                        GROUP_CONCAT(
@@ -1883,7 +1973,6 @@ $orderStmt->execute([
                 GROUP BY order_id
              ) coupon_summary ON coupon_summary.order_id = o.id
              WHERE o.user_id = :user_id
-             GROUP BY o.id
              ORDER BY o.created_at DESC'
         );
         $stmt->execute(['user_id' => (int)$user['id']]);
@@ -2050,8 +2139,12 @@ AND user_id = :user_id
         $itemsStmt->execute(['order_id' => (int)$order['id']]);
         $items = $itemsStmt->fetchAll(PDO::FETCH_ASSOC);
 
-        $esc = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
-        $money = static fn($value): string => 'Rs ' . number_format((float)$value, 2);
+        $esc = static function ($value): string {
+            return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+        };
+        $money = static function ($value): string {
+            return 'Rs ' . number_format((float)$value, 2);
+        };
 
         $itemRows = '';
         foreach ($items as $item) {
@@ -2600,12 +2693,11 @@ AND user_id = :user_id
             'id' => (int)$user['id'],
         ]);
 
-        $profileStmt = $pdo->prepare(
-            'INSERT INTO customer_profiles (user_id, date_of_birth, anniversary_date)
-             VALUES (:user_id, :date_of_birth, :anniversary_date)
-               AS new
-               ON DUPLICATE KEY UPDATE date_of_birth = new.date_of_birth, anniversary_date = new.anniversary_date, updated_at = NOW()'
-        );
+                $profileStmt = $pdo->prepare(
+                        'INSERT INTO customer_profiles (user_id, date_of_birth, anniversary_date)
+                         VALUES (:user_id, :date_of_birth, :anniversary_date)
+                             ON DUPLICATE KEY UPDATE date_of_birth = VALUES(date_of_birth), anniversary_date = VALUES(anniversary_date), updated_at = NOW()'
+                );
         $profileStmt->execute([
             'user_id' => (int)$user['id'],
             'date_of_birth' => $normalizedDob,
@@ -2811,12 +2903,10 @@ AND user_id = :user_id
     $eventInformation = trim((string)($input['event_information'] ?? ''));
     $eventDate = trim((string)($input['event_date'] ?? ''));
     $servings = trim((string)($input['number_of_servings_guests'] ?? ''));
-    $budgetRange = trim((string)($input['budget_range'] ?? ''));
-    $dietPreference = trim((string)($input['diet_preference'] ?? ''));
     $designBrief = trim((string)($input['design_breif_notes'] ?? ''));
     $privacyConsent = (string)($input['privacy_consent'] ?? '') === '1';
 
-    if ($name === '' || $email === '' || $phone === '' || $eventInformation === '' || $eventDate === '' || $servings === '' || $budgetRange === '' || $dietPreference === '' || $designBrief === '') {
+    if ($name === '' || $email === '' || $phone === '' || $eventInformation === '' || $eventDate === '' || $servings === '' || $designBrief === '') {
         Response::json(['success' => false, 'message' => 'Please fill all required fields'], 422);
         return;
     }
@@ -2857,12 +2947,6 @@ AND user_id = :user_id
         return;
     }
 
-    $allowedDietPreference = ['Veg', 'Non Veg', 'Jain'];
-    if (!in_array($dietPreference, $allowedDietPreference, true)) {
-        Response::json(['success' => false, 'message' => 'Invalid diet preference selected'], 422);
-        return;
-    }
-
     // ✅ IMAGE UPLOAD LOGIC START
     $referenceImagePath = null;
 
@@ -2888,8 +2972,6 @@ AND user_id = :user_id
         'event_information' => $eventInformation,
         'event_date' => $eventDate,
         'number_of_servings_guests' => $servings,
-        'budget_range' => $budgetRange,
-        'diet_preference' => $dietPreference,
         'design_breif_notes' => $designBrief,
         'privacy_consent' => $privacyConsent ? 1 : 0,
     ], JSON_UNESCAPED_SLASHES);
@@ -2917,9 +2999,7 @@ AND user_id = :user_id
     }
     $quoteDescription = 'Event: ' . $eventInformation
         . ' | Date: ' . ($eventDate !== '' ? $eventDate : 'Not specified')
-        . ' | Servings: ' . $servings
-        . ' | Budget: ' . $budgetRange
-        . ' | Diet: ' . $dietPreference;
+        . ' | Servings: ' . $servings;
     if ($safeDesignBrief !== '') {
         $quoteDescription .= ' | Notes: ' . $safeDesignBrief;
     }
@@ -2934,8 +3014,6 @@ AND user_id = :user_id
         'event_information' => $eventInformation,
         'event_date' => $eventDate,
         'number_of_servings_guests' => $servings,
-        'budget_range' => $budgetRange,
-        'diet_preference' => $dietPreference,
         'design_brief_notes' => $safeDesignBrief,
         'quote_description' => $quoteDescription,
         'reference_file' => (string)$referenceImagePath,
@@ -2945,7 +3023,6 @@ AND user_id = :user_id
         'contact.phone' => $phone,
         'contact.email' => $email,
         'contact.orderid' => 'INQ-' . $inquiryId,
-        'contact.amount' => $budgetRange,
         'contact.description' => $quoteDescription,
         'contact.quote_description' => $quoteDescription,
     ];
@@ -2960,8 +3037,6 @@ AND user_id = :user_id
             'event_information' => $eventInformation,
             'event_date' => $eventDate,
             'number_of_servings_guests' => $servings,
-            'budget_range' => $budgetRange,
-            'diet_preference' => $dietPreference,
             'design_breif_notes' => $designBrief,
             'reference_file' => (string)$referenceImagePath,
         ]);
@@ -4291,7 +4366,8 @@ AND user_id = :user_id
     {
         $userId = (int)($_SESSION['user_id'] ?? 0);
         $role = (string)($_SESSION['user_role'] ?? '');
-        if ($userId <= 0 || $role !== 'customer') {
+        $otpVerified = !empty($_SESSION['otp_verified']);
+        if ($userId <= 0 || $role !== 'customer' || !$otpVerified) {
             Response::json(['success' => false, 'message' => 'Customer authentication required'], 401);
             return null;
         }
@@ -5029,8 +5105,8 @@ AND user_id = :user_id
             $subtotal += (float)$item['line_total'];
             $itemCount += (int)$item['quantity'];
         }
-$deliveryFee = 0; // 
-//$deliveryFee = 60; // TODO: make dynamic based on pincode (future)
+    // Cart summary remains pre-fulfilment; delivery fee is computed in checkout preview.
+    $deliveryFee = 0;
         $discountTotal = 0.0;
         $couponData = null;
         $couponSession = $_SESSION['applied_coupon'] ?? null;
@@ -5081,11 +5157,16 @@ $deliveryFee = 0; //
     private function buildCheckoutPreview(PDO $pdo, int $cartId, array $input): array
     {
         $fulfilmentMode = (string)($input['fulfilment_mode'] ?? 'delivery');
-        $postalCode = trim((string)($input['postal_code'] ?? ''));
+        $postalCode = trim((string)($input['postal_code'] ?? $input['delivery_pincode'] ?? ''));
         $cart = $this->buildCartResponse($pdo, $cartId);
 
         if ((int)$cart['item_count'] <= 0) {
-            return ['ok' => false, 'message' => 'Cart is empty'];
+            return [
+                'ok' => false,
+                'code' => 'cart_empty',
+                'field' => 'cart',
+                'message' => 'Cart is empty',
+            ];
         }
 
         $deliveryFee = 0.0;
@@ -5093,32 +5174,50 @@ $deliveryFee = 0; //
 
         if ($fulfilmentMode === 'delivery' || $fulfilmentMode === 'custom_delivery') {
             if ($postalCode === '') {
-                return ['ok' => false, 'message' => 'postal_code is required for delivery'];
+                return [
+                    'ok' => false,
+                    'code' => 'postal_code_required',
+                    'field' => 'postal_code',
+                    'message' => 'postal_code is required for delivery',
+                ];
             }
 
             $pinStmt = $pdo->prepare('SELECT * FROM delivery_pincodes WHERE postal_code = :postal_code LIMIT 1');
             $pinStmt->execute(['postal_code' => $postalCode]);
             $pin = $pinStmt->fetch(PDO::FETCH_ASSOC);
             if (!$pin || (int)$pin['is_serviceable'] !== 1) {
-                return ['ok' => false, 'message' => 'Delivery unavailable for this pincode'];
+                return [
+                    'ok' => false,
+                    'code' => 'postal_code_not_serviceable',
+                    'field' => 'postal_code',
+                    'message' => 'Delivery unavailable for this pincode',
+                    'details' => ['postal_code' => $postalCode],
+                ];
             }
 
            $distanceKm = (float)$pin['approx_distance_km'];
 
 $slabStmt = $pdo->prepare('
 SELECT * FROM delivery_distance_slabs 
-WHERE :distance >= min_km AND :distance <= max_km
+WHERE :distance_min >= min_km AND :distance_max <= max_km
 LIMIT 1
 ');
 
 $slabStmt->execute([
-    'distance' => $distanceKm
+    'distance_min' => $distanceKm,
+    'distance_max' => $distanceKm,
 ]);
 
 $slab = $slabStmt->fetch(PDO::FETCH_ASSOC);
 
 if (!$slab || (int)$slab['is_available'] !== 1) {
-    return ['ok' => false, 'message' => 'Delivery outside service radius unless manually approved'];
+    return [
+        'ok' => false,
+        'code' => 'delivery_radius_exceeded',
+        'field' => 'postal_code',
+        'message' => 'Delivery outside service radius unless manually approved',
+        'details' => ['distance_km' => $distanceKm, 'postal_code' => $postalCode],
+    ];
 }
 
 $deliveryFee = (float)$slab['delivery_fee'];
@@ -5240,55 +5339,34 @@ $deliveryFee = (float)$slab['delivery_fee'];
         return;
     }
 
-    if ($this->otpRecentlyRequested($pdo, $email)) {
-        Response::json([
-            'success' => false,
-            'message' => 'Please wait 60 seconds before requesting a new OTP.',
-        ], 429);
-        return;
-    }
-
-    $otp = (string)random_int(100000, 999999);
+    $existingUserStmt = $pdo->prepare(
+        'SELECT id, full_name, phone FROM users WHERE email = :email AND role = "customer" LIMIT 1'
+    );
+    $existingUserStmt->execute(['email' => $email]);
+    $existingUser = $existingUserStmt->fetch(PDO::FETCH_ASSOC) ?: null;
 
     try {
-        MailService::sendOtp($email, $otp, $customerName);
+        AuthManager::sendOtp($pdo, $email, $customerName);
     } catch (\Throwable $e) {
-        error_log('SMTP ERROR: ' . $e->getMessage());
-        error_log('SMTP OTP META: ' . json_encode(MailService::getOtpSmtpRuntimeMeta()));
-        error_log('OTP send failed for ' . $email . ': ' . $e->getMessage());
+        $status = $e->getCode() === 429 ? 429 : 500;
         Response::json([
             'success' => false,
-            'message' => 'Unable to send OTP email right now. Please try again shortly.',
-        ], 500);
-        return;
-    }
-
-    $pdo->prepare('DELETE FROM otp_verifications WHERE email = :email')
-        ->execute(['email' => $email]);
-
-    $stmt = $pdo->prepare(
-        'INSERT INTO otp_verifications (email, otp, expires_at)
-         VALUES (:email, :otp, NOW() + INTERVAL 5 MINUTE)'
-    );
-    $insertOk = $stmt->execute([
-        'email' => $email,
-        'otp' => $otp,
-    ]);
-
-    if (!$insertOk) {
-        $pdo->prepare('DELETE FROM otp_verifications WHERE email = :email')
-            ->execute(['email' => $email]);
-        error_log('OTP persist failed after successful send for ' . $email);
-        Response::json([
-            'success' => false,
-            'message' => 'Unable to finalize OTP right now. Please request a new OTP.',
-        ], 500);
+            'message' => $e->getMessage() !== '' ? $e->getMessage() : 'Unable to send OTP email right now. Please try again shortly.',
+        ], $status);
         return;
     }
 
     Response::json([
         'success' => true,
         'message' => 'OTP sent to email',
+        'data' => [
+            'existing_customer' => $existingUser !== null,
+            'user' => $existingUser !== null ? [
+                'id' => (int)($existingUser['id'] ?? 0),
+                'full_name' => trim((string)($existingUser['full_name'] ?? '')),
+                'phone' => trim((string)($existingUser['phone'] ?? '')),
+            ] : null,
+        ],
     ]);
 }
 
@@ -5305,10 +5383,8 @@ public function verifyOtp(): void
     $otp = preg_replace('/\D+/', '', (string)($input['otp'] ?? '')) ?? '';
     $name = trim((string)($input['name'] ?? ''));
     $phone = trim((string)($input['phone'] ?? ''));
-
-    if (!isset($_SESSION['otp_verify_attempts']) || !is_array($_SESSION['otp_verify_attempts'])) {
-        $_SESSION['otp_verify_attempts'] = [];
-    }
+    $rememberDevice = !empty($input['remember_device'])
+        && in_array(strtolower((string)$input['remember_device']), ['1', 'true', 'yes', 'on'], true);
 
     if ($email === '' || $otp === '' || strlen($otp) !== 6 || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
         Response::json([
@@ -5318,172 +5394,82 @@ public function verifyOtp(): void
         return;
     }
 
-    $attemptWindowSeconds = 600;
-    $maxAttempts = 5;
-    $attemptInfo = $_SESSION['otp_verify_attempts'][$email] ?? ['count' => 0, 'window_started' => time()];
-    $attemptCount = (int)($attemptInfo['count'] ?? 0);
-    $windowStarted = (int)($attemptInfo['window_started'] ?? time());
-    $now = time();
-
-    if (($now - $windowStarted) > $attemptWindowSeconds) {
-        $attemptCount = 0;
-        $windowStarted = $now;
-    }
-
-    if ($attemptCount >= $maxAttempts) {
-        Response::json([
-            "success" => false,
-            "message" => "Too many OTP verification attempts. Please wait 10 minutes and try again."
-        ], 429);
-        return;
-    }
-
     $pdo = self::db();
     if (!$pdo) return;
 
-    $stmt = $pdo->prepare("
-        SELECT * FROM otp_verifications 
-        WHERE email = :email 
-        AND otp = :otp 
-        AND expires_at > NOW()
-        LIMIT 1
-    ");
-
-    $stmt->execute([
-        'email' => $email,
-        'otp' => $otp
-    ]);
-
-    $otpRow = $stmt->fetch();
-
-    if (!$otpRow) {
-        $_SESSION['otp_verify_attempts'][$email] = [
-            'count' => $attemptCount + 1,
-            'window_started' => $windowStarted,
-        ];
+    try {
+        AuthManager::validateOtp($pdo, $email, $otp, 'customer');
+        AuthManager::establishCustomerSession($pdo, $email, $name, $phone, $rememberDevice);
+    } catch (\Throwable $e) {
+        $status = ($e->getCode() === 429) ? 429 : (($e->getCode() === 401) ? 401 : 500);
         Response::json([
-            "success" => false,
-            "message" => "Invalid or expired OTP"
-        ], 401);
+            'success' => false,
+            'message' => $e->getMessage() !== '' ? $e->getMessage() : 'Unable to verify OTP right now.',
+        ], $status);
         return;
     }
 
-    // ✅ user create/get
-    $stmt = $pdo->prepare("SELECT id FROM users WHERE email = :email LIMIT 1");
-    $stmt->execute(['email' => $email]);
-    $user = $stmt->fetch();
-
-    if ($user) {
-        $userId = (int)$user['id'];
-
-        if ($name !== '' || $phone !== '') {
-            $updateParts = [];
-            $params = ['id' => $userId];
-
-            if ($name !== '') {
-                $updateParts[] = 'full_name = :name';
-                $params['name'] = $name;
-            }
-            if ($phone !== '') {
-                $updateParts[] = 'phone = :phone';
-                $params['phone'] = $phone;
-            }
-
-            if ($updateParts !== []) {
-                $pdo->prepare('UPDATE users SET ' . implode(', ', $updateParts) . ' WHERE id = :id')
-                    ->execute($params);
-            }
-        }
-    } else {
-        $generatedPasswordHash = password_hash(bin2hex(random_bytes(16)), PASSWORD_BCRYPT);
-        $stmt = $pdo->prepare(
-            'INSERT INTO users (full_name, email, phone, password_hash, role)
-             VALUES (:full_name, :email, :phone, :password_hash, "customer")'
-        );
-        $stmt->execute([
-            'full_name' => $name !== '' ? $name : 'Guest User',
-            'email' => $email,
-            'phone' => $phone !== '' ? $phone : '0000000000',
-            'password_hash' => $generatedPasswordHash,
-        ]);
-        $userId = (int)$pdo->lastInsertId();
-    }
-
-    // ✅ session
-    $_SESSION['user_id'] = $userId;
-
-    $_SESSION['user_role'] = 'customer';
-    $_SESSION['otp_verified'] = true;
-
-    $pdo->prepare('UPDATE users SET last_login_at = NOW() WHERE id = :id')
-        ->execute(['id' => $userId]);
-
-    // attach cart
-    $sessionId = session_id();
-    //$pdo->prepare("UPDATE carts SET user_id = :user_id WHERE session_id = :session_id")
-   // attach cart (FIXED VERSION 🔥)
-
-
-// 1. guest cart शोध
-// 🔥 attach + merge cart properly
-
-$sessionId = session_id();
-
-// ✅ guest cart
-$stmt = $pdo->prepare("
-    SELECT id FROM carts 
-    WHERE session_id = :session_id 
-    LIMIT 1
-");
-$stmt->execute(['session_id' => $sessionId]);
-$guestCartId = (int)($stmt->fetchColumn() ?: 0);
-
-// ✅ user cart
-$stmt = $pdo->prepare("
-    SELECT id FROM carts 
-    WHERE user_id = :user_id 
-    LIMIT 1
-");
-$stmt->execute(['user_id' => $userId]);
-$userCartId = (int)($stmt->fetchColumn() ?: 0);
-
-if ($guestCartId > 0) {
-
-    if ($userCartId > 0) {
-        // 🔥 MERGE ITEMS (MAIN FIX)
-        $pdo->prepare("
-            UPDATE cart_items 
-            SET cart_id = :user_cart_id 
-            WHERE cart_id = :guest_cart_id
-        ")->execute([
-            'user_cart_id' => $userCartId,
-            'guest_cart_id' => $guestCartId
-        ]);
-    } else {
-        // 🔥 convert guest cart → user cart
-        $pdo->prepare("
-            UPDATE carts 
-            SET user_id = :user_id 
-            WHERE id = :guest_cart_id
-        ")->execute([
-            'user_id' => $userId,
-            'guest_cart_id' => $guestCartId
-        ]);
-    }
-}
-
-
-    // delete OTP
-    $pdo->prepare("DELETE FROM otp_verifications WHERE email = :email")
-        ->execute(['email' => $email]);
-
-    unset($_SESSION['otp_verify_attempts'][$email]);
-
     Response::json([
         "success" => true,
-        "message" => "Email OTP verified"
+        "message" => "Email OTP verified",
+        "data" => [
+            "redirect_to" => "/account/dashboard.php",
+            "remember_device" => $rememberDevice,
+        ],
     ]);
 }
+
+    private function refreshSessionCookie(bool $rememberDevice): void
+    {
+        if (!ini_get('session.use_cookies')) {
+            return;
+        }
+
+        $params = session_get_cookie_params();
+        $defaultLifetime = (int)($params['lifetime'] ?? 0);
+        $lifetime = $rememberDevice ? (60 * 60 * 24 * 30) : $defaultLifetime;
+        $expires = $lifetime > 0 ? (time() + $lifetime) : 0;
+
+        setcookie(session_name(), session_id(), [
+            'expires' => $expires,
+            'path' => (string)($params['path'] ?? '/'),
+            'domain' => (string)($params['domain'] ?? ''),
+            'secure' => (bool)($params['secure'] ?? false),
+            'httponly' => (bool)($params['httponly'] ?? true),
+            'samesite' => (string)($params['samesite'] ?? 'Lax'),
+        ]);
+    }
+
+    /** @param array<string, mixed> $params */
+    private function expireSessionCookie(array $params): void
+    {
+        if (PHP_VERSION_ID >= 70300) {
+            setcookie(session_name(), '', [
+                'expires' => time() - 42000,
+                'path' => (string)($params['path'] ?? '/'),
+                'domain' => (string)($params['domain'] ?? ''),
+                'secure' => (bool)($params['secure'] ?? false),
+                'httponly' => (bool)($params['httponly'] ?? true),
+                'samesite' => (string)($params['samesite'] ?? 'Lax'),
+            ]);
+            return;
+        }
+
+        setcookie(
+            session_name(),
+            '',
+            time() - 42000,
+            (string)($params['path'] ?? '/'),
+            (string)($params['domain'] ?? ''),
+            (bool)($params['secure'] ?? false),
+            (bool)($params['httponly'] ?? true)
+        );
+    }
+
+    private function clearCustomerSessionState(): void
+    {
+        AuthManager::logoutCustomer();
+    }
 
 
 

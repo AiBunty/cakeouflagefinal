@@ -5,9 +5,11 @@ namespace App\Core;
 
 use App\Services\EmailBrandingService;
 use App\Services\MailService;
+use App\Services\MediaCapabilityService;
 use App\Services\SmtpTransportService;
 use App\Services\OrderAutomationService;
 use App\Services\VariableResolverService;
+use App\Services\VideoTranscodeService;
 use App\Services\WhatsAppDispatchService;
 use App\Services\WhatsAppMetaApiService;
 use PDO;
@@ -63,6 +65,10 @@ final class QueueWorker
                     }
                 }
                 if ($jobType === 'crm_trigger_push') {
+                    self::markFailed($pdo, $jobId, $e->getMessage());
+                    $failed++;
+                } elseif (($jobType === 'media_transcode' || $jobType === 'media_image_optimize')
+                    && self::isPermanentMediaFailure($e)) {
                     self::markFailed($pdo, $jobId, $e->getMessage());
                     $failed++;
                 } elseif ($attempts >= 5) {
@@ -157,6 +163,16 @@ final class QueueWorker
             return;
         }
 
+        if ($jobType === 'media_thumbnail_generate') {
+            self::executeMediaThumbnailGenerate($pdo, $payload);
+            return;
+        }
+
+        if ($jobType === 'media_cleanup') {
+            self::executeMediaCleanup($pdo, $payload);
+            return;
+        }
+
         throw new \RuntimeException('Unsupported job type: ' . $jobType);
     }
 
@@ -214,6 +230,17 @@ final class QueueWorker
             // Branding is low-priority: caller-supplied context values take precedence.
             $branding = EmailBrandingService::getEmailBranding($pdo);
             $context = array_merge($branding, $context);
+            if (!isset($context['payment_received_amount']) || trim((string)$context['payment_received_amount']) === '') {
+                $context['payment_received_amount'] = (string)($context['grand_total'] ?? '0.00');
+            }
+            if ((!isset($context['support_whatsapp']) || trim((string)$context['support_whatsapp']) === '')
+                && isset($context['support_phone'])) {
+                $context['support_whatsapp'] = (string)$context['support_phone'];
+            }
+            if (!isset($context['support_whatsapp_url']) || trim((string)$context['support_whatsapp_url']) === '') {
+                $digits = preg_replace('/\D+/', '', (string)($context['support_whatsapp'] ?? ''));
+                $context['support_whatsapp_url'] = $digits !== '' ? ('https://wa.me/' . $digits) : '';
+            }
 
             $templateFound = isset($template['subject']) || isset($template['body_template']);
             if (!$templateFound) {
@@ -296,41 +323,34 @@ final class QueueWorker
 
         self::setMediaAssetStatus($pdo, $canonicalPath, 'processing', null);
 
-        $ffmpeg = self::findFfmpegBinary();
-        if ($ffmpeg === null) {
+        $capability = MediaCapabilityService::detect();
+        if (!(bool)($capability['conversion_enabled'] ?? false)) {
             $sourceExt = strtolower((string)pathinfo($sourceAbsolute, PATHINFO_EXTENSION));
-            if ($sourceExt === 'mp4') {
-                if ($sourceAbsolute !== $canonicalAbsolute) {
-                    if (!@rename($sourceAbsolute, $canonicalAbsolute)) {
-                        if (!@copy($sourceAbsolute, $canonicalAbsolute)) {
-                            throw new \RuntimeException('FFmpeg unavailable and fallback copy failed');
-                        }
-                        @unlink($sourceAbsolute);
-                    }
-                }
-            } else {
-                throw new \RuntimeException('FFmpeg is not available for non-MP4 source conversion');
+            if ($sourceExt !== 'mp4') {
+                throw new \RuntimeException('FFmpeg/ffprobe unavailable for non-MP4 source conversion');
             }
-        } else {
-            $command = escapeshellcmd($ffmpeg)
-                . ' -y -i ' . escapeshellarg($sourceAbsolute)
-                . ' -map 0:v:0 -map 0:a? -c:v libx264 -preset veryfast -crf 23'
-                . ' -vf ' . escapeshellarg('scale=min(1920,iw):-2:force_original_aspect_ratio=decrease')
-                . ' -c:a aac -b:a 128k -movflags +faststart '
-                . escapeshellarg($canonicalAbsolute)
-                . ' 2>&1';
-
-            $output = [];
-            $exitCode = 1;
-            @exec($command, $output, $exitCode);
-            if ($exitCode !== 0 || !is_file($canonicalAbsolute)) {
-                @unlink($canonicalAbsolute);
-                throw new \RuntimeException('Video conversion failed via FFmpeg');
-            }
-
             if ($sourceAbsolute !== $canonicalAbsolute) {
-                @unlink($sourceAbsolute);
+                if (!@copy($sourceAbsolute, $canonicalAbsolute)) {
+                    throw new \RuntimeException('Fallback MP4 copy failed without FFmpeg');
+                }
             }
+            $meta = VideoTranscodeService::probeMetadata($canonicalAbsolute, (string)($capability['ffprobe_binary'] ?? ''));
+            self::setMediaAssetOutputMeta($pdo, $canonicalPath, [
+                'duration_seconds' => $meta['duration_seconds'],
+                'resolution' => $meta['resolution'],
+                'optimized_path' => $canonicalPath,
+            ]);
+        } else {
+            $meta = VideoTranscodeService::transcodeToMp4(
+                $sourceAbsolute,
+                $canonicalAbsolute,
+                (string)($capability['ffmpeg_binary'] ?? null)
+            );
+            self::setMediaAssetOutputMeta($pdo, $canonicalPath, [
+                'duration_seconds' => $meta['duration_seconds'],
+                'resolution' => $meta['resolution'],
+                'optimized_path' => $canonicalPath,
+            ]);
         }
 
         $canonicalSize = filesize($canonicalAbsolute);
@@ -339,6 +359,63 @@ final class QueueWorker
         }
 
         self::setMediaAssetStatus($pdo, $canonicalPath, 'ready', null, (int)$canonicalSize);
+
+        self::enqueueJob($pdo, 'media_thumbnail_generate', [
+            'canonical_path' => $canonicalPath,
+        ]);
+        self::enqueueJob($pdo, 'media_cleanup', [
+            'source_path' => $sourcePath,
+            'canonical_path' => $canonicalPath,
+        ]);
+    }
+
+    /** @param array<string,mixed> $payload */
+    private static function executeMediaThumbnailGenerate(PDO $pdo, array $payload): void
+    {
+        $canonicalPath = trim((string)($payload['canonical_path'] ?? ''));
+        if (!self::isValidMediaRelativePath($canonicalPath)) {
+            throw new \RuntimeException('Invalid canonical path for thumbnail generation');
+        }
+
+        $canonicalAbsolute = self::resolveMediaAbsolutePath($canonicalPath);
+        if ($canonicalAbsolute === null || !is_file($canonicalAbsolute)) {
+            throw new \RuntimeException('Canonical MP4 missing for thumbnail generation');
+        }
+
+        $thumbnailPath = preg_replace('/\.mp4$/i', '-poster.webp', $canonicalPath);
+        if (!is_string($thumbnailPath) || $thumbnailPath === '' || !self::isValidMediaRelativePath($thumbnailPath)) {
+            throw new \RuntimeException('Unable to derive thumbnail target path');
+        }
+
+        $thumbnailAbsolute = self::resolveMediaAbsolutePath($thumbnailPath);
+        if ($thumbnailAbsolute === null) {
+            throw new \RuntimeException('Unable to resolve thumbnail target path');
+        }
+
+        VideoTranscodeService::generatePosterWebp($canonicalAbsolute, $thumbnailAbsolute);
+        self::setMediaAssetOutputMeta($pdo, $canonicalPath, [
+            'thumbnail_path' => $thumbnailPath,
+        ]);
+    }
+
+    /** @param array<string,mixed> $payload */
+    private static function executeMediaCleanup(PDO $pdo, array $payload): void
+    {
+        $sourcePath = trim((string)($payload['source_path'] ?? ''));
+        $canonicalPath = trim((string)($payload['canonical_path'] ?? ''));
+        if ($sourcePath === '' || $sourcePath === $canonicalPath || !self::isValidMediaRelativePath($sourcePath)) {
+            return;
+        }
+
+        $keepOriginal = self::settingEnabled($pdo, 'media_keep_original_video', true);
+        if ($keepOriginal) {
+            return;
+        }
+
+        $sourceAbsolute = self::resolveMediaAbsolutePath($sourcePath);
+        if ($sourceAbsolute !== null && is_file($sourceAbsolute)) {
+            @unlink($sourceAbsolute);
+        }
     }
 
     /** @param array<string,mixed> $payload */
@@ -560,6 +637,13 @@ final class QueueWorker
         return null;
     }
 
+    private static function isPermanentMediaFailure(Throwable $e): bool
+    {
+        $message = strtolower($e->getMessage());
+        return str_contains($message, 'no webp encoder available')
+            || str_contains($message, 'imagewebp/cwebp missing');
+    }
+
     private static function deriveUnifiedVariantPath(string $optimizedPath, string $variant): string
     {
         $parts = pathinfo($optimizedPath);
@@ -625,24 +709,131 @@ final class QueueWorker
         }
 
         if ($fileSize !== null) {
-            $stmt = $pdo->prepare('UPDATE media_assets SET conversion_status = :status, conversion_error = :conversion_error, mime_type = :mime_type, file_size = :file_size, version_token = :version_token, updated_at = NOW() WHERE canonical_path = :canonical_path');
-            $stmt->execute([
-                'status' => $status,
-                'conversion_error' => $error,
-                'mime_type' => 'video/mp4',
-                'file_size' => $fileSize,
-                'version_token' => (string)time(),
-                'canonical_path' => $canonicalPath,
-            ]);
+            if (self::mediaAssetsColumnExists($pdo, 'transcoding_status')) {
+                $stmt = $pdo->prepare('UPDATE media_assets SET conversion_status = :status, transcoding_status = :transcoding_status, conversion_error = :conversion_error, mime_type = :mime_type, file_size = :file_size, version_token = :version_token, updated_at = NOW() WHERE canonical_path = :canonical_path');
+                $stmt->execute([
+                    'status' => $status,
+                    'transcoding_status' => $status === 'ready' ? 'optimized' : $status,
+                    'conversion_error' => $error,
+                    'mime_type' => 'video/mp4',
+                    'file_size' => $fileSize,
+                    'version_token' => (string)time(),
+                    'canonical_path' => $canonicalPath,
+                ]);
+            } else {
+                $stmt = $pdo->prepare('UPDATE media_assets SET conversion_status = :status, conversion_error = :conversion_error, mime_type = :mime_type, file_size = :file_size, version_token = :version_token, updated_at = NOW() WHERE canonical_path = :canonical_path');
+                $stmt->execute([
+                    'status' => $status,
+                    'conversion_error' => $error,
+                    'mime_type' => 'video/mp4',
+                    'file_size' => $fileSize,
+                    'version_token' => (string)time(),
+                    'canonical_path' => $canonicalPath,
+                ]);
+            }
             return;
         }
 
-        $stmt = $pdo->prepare('UPDATE media_assets SET conversion_status = :status, conversion_error = :conversion_error, updated_at = NOW() WHERE canonical_path = :canonical_path');
+        if (self::mediaAssetsColumnExists($pdo, 'transcoding_status')) {
+            $stmt = $pdo->prepare('UPDATE media_assets SET conversion_status = :status, transcoding_status = :transcoding_status, conversion_error = :conversion_error, updated_at = NOW() WHERE canonical_path = :canonical_path');
+            $stmt->execute([
+                'status' => $status,
+                'transcoding_status' => $status === 'ready' ? 'optimized' : $status,
+                'conversion_error' => $error,
+                'canonical_path' => $canonicalPath,
+            ]);
+        } else {
+            $stmt = $pdo->prepare('UPDATE media_assets SET conversion_status = :status, conversion_error = :conversion_error, updated_at = NOW() WHERE canonical_path = :canonical_path');
+            $stmt->execute([
+                'status' => $status,
+                'conversion_error' => $error,
+                'canonical_path' => $canonicalPath,
+            ]);
+        }
+    }
+
+    /** @param array<string,mixed> $meta */
+    private static function setMediaAssetOutputMeta(PDO $pdo, string $canonicalPath, array $meta): void
+    {
+        $exists = $pdo->query("SHOW TABLES LIKE 'media_assets'");
+        if (!($exists instanceof \PDOStatement) || !$exists->fetchColumn()) {
+            return;
+        }
+
+        $set = [];
+        $params = ['canonical_path' => $canonicalPath];
+
+        if (isset($meta['optimized_path']) && self::mediaAssetsColumnExists($pdo, 'optimized_path')) {
+            $set[] = 'optimized_path = :optimized_path';
+            $params['optimized_path'] = (string)$meta['optimized_path'];
+        }
+        if (isset($meta['thumbnail_path']) && self::mediaAssetsColumnExists($pdo, 'thumbnail_path')) {
+            $set[] = 'thumbnail_path = :thumbnail_path';
+            $params['thumbnail_path'] = (string)$meta['thumbnail_path'];
+        }
+        if (isset($meta['duration_seconds']) && self::mediaAssetsColumnExists($pdo, 'duration_seconds')) {
+            $set[] = 'duration_seconds = :duration_seconds';
+            $params['duration_seconds'] = $meta['duration_seconds'] !== null ? (float)$meta['duration_seconds'] : null;
+        }
+        if (isset($meta['resolution']) && self::mediaAssetsColumnExists($pdo, 'resolution')) {
+            $set[] = 'resolution = :resolution';
+            $params['resolution'] = $meta['resolution'] !== null ? (string)$meta['resolution'] : null;
+        }
+        if (self::mediaAssetsColumnExists($pdo, 'transcoding_status')) {
+            $set[] = 'transcoding_status = :transcoding_status';
+            $params['transcoding_status'] = 'optimized';
+        }
+
+        if ($set === []) {
+            return;
+        }
+
+        $sql = 'UPDATE media_assets SET ' . implode(', ', $set) . ', updated_at = NOW() WHERE canonical_path = :canonical_path';
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+    }
+
+    private static function mediaAssetsColumnExists(PDO $pdo, string $column): bool
+    {
+        static $cache = [];
+        if (isset($cache[$column])) {
+            return $cache[$column];
+        }
+
+        $stmt = $pdo->prepare(
+            'SELECT 1
+             FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE()
+               AND TABLE_NAME = "media_assets"
+               AND COLUMN_NAME = :column_name
+             LIMIT 1'
+        );
+        $stmt->execute(['column_name' => $column]);
+        $cache[$column] = (bool)$stmt->fetchColumn();
+        return $cache[$column];
+    }
+
+    /** @param array<string,mixed> $payload */
+    private static function enqueueJob(PDO $pdo, string $jobType, array $payload): void
+    {
+        $stmt = $pdo->prepare('INSERT INTO queue_jobs (job_type, payload_json, status, available_at, attempts) VALUES (:job_type, :payload_json, "queued", NOW(), 0)');
         $stmt->execute([
-            'status' => $status,
-            'conversion_error' => $error,
-            'canonical_path' => $canonicalPath,
+            'job_type' => $jobType,
+            'payload_json' => json_encode($payload, JSON_UNESCAPED_SLASHES),
         ]);
+    }
+
+    private static function settingEnabled(PDO $pdo, string $key, bool $default): bool
+    {
+        $stmt = $pdo->prepare('SELECT setting_value FROM settings WHERE setting_key = :key LIMIT 1');
+        $stmt->execute(['key' => $key]);
+        $value = $stmt->fetchColumn();
+        if ($value === false) {
+            return $default;
+        }
+
+        $normalized = strtolower(trim((string)$value));
+        return !in_array($normalized, ['0', 'false', 'no', 'off'], true);
     }
 
     private static function isValidMediaRelativePath(string $path): bool
@@ -712,14 +903,8 @@ final class QueueWorker
     /** @param array<string,mixed> $context */
     private static function renderTemplate(string $template, array $context): string
     {
-        $output = $template;
-        foreach ($context as $key => $value) {
-            if (!is_scalar($value)) {
-                continue;
-            }
-            $output = str_replace('{{' . (string)$key . '}}', (string)$value, $output);
-        }
-        return $output;
+        $resolver = new VariableResolverService();
+        return $resolver->renderStrict($template, $context);
     }
 
     /** @param array<int,string> $recipients

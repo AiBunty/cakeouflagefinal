@@ -19,8 +19,7 @@
         <label class="form-control"><span>Slug</span><input type="text" name="slug" required /></label>
         <label class="form-control"><span>SKU</span><input type="text" name="sku" required /></label>
         <label class="form-control"><span>Category</span><select name="collection_category_id" id="adminProductCategory" required></select></label>
-        <label class="form-control"><span>Short Description</span><input type="text" name="short_description" required /></label>
-        <label class="form-control"><span>Long Description</span><textarea name="long_description" rows="4" required></textarea></label>
+        <label class="form-control"><span>Description</span><textarea name="description" rows="5" required></textarea></label>
         <div class="form-row-two">
           <label class="form-control"><span>Starting Price</span><input type="number" name="starting_price" min="1" step="0.01" required /></label>
           <label class="form-control"><span>Base Price</span><input type="number" name="base_price" min="1" step="0.01" required /></label>

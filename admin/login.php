@@ -5,12 +5,87 @@ ob_start();
 // Allow enough time for SMTP round-trips (connect + EHLO + STARTTLS + AUTH + DATA).
 @set_time_limit(120);
 
+// Production-safe diagnostics to avoid silent blank pages.
+$adminLoginLogDir = dirname(__DIR__) . '/storage/logs';
+if (!is_dir($adminLoginLogDir)) {
+  @mkdir($adminLoginLogDir, 0775, true);
+}
+@ini_set('log_errors', '1');
+@ini_set('display_errors', '0');
+@ini_set('error_log', $adminLoginLogDir . '/admin-login-runtime.log');
+error_reporting(E_ALL);
+
+register_shutdown_function(static function (): void {
+  $error = error_get_last();
+  if ($error === null) {
+    return;
+  }
+  $fatalTypes = [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR];
+  if (!in_array((int)($error['type'] ?? 0), $fatalTypes, true)) {
+    return;
+  }
+  error_log('[admin_login_fatal] ' . (string)($error['message'] ?? 'Unknown fatal') . ' in ' . (string)($error['file'] ?? 'unknown') . ':' . (int)($error['line'] ?? 0));
+});
+
 session_name('cakeouflage_sid');
-session_start();
+if (session_status() === PHP_SESSION_NONE) {
+  // Keep login sessions in the same storage path as app/bootstrap.php so
+  // dashboard/auth pages can read the same session file after redirect.
+  $sessionDir = dirname(__DIR__) . '/storage/sessions';
+  if (!is_dir($sessionDir)) {
+    @mkdir($sessionDir, 0775, true);
+  }
+  @session_save_path($sessionDir);
+  session_start();
+}
 
 require_once __DIR__ . '/includes/db.php';
-require_once __DIR__ . '/includes/auth.php';
 require_once dirname(__DIR__) . '/app/Services/MailService.php';
+
+if (!function_exists('admin_default_crm_permissions')) {
+function admin_default_crm_permissions(): array
+{
+  return array('dashboard', 'follow_ups', 'crm_settings', 'crm_logs', 'crm_report', 'change_password');
+}
+}
+
+if (!function_exists('admin_load_permissions')) {
+function admin_load_permissions(mysqli $conn, int $adminId): array
+{
+  $permissions = array();
+
+  $roleStmt = $conn->prepare('SELECT role FROM admins WHERE id = ? LIMIT 1');
+  if ($roleStmt) {
+    $roleStmt->bind_param('i', $adminId);
+    $roleStmt->execute();
+    $roleRes = $roleStmt->get_result();
+    $roleRow = $roleRes ? $roleRes->fetch_assoc() : null;
+    $roleStmt->close();
+
+    if ($roleRow && (string)($roleRow['role'] ?? '') === 'super_admin') {
+      $_SESSION['admin_permissions'] = ['*'];
+      return $_SESSION['admin_permissions'];
+    }
+  }
+
+  $stmt = $conn->prepare('SELECT permission_key FROM admin_permissions WHERE admin_id = ?');
+  if ($stmt) {
+    $stmt->bind_param('i', $adminId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    while ($result && ($row = $result->fetch_assoc())) {
+      $perm = trim((string)($row['permission_key'] ?? ''));
+      if ($perm !== '') {
+        $permissions[] = $perm;
+      }
+    }
+    $stmt->close();
+  }
+
+  $_SESSION['admin_permissions'] = $permissions;
+  return $permissions;
+}
+}
 
 function admin_login_is_dev_mode(): bool
 {
@@ -118,7 +193,7 @@ function ensure_admin_identity(mysqli $conn): void
         $insertSub->close();
 
         if ($subId > 0) {
-          $permissions = admin_label_presets()['crm'] ?? array('dashboard', 'follow_ups', 'crm_settings', 'crm_logs', 'crm_report', 'change_password');
+          $permissions = admin_default_crm_permissions();
           $permInsert = $conn->prepare('INSERT IGNORE INTO admin_permissions (admin_id, permission_key) VALUES (?, ?)');
           if ($permInsert) {
             foreach ($permissions as $perm) {
@@ -313,6 +388,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               $_SESSION['admin_id'] = (int) $admin['id'];
               $_SESSION['admin_name'] = $admin['full_name'];
               $_SESSION['admin_role'] = $admin['role'];
+              $_SESSION['admin_otp_verified'] = true;
               $_SESSION['admin_department_label'] = $admin['department_label'] ?? '';
               admin_auth_log('otp_verify_success', [
                 'email_ref' => admin_auth_email_ref($adminEmail),

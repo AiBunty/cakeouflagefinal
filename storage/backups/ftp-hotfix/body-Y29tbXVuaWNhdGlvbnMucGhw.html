@@ -1,0 +1,2694 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Admin Panel</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="csrf-token" content="91c496cc1ab3052eb79f08144a3d3db0e4aeeff075738292058ded5ab7067041">
+<script src="/client/assets/js/scroll-preserve.js?v=1779732726"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Poppins:wght@400;500;600;700&display=swap');
+
+:root {
+  --admin-burgundy: #80001F;
+  --admin-burgundy-dark: #5f0017;
+  --admin-soft-pink: #F8D8DE;
+  --admin-ink: #2d1f25;
+  --admin-muted: #7a6870;
+  --admin-surface: #fffdfd;
+  --sidebar-w: 272px;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: 'Poppins', sans-serif;
+  background: linear-gradient(145deg, #fffafb 0%, #fdeef1 56%, #fae4ea 100%);
+  color: var(--admin-ink);
+}
+
+.dashboard {
+  display: flex;
+  min-height: 100vh;
+}
+
+/* ── Sidebar shell ─────────────────────────────── */
+.sidebar {
+  width: var(--sidebar-w);
+  background: linear-gradient(180deg, #8d0a2d 0%, #740020 54%, #560017 100%);
+  color: #fff;
+  min-height: 100vh;
+  position: fixed;
+  inset: 0 auto 0 0;
+  border-right: 1px solid rgba(255,255,255,0.1);
+  box-shadow: 14px 0 34px rgba(74,8,30,0.22);
+  display: flex;
+  flex-direction: column;
+  z-index: 1001;
+}
+
+/* ── Logo header ───────────────────────────────── */
+.sidebar__head {
+  padding: 22px 20px 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.12);
+  flex-shrink: 0;
+}
+.sidebar__head img {
+  display: block;
+  width: 148px;
+  max-width: 100%;
+  filter: brightness(0) invert(1);
+}
+.sidebar__kicker {
+  margin: 7px 0 0;
+  font-size: 0.67rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.55);
+}
+
+/* ── Search ────────────────────────────────────── */
+.nav-search-wrap {
+  padding: 12px 14px 6px;
+  flex-shrink: 0;
+}
+.nav-search {
+  width: 100%;
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 8px;
+  padding: 7px 10px 7px 30px;
+  color: #fff;
+  font-size: 0.8rem;
+  font-family: inherit;
+  outline: none;
+  transition: background 150ms, border-color 150ms;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='rgba(255,255,255,0.45)'%3E%3Cpath fill-rule='evenodd' d='M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z' clip-rule='evenodd'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: 8px 50%;
+  background-size: 13px;
+}
+.nav-search::placeholder { color: rgba(255,255,255,0.4); }
+.nav-search:focus { background-color: rgba(255,255,255,0.16); border-color: rgba(255,255,255,0.38); }
+
+/* ── Scrollable body ───────────────────────────── */
+.sidebar__body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px 0 10px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.18) transparent;
+}
+.sidebar__body::-webkit-scrollbar { width: 4px; }
+.sidebar__body::-webkit-scrollbar-track { background: transparent; }
+.sidebar__body::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.18); border-radius: 2px; }
+
+/* ── Nav sections ──────────────────────────────── */
+.nav-section { padding: 6px 0 2px; }
+.nav-section + .nav-section {
+  border-top: 1px solid rgba(255,255,255,0.07);
+  margin-top: 2px;
+  padding-top: 8px;
+}
+
+.nav-section__toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 2px 18px 4px;
+  cursor: pointer;
+  color: rgba(255,255,255,0.45);
+  font-family: inherit;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  transition: color 140ms;
+}
+.nav-section__toggle:hover { color: rgba(255,255,255,0.75); }
+
+.nav-section__chevron {
+  font-size: 0.55rem;
+  transition: transform 220ms ease;
+  display: inline-block;
+  line-height: 1;
+}
+.nav-section.is-collapsed .nav-section__chevron { transform: rotate(-90deg); }
+
+.nav-section__items {
+  overflow: hidden;
+  transition: max-height 260ms ease;
+  max-height: 800px;
+}
+.nav-section.is-collapsed .nav-section__items { max-height: 0; }
+
+/* ── Nav items ─────────────────────────────────── */
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 14px 9px 16px;
+  margin: 1px 8px;
+  color: rgba(255,255,255,0.82);
+  text-decoration: none;
+  border-radius: 10px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: background 160ms, color 160ms, transform 160ms;
+  position: relative;
+}
+.nav-item:hover {
+  background: rgba(255,255,255,0.11);
+  color: #fff;
+  transform: translateX(2px);
+}
+.nav-item.is-active {
+  background: rgba(255,255,255,0.17);
+  color: #fff;
+  font-weight: 600;
+}
+.nav-item.is-active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 58%;
+  background: rgba(255,255,255,0.88);
+  border-radius: 0 3px 3px 0;
+}
+.nav-item.is-hidden { display: none; }
+
+.nav-item__icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  opacity: 0.8;
+  display: flex;
+  align-items: center;
+}
+.nav-item__icon svg { width: 16px; height: 16px; display: block; }
+.nav-item.is-active .nav-item__icon,
+.nav-item:hover .nav-item__icon { opacity: 1; }
+
+/* ── Footer ────────────────────────────────────── */
+.sidebar__footer {
+  flex-shrink: 0;
+  border-top: 1px solid rgba(255,255,255,0.12);
+  padding: 13px 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.sidebar__user-info { flex: 1; min-width: 0; }
+.sidebar__user-name {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sidebar__user-role {
+  font-size: 0.68rem;
+  color: rgba(255,255,255,0.5);
+  margin-top: 1px;
+}
+.sidebar__logout-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.09);
+  border: 1px solid rgba(255,255,255,0.18);
+  color: rgba(255,255,255,0.8);
+  text-decoration: none;
+  flex-shrink: 0;
+  transition: background 160ms, color 160ms, border-color 160ms;
+}
+.sidebar__logout-btn:hover {
+  background: rgba(220,50,50,0.3);
+  color: #fff;
+  border-color: rgba(220,50,50,0.5);
+}
+.sidebar__logout-btn svg { width: 16px; height: 16px; }
+
+/* ── Mobile toggle ─────────────────────────────── */
+.sidebar__toggle { display: none; }
+
+/* ── Main content ──────────────────────────────── */
+.main {
+  margin-left: var(--sidebar-w);
+  padding: 30px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* ── Header ────────────────────────────────────── */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+  background: rgba(255,255,255,0.82);
+  border: 1px solid rgba(128,0,31,0.1);
+  border-radius: 18px;
+  padding: 16px 20px;
+  backdrop-filter: blur(6px);
+}
+.header h1 {
+  margin: 0;
+  font-family: 'DM Serif Display', Georgia, serif;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  color: var(--admin-burgundy);
+  font-size: clamp(1.7rem, 2.7vw, 2.2rem);
+}
+.header__meta {
+  margin: 2px 0 0;
+  color: var(--admin-muted);
+  font-size: 0.85rem;
+}
+.logout {
+  background: var(--admin-burgundy);
+  color: white;
+  padding: 9px 16px;
+  border-radius: 999px;
+  text-decoration: none;
+  font-size: 0.84rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 600;
+  transition: background 180ms ease, transform 180ms ease;
+}
+.logout:hover {
+  background: var(--admin-burgundy-dark);
+  transform: translateY(-1px);
+}
+
+/* ── Cards / Table ─────────────────────────────── */
+.card {
+  background: var(--admin-surface);
+  padding: 22px;
+  border-radius: 18px;
+  border: 1px solid rgba(128,0,31,0.1);
+  box-shadow: 0 14px 30px rgba(96,18,45,0.08);
+}
+.cards {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 18px;
+}
+.table {
+  background: var(--admin-surface);
+  padding: 20px;
+  border-radius: 18px;
+  margin-top: 20px;
+  border: 1px solid rgba(128,0,31,0.1);
+  box-shadow: 0 12px 26px rgba(96,18,45,0.08);
+}
+.table h3 {
+  margin: 0 0 14px;
+  font-family: 'DM Serif Display', Georgia, serif;
+  font-size: 1.35rem;
+  font-weight: 400;
+  color: var(--admin-burgundy);
+}
+table { width: 100%; border-collapse: collapse; background: transparent; }
+th, td { padding: 12px 10px; text-align: left; }
+th { color: var(--admin-burgundy); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
+tr { border-bottom: 1px solid rgba(128,0,31,0.08); }
+
+/* ── Responsive ────────────────────────────────── */
+@media (max-width: 1080px) {
+  .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 860px) {
+  .sidebar__toggle {
+    display: block;
+    position: fixed;
+    top: 14px;
+    left: 14px;
+    z-index: 1100;
+    background: var(--admin-burgundy);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 9px 12px;
+    font-size: 1.1rem;
+    box-shadow: 0 2px 8px rgba(128,0,31,0.24);
+    cursor: pointer;
+  }
+  .sidebar {
+    width: 88vw;
+    max-width: 300px;
+    min-height: 100vh;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    box-shadow: 14px 0 34px rgba(74,8,30,0.24);
+  }
+  .sidebar.is-open { transform: translateX(0); }
+  .main { margin-left: 0; padding: 68px 16px 28px; }
+  .header { flex-direction: column; align-items: flex-start; }
+  .cards { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+
+<body>
+
+<button class="sidebar__toggle" id="sidebarToggle" aria-label="Toggle menu">&#9776;</button>
+
+<div class="dashboard">
+
+<aside class="sidebar" id="adminSidebar" role="navigation" aria-label="Admin Sidebar">
+
+  <div class="sidebar__head">
+        <img src="/public/uploads/originals/branding/mainlogo_20260525182241_b1e64509.png" alt="Cakeouflage">
+    <p class="sidebar__kicker">Admin Studio</p>
+  </div>
+
+  <div class="nav-search-wrap">
+    <input type="search" id="navSearch" class="nav-search" placeholder="Find a page&hellip;" autocomplete="off" aria-label="Search navigation">
+  </div>
+
+  <div class="sidebar__body" id="sidebarNav">
+                <div class="nav-section" id="navSec_sales">
+        <button class="nav-section__toggle" data-section="navSec_sales" aria-expanded="true">
+          Sales<span class="nav-section__chevron">&#9660;</span>
+        </button>
+        <div class="nav-section__items">
+                                  <a href="dashboard.php"
+               class="nav-item"
+               data-nav-title="dashboard"
+               >
+              <span class="nav-item__icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM11 13a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg></span>
+              <span class="nav-item__text">Dashboard</span>
+            </a>
+                                  <a href="orders.php"
+               class="nav-item"
+               data-nav-title="orders"
+               >
+              <span class="nav-item__icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"/><path fill-rule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clip-rule="evenodd"/></svg></span>
+              <span class="nav-item__text">Orders</span>
+            </a>
+                                  <a href="refunds.php"
+               class="nav-item"
+               data-nav-title="refunds"
+               >
+              <span class="nav-item__icon" aria-hidden="true"></span>
+              <span class="nav-item__text">Refunds</span>
+            </a>
+                                  <a href="bank-alerts.php"
+               class="nav-item"
+               data-nav-title="payment verification"
+               >
+              <span class="nav-item__icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M10 2a6 6 0 00-6 6v2.586l-.707.707A1 1 0 004 13h12a1 1 0 00.707-1.707L16 10.586V8a6 6 0 00-6-6zm-2 13a2 2 0 104 0H8z" clip-rule="evenodd"/></svg></span>
+              <span class="nav-item__text">Payment Verification</span>
+            </a>
+                                  <a href="manual_order.php"
+               class="nav-item"
+               data-nav-title="manual order punch"
+               >
+              <span class="nav-item__icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"/></svg></span>
+              <span class="nav-item__text">Manual Order Punch</span>
+            </a>
+                                  <a href="production_plan.php"
+               class="nav-item"
+               data-nav-title="production plan"
+               >
+              <span class="nav-item__icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2H3V4zm0 4h14v8a1 1 0 01-1 1H4a1 1 0 01-1-1V8zm3 2a1 1 0 000 2h2a1 1 0 100-2H6zm0 3a1 1 0 100 2h5a1 1 0 100-2H6z" clip-rule="evenodd"/></svg></span>
+              <span class="nav-item__text">Production Plan</span>
+            </a>
+                                  <a href="slots.php"
+               class="nav-item"
+               data-nav-title="slot management"
+               >
+              <span class="nav-item__icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd"/></svg></span>
+              <span class="nav-item__text">Slot Management</span>
+            </a>
+                  </div>
+      </div>
+                <div class="nav-section" id="navSec_catalog">
+        <button class="nav-section__toggle" data-section="navSec_catalog" aria-expanded="true">
+          Catalog<span class="nav-section__chevron">&#9660;</span>
+        </button>
+        <div class="nav-section__items">
+                                  <a href="products.php"
+               class="nav-item"
+               data-nav-title="products"
+               >
+              <span class="nav-item__icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M3 1a1 1 0 000 2h1.22l.305 1.222a.997.997 0 00.01.042l1.358 5.43-.893.892C3.74 11.846 4.632 14 6.414 14H15a1 1 0 000-2H6.414l1-1H14a1 1 0 00.894-.553l3-6A1 1 0 0017 3H6.28l-.31-1.243A1 1 0 005 1H3zM16 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM6.5 18a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/></svg></span>
+              <span class="nav-item__text">Products</span>
+            </a>
+                                  <a href="categories.php"
+               class="nav-item"
+               data-nav-title="categories"
+               >
+              <span class="nav-item__icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"/></svg></span>
+              <span class="nav-item__text">Categories</span>
+            </a>
+                                  <a href="banners.php"
+               class="nav-item"
+               data-nav-title="media center"
+               >
+              <span class="nav-item__icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clip-rule="evenodd"/></svg></span>
+              <span class="nav-item__text">Media Center</span>
+            </a>
+                                  <a href="coupons.php"
+               class="nav-item"
+               data-nav-title="coupons"
+               >
+              <span class="nav-item__icon" aria-hidden="true"></span>
+              <span class="nav-item__text">Coupons</span>
+            </a>
+                                  <a href="toppers.php"
+               class="nav-item"
+               data-nav-title="cake toppers"
+               >
+              <span class="nav-item__icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg></span>
+              <span class="nav-item__text">Cake Toppers</span>
+            </a>
+                                  <a href="import-products.php"
+               class="nav-item"
+               data-nav-title="import products"
+               >
+              <span class="nav-item__icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd"/></svg></span>
+              <span class="nav-item__text">Import Products</span>
+            </a>
+                  </div>
+      </div>
+                <div class="nav-section" id="navSec_crm">
+        <button class="nav-section__toggle" data-section="navSec_crm" aria-expanded="true">
+          CRM<span class="nav-section__chevron">&#9660;</span>
+        </button>
+        <div class="nav-section__items">
+                                  <a href="follow_ups.php"
+               class="nav-item"
+               data-nav-title="follow ups"
+               >
+              <span class="nav-item__icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z"/></svg></span>
+              <span class="nav-item__text">Follow Ups</span>
+            </a>
+                                  <a href="build-your-own-cake.php"
+               class="nav-item"
+               data-nav-title="build your own cake"
+               >
+              <span class="nav-item__icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M10 2a3 3 0 013 3v1h1a2 2 0 012 2v2a4 4 0 01-4 4H8a4 4 0 01-4-4V8a2 2 0 012-2h1V5a3 3 0 013-3zm1 4V5a1 1 0 10-2 0v1h2zm-1 11a3 3 0 003-3v-1H7v1a3 3 0 003 3z"/></svg></span>
+              <span class="nav-item__text">Build Your Own Cake</span>
+            </a>
+                                  <a href="crm_settings.php"
+               class="nav-item"
+               data-nav-title="crm settings"
+               >
+              <span class="nav-item__icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"/></svg></span>
+              <span class="nav-item__text">CRM Settings</span>
+            </a>
+                                  <a href="communications.php"
+               class="nav-item is-active"
+               data-nav-title="communications"
+               aria-current="page">
+              <span class="nav-item__icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z"/><path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z"/></svg></span>
+              <span class="nav-item__text">Communications</span>
+            </a>
+                                  <a href="crm_push_logs.php"
+               class="nav-item"
+               data-nav-title="crm push logs"
+               >
+              <span class="nav-item__icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zm6-4a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zm6-3a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z"/></svg></span>
+              <span class="nav-item__text">CRM Push Logs</span>
+            </a>
+                  </div>
+      </div>
+                <div class="nav-section" id="navSec_reports">
+        <button class="nav-section__toggle" data-section="navSec_reports" aria-expanded="true">
+          Reports<span class="nav-section__chevron">&#9660;</span>
+        </button>
+        <div class="nav-section__items">
+                                  <a href="sales_register.php"
+               class="nav-item"
+               data-nav-title="sales register"
+               >
+              <span class="nav-item__icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M3 3a1 1 0 000 2h14a1 1 0 100-2H3zm0 5a1 1 0 000 2h14a1 1 0 100-2H3zm0 5a1 1 0 000 2h8a1 1 0 100-2H3z"/></svg></span>
+              <span class="nav-item__text">Sales Register</span>
+            </a>
+                                  <a href="collections_queue.php"
+               class="nav-item"
+               data-nav-title="collections queue"
+               >
+              <span class="nav-item__icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h9a2 2 0 002-2V9a1 1 0 10-2 0v6H4V5h9a1 1 0 100-2H4zm10.293.293a1 1 0 011.414 0l2 2a1 1 0 010 1.414l-5.5 5.5a1 1 0 01-.39.243l-2 .667a1 1 0 01-1.265-1.265l.667-2a1 1 0 01.243-.39l5.5-5.5z" clip-rule="evenodd"/></svg></span>
+              <span class="nav-item__text">Collections Queue</span>
+            </a>
+                                  <a href="sales_report.php"
+               class="nav-item"
+               data-nav-title="sales report"
+               >
+              <span class="nav-item__icon" aria-hidden="true"></span>
+              <span class="nav-item__text">Sales Report</span>
+            </a>
+                                  <a href="cash_report.php"
+               class="nav-item"
+               data-nav-title="cash report"
+               >
+              <span class="nav-item__icon" aria-hidden="true"></span>
+              <span class="nav-item__text">Cash Report</span>
+            </a>
+                                  <a href="bank_report.php"
+               class="nav-item"
+               data-nav-title="bank report"
+               >
+              <span class="nav-item__icon" aria-hidden="true"></span>
+              <span class="nav-item__text">Bank Report</span>
+            </a>
+                                  <a href="collection_report.php"
+               class="nav-item"
+               data-nav-title="collection report"
+               >
+              <span class="nav-item__icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v.092a4.535 4.535 0 00-1.676.662C6.602 7.234 6 8.009 6 9c0 .99.602 1.765 1.324 2.246.48.32 1.054.545 1.676.662v1.941c-.391-.127-.68-.317-.843-.504a1 1 0 10-1.51 1.31c.562.649 1.413 1.076 2.353 1.253V16a1 1 0 102 0v-.092a4.535 4.535 0 001.676-.662C13.398 14.766 14 13.991 14 13c0-.99-.602-1.765-1.324-2.246A4.535 4.535 0 0011 10.092V8.151c.391.127.68.317.843.504a1 1 0 101.511-1.31c-.563-.649-1.413-1.076-2.354-1.253V6z" clip-rule="evenodd"/></svg></span>
+              <span class="nav-item__text">Collection Report</span>
+            </a>
+                                  <a href="crm_report.php"
+               class="nav-item"
+               data-nav-title="crm report"
+               >
+              <span class="nav-item__icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V7.414A2 2 0 0015.414 6L12 2.586A2 2 0 0010.586 2H6zm2 10a1 1 0 10-2 0v3a1 1 0 102 0v-3zm2-3a1 1 0 011 1v5a1 1 0 11-2 0v-5a1 1 0 011-1zm4-1a1 1 0 10-2 0v7a1 1 0 102 0V8z" clip-rule="evenodd"/></svg></span>
+              <span class="nav-item__text">CRM Report</span>
+            </a>
+                                  <a href="coupon_report.php"
+               class="nav-item"
+               data-nav-title="coupon report"
+               >
+              <span class="nav-item__icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M17.707 9.293a1 1 0 010 1.414l-7 7a1 1 0 01-1.414 0l-7-7A.997.997 0 012 10V5a3 3 0 013-3h5c.256 0 .512.098.707.293l7 7zM5 6a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg></span>
+              <span class="nav-item__text">Coupon Report</span>
+            </a>
+                                  <a href="celebration_report.php"
+               class="nav-item"
+               data-nav-title="celebration report"
+               >
+              <span class="nav-item__icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M10 2a1 1 0 011 1v1.09a5.002 5.002 0 013.535 2.082l.772-.445a1 1 0 111 1.732l-.773.446A4.978 4.978 0 0115 10c0 .703-.145 1.373-.406 1.98l.774.447a1 1 0 11-1 1.732l-.774-.447A5.001 5.001 0 0111 15.91V17a1 1 0 11-2 0v-1.09a5.002 5.002 0 01-3.535-2.082l-.772.445a1 1 0 11-1-1.732l.773-.446A4.978 4.978 0 015 10c0-.703.145-1.373.406-1.98l-.774-.447a1 1 0 011-1.732l.774.447A5.001 5.001 0 019 4.09V3a1 1 0 011-1zm0 4a4 4 0 100 8 4 4 0 000-8z"/></svg></span>
+              <span class="nav-item__text">Celebration Report</span>
+            </a>
+                  </div>
+      </div>
+                <div class="nav-section" id="navSec_system">
+        <button class="nav-section__toggle" data-section="navSec_system" aria-expanded="true">
+          System<span class="nav-section__chevron">&#9660;</span>
+        </button>
+        <div class="nav-section__items">
+                                  <a href="business-settings.php"
+               class="nav-item"
+               data-nav-title="business settings"
+               >
+              <span class="nav-item__icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 110 2h-3a1 1 0 01-1-1v-2a1 1 0 00-1-1H9a1 1 0 00-1 1v2a1 1 0 01-1 1H4a1 1 0 110-2V4zm3 1h2v2H7V5zm2 4H7v2h2V9zm2-4h2v2h-2V5zm2 4h-2v2h2V9z" clip-rule="evenodd"/></svg></span>
+              <span class="nav-item__text">Business Settings</span>
+            </a>
+                                  <a href="maintenance.php"
+               class="nav-item"
+               data-nav-title="maintenance"
+               >
+              <span class="nav-item__icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clip-rule="evenodd"/></svg></span>
+              <span class="nav-item__text">Maintenance</span>
+            </a>
+                                  <a href="form-test-harness-report.php"
+               class="nav-item"
+               data-nav-title="form test harness"
+               >
+              <span class="nav-item__icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V8.414A2 2 0 0017.414 7l-4.414-4.414A2 2 0 0011.586 2H4zm2 6a1 1 0 100 2h8a1 1 0 100-2H6zm0 3a1 1 0 100 2h5a1 1 0 100-2H6z" clip-rule="evenodd"/></svg></span>
+              <span class="nav-item__text">Form Test Harness</span>
+            </a>
+                                  <a href="admin_users.php"
+               class="nav-item"
+               data-nav-title="sub users"
+               >
+              <span class="nav-item__icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z"/></svg></span>
+              <span class="nav-item__text">Sub Users</span>
+            </a>
+                  </div>
+      </div>
+      </div>
+
+  <div class="sidebar__footer">
+    <div class="sidebar__user-info">
+      <div class="sidebar__user-name">Dcore</div>
+      <div class="sidebar__user-role"></div>
+    </div>
+    <a href="logout.php" class="sidebar__logout-btn" title="Logout" aria-label="Logout">
+      <svg viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path fill-rule="evenodd" d="M3 3a1 1 0 011 1v12a1 1 0 11-2 0V4a1 1 0 011-1zm7.707 3.293a1 1 0 010 1.414L9.414 9H17a1 1 0 110 2H9.414l1.293 1.293a1 1 0 01-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+    </a>
+  </div>
+
+</aside>
+
+<div class="main">
+
+<div class="header">
+  <div>
+    <h1>Communications</h1>
+    <p class="header__meta">
+      Cakeouflage Admin Panel
+          </p>
+  </div>
+  <a href="logout.php" class="logout">Logout</a>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* Mobile toggle */
+  var sidebar = document.getElementById('adminSidebar');
+  var toggle  = document.getElementById('sidebarToggle');
+  if (sidebar && toggle) {
+    toggle.addEventListener('click', function () { sidebar.classList.toggle('is-open'); });
+    document.addEventListener('click', function (e) {
+      if (window.innerWidth > 860 || !sidebar.classList.contains('is-open')) { return; }
+      if (!sidebar.contains(e.target) && !toggle.contains(e.target)) { sidebar.classList.remove('is-open'); }
+    });
+  }
+
+  /* Section collapse — persisted in localStorage */
+  var LS_KEY = 'cakeo_nav_collapsed_v1';
+  function getCollapsed() { try { return JSON.parse(localStorage.getItem(LS_KEY) || '[]'); } catch(e) { return []; } }
+  function setCollapsed(arr) { try { localStorage.setItem(LS_KEY, JSON.stringify(arr)); } catch(e) {} }
+
+  // Restore on load
+  getCollapsed().forEach(function (id) {
+    var el = document.getElementById(id);
+    if (!el) { return; }
+    el.classList.add('is-collapsed');
+    var btn = el.querySelector('.nav-section__toggle');
+    if (btn) { btn.setAttribute('aria-expanded', 'false'); }
+  });
+
+  document.querySelectorAll('.nav-section__toggle').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var id  = btn.getAttribute('data-section');
+      var sec = document.getElementById(id);
+      if (!sec) { return; }
+      var now = sec.classList.toggle('is-collapsed');
+      btn.setAttribute('aria-expanded', now ? 'false' : 'true');
+      var list = getCollapsed();
+      if (now) { if (list.indexOf(id) < 0) { list.push(id); } }
+      else { list = list.filter(function (x) { return x !== id; }); }
+      setCollapsed(list);
+    });
+  });
+
+  /* Sidebar scroll persistence — save before leaving, restore on load */
+  var SCROLL_KEY = 'cakeo_sidebar_scroll_v1';
+  var sidebarBody = document.querySelector('.sidebar__body');
+  if (sidebarBody) {
+    var savedScroll = parseInt(sessionStorage.getItem(SCROLL_KEY) || '0', 10);
+    if (savedScroll > 0) { sidebarBody.scrollTop = savedScroll; }
+    window.addEventListener('beforeunload', function () {
+      sessionStorage.setItem(SCROLL_KEY, String(sidebarBody.scrollTop));
+    });
+  }
+
+  /* Nav search */
+  var searchEl = document.getElementById('navSearch');
+  if (searchEl) {
+    searchEl.addEventListener('input', function () {
+      var q = searchEl.value.trim().toLowerCase();
+      var items = document.querySelectorAll('#sidebarNav .nav-item');
+      items.forEach(function (item) {
+        item.classList.toggle('is-hidden', q.length > 0 && (item.getAttribute('data-nav-title') || '').indexOf(q) < 0);
+      });
+      document.querySelectorAll('.nav-section').forEach(function (sec) {
+        if (q.length === 0) {
+          sec.style.display = '';
+          var id = sec.id;
+          var collapsed = getCollapsed().indexOf(id) >= 0;
+          sec.classList.toggle('is-collapsed', collapsed);
+        } else {
+          sec.classList.remove('is-collapsed');
+          sec.style.display = sec.querySelectorAll('.nav-item:not(.is-hidden)').length === 0 ? 'none' : '';
+        }
+      });
+    });
+  }
+
+})();
+</script>
+<!-- Visual editor styles -->
+
+<style>
+/* ── layout ─────────────────────────────── */
+.comm-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 4px 0 32px;
+}
+
+/* quick-nav bar */
+.comm-quicknav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.comm-quicknav a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 9px;
+  border: 1px solid rgba(128,0,31,.14);
+  background: #fff8fa;
+  color: #80001F;
+  font-size: 0.88rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 130ms, box-shadow 130ms, transform 130ms;
+}
+.comm-quicknav a:hover {
+  background: #ede4e8;
+  box-shadow: 0 3px 10px rgba(128,0,31,.10);
+  transform: translateY(-1px);
+}
+
+.comm-routing-card {
+  background: #fff;
+  border: 1px solid rgba(128,0,31,.12);
+  border-radius: 16px;
+  padding: 14px;
+}
+.comm-routing-head h2 {
+  margin: 0;
+  color: #80001F;
+  font-size: 1.06rem;
+}
+.comm-routing-note {
+  margin: 6px 0 0;
+  color: #8f6c79;
+  font-size: .85rem;
+}
+.comm-routing-grid {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+.comm-routing-field label {
+  display: block;
+  margin-bottom: 6px;
+  color: #6e2a3e;
+  font-size: .8rem;
+  font-weight: 700;
+  letter-spacing: .02em;
+}
+.comm-routing-field input,
+.comm-routing-field select {
+  width: 100%;
+  border: 1px solid rgba(128,0,31,.18);
+  border-radius: 10px;
+  min-height: 40px;
+  padding: 8px 10px;
+  font: inherit;
+}
+.comm-routing-field select {
+  min-height: 130px;
+}
+.comm-routing-actions {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.comm-routing-flash {
+  font-size: .82rem;
+  color: #166534;
+}
+
+/* card */
+.comm-card {
+  background: #fffdfd;
+  border-radius: 20px;
+  border: 1px solid rgba(128,0,31,.10);
+  box-shadow: 0 10px 28px rgba(96,18,45,.07);
+  overflow: hidden;
+}
+.comm-card__head {
+  padding: 22px 26px 14px;
+  border-bottom: 1px solid rgba(128,0,31,.07);
+  background: linear-gradient(180deg,#fff8fa 0%,#fff 100%);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.comm-card__head h2 {
+  margin: 0;
+  font-family: 'DM Serif Display', Georgia, serif;
+  color: #80001F;
+  font-size: 1.3rem;
+  font-weight: 400;
+  flex: 1;
+}
+
+/* channel tabs */
+.comm-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 14px 26px 0;
+}
+.comm-tab {
+  padding: 7px 18px;
+.wa-bind-card {
+  background: #fff;
+  border: 1px solid rgba(128,0,31,.10);
+  border-radius: 14px;
+  padding: 14px;
+}
+.wa-bind-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 1.2fr 1fr auto;
+  align-items: end;
+}
+.wa-bind-grid label {
+  display: block;
+  font-size: .78rem;
+  color: #6e4756;
+  margin-bottom: 4px;
+}
+.wa-bind-grid select {
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid #e6ccd5;
+  border-radius: 9px;
+  padding: 0 10px;
+}
+.wa-bind-meta {
+  margin-top: 8px;
+  color: #7b5f6c;
+  font-size: .78rem;
+}
+.wa-bind-status {
+  margin-left: 10px;
+  font-size: .8rem;
+}
+.wa-bind-status.ok { color: #1f6b3d; }
+.wa-bind-status.err { color: #9b1f1f; }
+  border-radius: 9px 9px 0 0;
+  border: 1px solid rgba(128,0,31,.12);
+  border-bottom: none;
+  .wa-bind-grid { grid-template-columns: 1fr; }
+  background: #f9f4f6;
+  color: #80001F;
+  font-size: 0.89rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 120ms;
+}
+.comm-tab.active {
+  background: #80001F;
+  color: #fff;
+}
+
+/* editor split */
+.comm-editor {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  min-height: 520px;
+}
+@media (max-width: 760px) {
+  .comm-editor { grid-template-columns: 1fr; }
+}
+.comm-list {
+  border-right: 1px solid rgba(128,0,31,.08);
+  overflow-y: auto;
+  max-height: 700px;
+}
+.comm-list-item {
+  padding: 13px 18px;
+  border-bottom: 1px solid rgba(128,0,31,.06);
+  cursor: pointer;
+  transition: background 110ms;
+}
+.comm-list-item:hover { background: #fff2f5; }
+.comm-list-item.selected { background: #fff2f5; border-left: 3px solid #80001F; }
+.comm-list-item__label {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: #3d1020;
+}
+.comm-list-item__key {
+  font-size: 0.76rem;
+  color: #9a7080;
+  margin-top: 2px;
+}
+.comm-list-item__badge {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 1px 8px;
+  border-radius: 20px;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+.badge-active { background: #d1fae5; color: #065f46; }
+.badge-inactive { background: #fee2e2; color: #991b1b; }
+
+/* right pane */
+.comm-pane {
+  padding: 22px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow-y: auto;
+}
+.comm-pane-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #c4a0ad;
+  font-size: 0.95rem;
+}
+.comm-field label {
+  display: block;
+  font-weight: 600;
+  font-size: 0.88rem;
+  color: #6e2a3e;
+  margin-bottom: 5px;
+}
+.comm-input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid rgba(128,0,31,.16);
+  border-radius: 10px;
+  padding: 9px 13px;
+  font: inherit;
+  font-size: 0.95rem;
+  color: #3d1020;
+  background: #fffcfd;
+  transition: border-color 120ms, box-shadow 120ms;
+}
+.comm-input:focus {
+  outline: none;
+  border-color: #80001F;
+  box-shadow: 0 0 0 3px rgba(128,0,31,.09);
+}
+.comm-textarea {
+  resize: vertical;
+  min-height: 280px;
+  font-family: 'Fira Code', 'Cascadia Code', Consolas, monospace;
+  font-size: 0.83rem;
+  line-height: 1.55;
+}
+.comm-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.comm-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.88rem;
+  color: #6e2a3e;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+}
+.comm-toggle input[type=checkbox] {
+  accent-color: #80001F;
+  width: 17px;
+  height: 17px;
+}
+.btn-save {
+  padding: 9px 26px;
+  background: #80001F;
+  color: #fff;
+  border: none;
+  border-radius: 11px;
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 130ms, box-shadow 130ms, transform 130ms;
+}
+.btn-save:hover { background: #a0002a; box-shadow: 0 4px 14px rgba(128,0,31,.22); transform: translateY(-1px); }
+.btn-save:disabled { opacity: .55; cursor: not-allowed; transform: none; box-shadow: none; }
+.btn-preview {
+  padding: 8px 18px;
+  background: transparent;
+  color: #80001F;
+  border: 1.5px solid rgba(128,0,31,.3);
+  border-radius: 11px;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 130ms, border-color 130ms;
+}
+.btn-preview:hover { background: #fff2f5; border-color: #80001F; }
+.comm-status {
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 8px;
+  display: none;
+}
+.comm-status.ok { display: inline-block; background: #d1fae5; color: #065f46; }
+.comm-status.err { display: inline-block; background: #fee2e2; color: #991b1b; }
+
+/* preview iframe */
+.comm-preview-wrap {
+  display: none;
+  border: 1px solid rgba(128,0,31,.12);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.comm-preview-wrap.visible { display: block; }
+.comm-preview-iframe {
+  width: 100%;
+  height: 420px;
+  border: none;
+  display: block;
+  background: #fff;
+}
+
+/* spinner */
+.comm-spinner {
+  display: inline-block;
+  width: 14px; height: 14px;
+  border: 2px solid rgba(255,255,255,.4);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin .6s linear infinite;
+  vertical-align: middle;
+  margin-right: 4px;
+  display: none;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* loading overlay for list */
+.comm-loading {
+  padding: 40px;
+  text-align: center;
+  color: #c4a0ad;
+  font-size: 0.9rem;
+}
+
+/* ── Editor toolbar wrapper ────────────────────────────── */
+.comm-editor-toolbar-wrap {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 6px;
+  border: 1px solid rgba(128,0,31,.15);
+  border-bottom: none;
+  border-radius: 12px 12px 0 0;
+  background: #fffcfd;
+  padding: 6px 10px;
+}
+.comm-rich-toolbar {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 4px 0 2px;
+  border-top: 1px solid rgba(128,0,31,.10);
+}
+.comm-tool-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding-right: 6px;
+  margin-right: 2px;
+  border-right: 1px solid rgba(128,0,31,.10);
+}
+.comm-tool-group:last-child {
+  border-right: none;
+  padding-right: 0;
+  margin-right: 0;
+}
+.comm-tool-btn {
+  height: 30px;
+  min-width: 30px;
+  padding: 0 8px;
+  border: 1px solid rgba(128,0,31,.22);
+  border-radius: 7px;
+  background: #fff;
+  color: #3d1020;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+}
+.comm-tool-btn:hover {
+  background: #fff3f6;
+  border-color: rgba(128,0,31,.34);
+}
+.comm-tool-btn:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+.comm-tool-select {
+  height: 30px;
+  border: 1px solid rgba(128,0,31,.22);
+  border-radius: 7px;
+  background: #fff;
+  color: #3d1020;
+  font: inherit;
+  font-size: 0.8rem;
+  padding: 0 8px;
+}
+.comm-tool-color {
+  width: 32px;
+  height: 30px;
+  border: 1px solid rgba(128,0,31,.22);
+  border-radius: 7px;
+  background: #fff;
+  padding: 2px;
+  cursor: pointer;
+}
+.comm-tool-title {
+  font-size: 0.72rem;
+  color: #9a7080;
+  padding: 0 2px;
+}
+/* visual-mode info bar */
+#visualInfoBar {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  color: #9a7080;
+  padding: 0 4px;
+}
+.comm-editor-extra-btns {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 3px 0;
+}
+.btn-src {
+  padding: 5px 11px;
+  background: #fff;
+  color: #3d1020;
+  border: 1px solid rgba(128,0,31,.22);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 120ms, color 120ms;
+}
+.btn-src:hover, .btn-src.active { background: #3d1020; color: #fff; border-color: #3d1020; }
+.btn-vars {
+  padding: 5px 11px;
+  background: #80001F;
+  color: #fff;
+  border: 1px solid #80001F;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 120ms;
+}
+.btn-vars:hover { background: #a0002a; border-color: #a0002a; }
+
+/* Visual editable iframe */
+#visualEditWrap {
+  border: 1px solid rgba(128,0,31,.15);
+  border-radius: 0 0 12px 12px;
+  overflow: hidden;
+  background: #f2eef0;
+}
+#visualEditFrame {
+  width: 100%;
+  min-height: 420px;
+  border: none;
+  display: block;
+  background: transparent;
+}
+
+/* Source textarea */
+.comm-textarea-source {
+  min-height: 420px;
+  border-radius: 0 0 12px 12px;
+  border-top: none;
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 12.5px;
+  line-height: 1.55;
+  white-space: pre;
+  word-wrap: normal;
+  overflow-x: auto;
+  tab-size: 2;
+  color: #1d1115;
+  background: #fdf8fa;
+}
+
+/* ── Custom Values Panel ─────────────────────────────── */
+.cv-panel {
+  position: fixed;
+  top: 0;
+  right: -320px;
+  width: 300px;
+  height: 100vh;
+  background: #fff;
+  border-left: 1px solid rgba(128,0,31,.15);
+  box-shadow: -8px 0 32px rgba(128,0,31,.12);
+  z-index: 1000;
+  transition: right 0.25s ease;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.cv-panel.open { right: 0; }
+.cv-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.22);
+  z-index: 999;
+}
+.cv-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px;
+  background: linear-gradient(135deg, #80001F 0%, #a0002a 100%);
+  color: #fff;
+  font-family: 'DM Serif Display', Georgia, serif;
+  font-size: 1.05rem;
+  flex-shrink: 0;
+}
+.cv-close {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 2px 8px;
+  border-radius: 6px;
+  transition: background 120ms;
+}
+.cv-close:hover { background: rgba(255,255,255,.2); }
+.cv-panel__body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px;
+}
+.cv-group { margin-bottom: 14px; }
+.cv-group__label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #80001F;
+  margin: 0 0 7px;
+  padding: 3px 8px;
+  background: #fff2f5;
+  border-radius: 6px;
+}
+.cv-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px;
+  border-radius: 9px;
+  border: 1px solid rgba(128,0,31,.10);
+  background: #fffcfd;
+  margin-bottom: 5px;
+  transition: background 110ms;
+}
+.cv-chip:hover { background: #fff2f5; }
+.cv-chip__token {
+  font-family: 'Fira Code', Consolas, monospace;
+  font-size: 0.77rem;
+  color: #80001F;
+  font-weight: 600;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cv-chip__name {
+  font-size: 0.72rem;
+  color: #9a7080;
+  flex-shrink: 0;
+}
+.cv-chip__actions { display: flex; gap: 3px; }
+.cv-btn {
+  background: none;
+  border: 1px solid rgba(128,0,31,.15);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.78rem;
+  padding: 3px 7px;
+  transition: background 110ms, border-color 110ms;
+  line-height: 1;
+}
+.cv-btn:hover { background: #fff2f5; border-color: #80001F; }
+.cv-btn--insert { background: #fff5f8; }
+.cv-toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: #1d1115;
+  color: #fff;
+  padding: 10px 18px;
+  border-radius: 10px;
+  font-size: 0.88rem;
+  z-index: 2000;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+.comm-diag {
+  margin-top: 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(128,0,31,.10);
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(96,18,45,.06);
+  overflow: hidden;
+}
+.comm-diag__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 18px;
+  border-bottom: 1px solid rgba(128,0,31,.08);
+  background: #fff8fa;
+}
+.comm-diag__head h3 {
+  margin: 0;
+  font-size: .98rem;
+  color: #80001F;
+}
+.comm-diag__meta {
+  margin: 0;
+  font-size: .76rem;
+  color: #8f6c79;
+}
+.comm-diag__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.comm-diag__section {
+  padding: 14px 16px 16px;
+}
+.comm-diag__section + .comm-diag__section {
+  border-left: 1px solid rgba(128,0,31,.08);
+}
+.comm-diag__title {
+  margin: 0 0 10px;
+  font-size: .84rem;
+  color: #6f0d2b;
+  font-weight: 700;
+}
+.comm-diag-table-wrap {
+  overflow-x: auto;
+  border: 1px solid rgba(128,0,31,.08);
+  border-radius: 10px;
+}
+.comm-diag-table {
+  width: 100%;
+  min-width: 560px;
+  border-collapse: collapse;
+}
+.comm-diag-table th,
+.comm-diag-table td {
+  font-size: .76rem;
+  padding: 8px 9px;
+  border-bottom: 1px solid rgba(128,0,31,.08);
+  text-align: left;
+  white-space: nowrap;
+}
+.comm-diag-table th {
+  background: #fff7f9;
+  color: #6f0d2b;
+}
+.comm-diag-table td.key {
+  font-family: 'Fira Code', Consolas, monospace;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.comm-diag-table tr.alias-hit td {
+  background: #fff7ed;
+}
+.comm-diag-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 6px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  border: 1px solid #fdba74;
+  background: #ffedd5;
+  color: #9a3412;
+  font-size: .65rem;
+  font-weight: 700;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+}
+.comm-diag-empty {
+  margin: 0;
+  font-size: .78rem;
+  color: #8f6c79;
+}
+@media (max-width: 980px) {
+  .comm-diag__grid {
+    grid-template-columns: 1fr;
+  }
+  .comm-diag__section + .comm-diag__section {
+    border-left: 0;
+    border-top: 1px solid rgba(128,0,31,.08);
+  }
+}
+</style>
+
+<div class="comm-shell">
+
+  <!-- Quick nav -->
+  <div class="comm-quicknav">
+    <a href="crm_settings.php">⚙️ CRM Settings</a>
+    <a href="follow_ups.php">👥 Follow Ups</a>
+    <a href="crm_push_logs.php">📋 Push Logs</a>
+    <a href="crm_report.php">📊 CRM Report</a>
+  </div>
+
+  <form class="comm-routing-card" method="post" action="communications.php">
+    <input type="hidden" name="_csrf" value="91c496cc1ab3052eb79f08144a3d3db0e4aeeff075738292058ded5ab7067041">
+    <input type="hidden" name="action" value="save_admin_email_routing">
+    <div class="comm-routing-head">
+      <h2>Admin Email Routing</h2>
+      <p class="comm-routing-note">Admin-targeted communication events are sent to this primary mailbox. Optional CC users receive the same admin template in parallel.</p>
+    </div>
+    <div class="comm-routing-grid">
+      <div class="comm-routing-field">
+        <label for="communication_admin_to_email">Primary Admin Email</label>
+        <input type="email" id="communication_admin_to_email" name="communication_admin_to_email" required value="cakeouflage@gmail.com" placeholder="ops@cakeouflage.com">
+      </div>
+      <div class="comm-routing-field">
+        <label for="communication_admin_cc_admin_ids">CC Admin Users (optional)</label>
+        <select id="communication_admin_cc_admin_ids" name="communication_admin_cc_admin_ids[]" multiple>
+                      <option value="2" >
+              Ansh (cakeouflage@gmail.com)            </option>
+                      <option value="1" >
+              Dcore (aibuntysystems@gmail.com)            </option>
+                  </select>
+      </div>
+    </div>
+    <div class="comm-routing-actions">
+      <button class="btn-save" type="submit">Save Admin Routing</button>
+          </div>
+  </form>
+
+  <div class="wa-bind-card">
+    <div class="comm-card__head" style="padding:8px 0 12px;border:0;background:none;">
+      <h2 style="font-size:1.1rem;">WhatsApp Event Binding</h2>
+    </div>
+    <div class="wa-bind-grid">
+      <div>
+        <label for="byocWaTemplateSelect">Managed Template (approved only)</label>
+        <select id="byocWaTemplateSelect">
+          <option value="">Loading approved templates...</option>
+        </select>
+      </div>
+      <div>
+        <label for="byocWaMappingActive">Mapping Status</label>
+        <select id="byocWaMappingActive">
+          <option value="1">Active</option>
+          <option value="0">Inactive</option>
+        </select>
+      </div>
+      <div>
+        <button class="btn-save" type="button" id="byocWaSaveBtn" onclick="saveByocWhatsAppBinding()">Save Binding</button>
+        <span class="wa-bind-status" id="byocWaStatus"></span>
+      </div>
+    </div>
+    <div class="wa-bind-meta" id="byocWaMeta">Event Key: <strong>build_your_cake_quote_whatsapp</strong></div>
+  </div>
+
+  <!-- Main card -->
+  <div class="comm-card">
+    <div class="comm-card__head">
+      <h2>📧 Communication Templates</h2>
+    </div>
+
+    <!-- Channel tabs -->
+    <div class="comm-tabs">
+      <div class="comm-tab active" data-channel="email" onclick="switchChannel('email', this)">Email</div>
+      <div class="comm-tab" data-channel="whatsapp" onclick="switchChannel('whatsapp', this)">WhatsApp</div>
+    </div>
+
+    <div class="comm-editor">
+      <!-- Left: template list -->
+      <div class="comm-list" id="commList">
+        <div class="comm-loading">Loading templates…</div>
+      </div>
+
+      <!-- Right: editor pane -->
+      <div class="comm-pane" id="commPane">
+        <div class="comm-pane-empty" id="commPaneEmpty">← Select a template to edit</div>
+
+        <div id="commEditor" style="display:none; flex-direction:column; gap:14px;">
+
+          <!-- Subject (email only) -->
+          <div class="comm-field" id="subjectWrap">
+            <label>Subject</label>
+            <input type="text" id="subjectInput" class="comm-input" placeholder="Email subject line…">
+          </div>
+
+          <!-- TinyMCE editor (email only) -->
+          <div id="editorToolbarWrap">
+            <div class="comm-editor-toolbar-wrap" style="padding:8px 12px;border-bottom:1px solid #f0d7df;">
+              <div class="comm-editor-extra-btns">
+                <button type="button" class="btn-vars" onclick="toggleCustomValues()">&#123;&#123;&#125;&#125; Variables</button>
+              </div>
+            </div>
+            <!-- TinyMCE mounts here -->
+            <textarea id="tinymceEditor" class="comm-input" placeholder="Email body HTML…" style="width:100%;min-height:420px;"></textarea>
+          </div>
+
+          <!-- WhatsApp plain-text body (no toolbar) -->
+          <div id="waBodyWrap" style="display:none;" class="comm-field">
+            <label>Message Body <span style="font-size:.75rem;color:#9a7080;font-weight:400;">(use {{variable}} placeholders)</span></label>
+            <textarea id="waBodyInput" class="comm-input comm-textarea" placeholder="WhatsApp message template…"></textarea>
+          </div>
+
+          <!-- Active toggle + actions -->
+          <div class="comm-row">
+            <label class="comm-toggle">
+              <input type="checkbox" id="activeToggle"> Active
+            </label>
+            <button class="btn-preview" type="button" id="btnPreview" onclick="togglePreview()" style="display:none;">👁 Preview</button>
+            <button class="btn-save" type="button" id="btnSave" onclick="saveTemplate()">
+              <span class="comm-spinner" id="saveSpin"></span>Save Template
+            </button>
+            <button class="btn-preview" type="button" id="btnSendTest" onclick="openTestEmailPanel()" style="display:none;">✉ Send Test</button>
+            <span class="comm-status" id="commStatus"></span>
+          </div>
+
+          <!-- Send Test Email panel (email channel only) -->
+          <div id="testEmailPanel" style="display:none;margin-top:14px;background:#fff7f9;border:1px solid #f0d7df;border-radius:12px;padding:18px;">
+            <p style="margin:0 0 10px;font-weight:600;color:#80001F;">Send Test Email</p>
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+              <input type="email" id="testEmailRecipient" placeholder="recipient@example.com"
+                     style="flex:1;min-width:220px;padding:9px 14px;border:1px solid #e2c8d1;border-radius:8px;font-size:14px;">
+              <button type="button" onclick="sendTestEmail()"
+                      style="background:#80001F;color:#fff;padding:9px 18px;border:none;border-radius:8px;font-weight:600;cursor:pointer;white-space:nowrap;">
+                <span id="testEmailSpin" class="comm-spinner"></span>Send
+              </button>
+            </div>
+            <div id="testEmailStatus" style="margin-top:8px;font-size:13px;"></div>
+          </div>
+
+          <!-- Preview iframe (email only) -->
+          <div class="comm-preview-wrap" id="previewWrap">
+            <iframe class="comm-preview-iframe" id="previewFrame" title="Email Preview"></iframe>
+          </div>
+
+        </div><!-- /commEditor -->
+      </div><!-- /comm-pane -->
+    </div><!-- /comm-editor -->
+  </div><!-- /comm-card -->
+
+  <div class="comm-diag">
+    <div class="comm-diag__head">
+      <h3>🔎 Trigger Resolution Diagnostics</h3>
+      <p class="comm-diag__meta">Shows requested vs resolved keys for alias compatibility during rollout.</p>
+    </div>
+    <div class="comm-diag__grid">
+      <section class="comm-diag__section">
+        <p class="comm-diag__title">Email Trigger Queue (last 25)</p>
+                  <div class="comm-diag-table-wrap">
+            <table class="comm-diag-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Requested Key</th>
+                  <th>Resolved Key</th>
+                  <th>Recipient</th>
+                  <th>Status</th>
+                  <th>Created</th>
+                </tr>
+              </thead>
+              <tbody>
+                                                    <tr class="">
+                    <td>222</td>
+                    <td class="key" title="build_your_cake_quote_email">build_your_cake_quote_email</td>
+                    <td class="key" title="build_your_cake_quote_email">
+                      build_your_cake_quote_email                                          </td>
+                    <td>byoc.qa.20260526001126@example.com</td>
+                    <td>sent</td>
+                    <td>2026-05-26 08:07:52</td>
+                  </tr>
+                                                    <tr class="">
+                    <td>220</td>
+                    <td class="key" title="build_your_cake_quote_email">build_your_cake_quote_email</td>
+                    <td class="key" title="build_your_cake_quote_email">
+                      build_your_cake_quote_email                                          </td>
+                    <td>byoc.qa.20260526000446@example.com</td>
+                    <td>sent</td>
+                    <td>2026-05-26 08:07:37</td>
+                  </tr>
+                                                    <tr class="">
+                    <td>219</td>
+                    <td class="key" title="order_delivered_admin">order_delivered_admin</td>
+                    <td class="key" title="order_delivered_admin">
+                      order_delivered_admin                                          </td>
+                    <td>cakeouflage@gmail.com</td>
+                    <td>sent</td>
+                    <td>2026-05-26 00:19:55</td>
+                  </tr>
+                                                    <tr class="">
+                    <td>218</td>
+                    <td class="key" title="order_delivered_customer">order_delivered_customer</td>
+                    <td class="key" title="order_delivered_customer">
+                      order_delivered_customer                                          </td>
+                    <td>manual.qa.20260526001954@example.com</td>
+                    <td>sent</td>
+                    <td>2026-05-26 00:19:55</td>
+                  </tr>
+                                                    <tr class="">
+                    <td>217</td>
+                    <td class="key" title="ready_order_admin">ready_order_admin</td>
+                    <td class="key" title="ready_order_admin">
+                      ready_order_admin                                          </td>
+                    <td>cakeouflage@gmail.com</td>
+                    <td>sent</td>
+                    <td>2026-05-26 00:19:55</td>
+                  </tr>
+                                                    <tr class="">
+                    <td>216</td>
+                    <td class="key" title="ready_order_customer">ready_order_customer</td>
+                    <td class="key" title="ready_order_customer">
+                      ready_order_customer                                          </td>
+                    <td>manual.qa.20260526001954@example.com</td>
+                    <td>sent</td>
+                    <td>2026-05-26 00:19:55</td>
+                  </tr>
+                                                    <tr class="">
+                    <td>215</td>
+                    <td class="key" title="payment_confirmed_admin">payment_confirmed_admin</td>
+                    <td class="key" title="payment_confirmed_admin">
+                      payment_confirmed_admin                                          </td>
+                    <td>cakeouflage@gmail.com</td>
+                    <td>sent</td>
+                    <td>2026-05-26 00:19:55</td>
+                  </tr>
+                                                    <tr class="">
+                    <td>214</td>
+                    <td class="key" title="payment_confirmed_customer">payment_confirmed_customer</td>
+                    <td class="key" title="payment_confirmed_customer">
+                      payment_confirmed_customer                                          </td>
+                    <td>manual.qa.20260526001954@example.com</td>
+                    <td>sent</td>
+                    <td>2026-05-26 00:19:55</td>
+                  </tr>
+                                                    <tr class="">
+                    <td>213</td>
+                    <td class="key" title="order_delivered_admin">order_delivered_admin</td>
+                    <td class="key" title="order_delivered_admin">
+                      order_delivered_admin                                          </td>
+                    <td>cakeouflage@gmail.com</td>
+                    <td>sent</td>
+                    <td>2026-05-26 00:11:32</td>
+                  </tr>
+                                                    <tr class="">
+                    <td>212</td>
+                    <td class="key" title="order_delivered_customer">order_delivered_customer</td>
+                    <td class="key" title="order_delivered_customer">
+                      order_delivered_customer                                          </td>
+                    <td>byoc.qa.20260526001126@example.com</td>
+                    <td>sent</td>
+                    <td>2026-05-26 00:11:32</td>
+                  </tr>
+                                                    <tr class="">
+                    <td>211</td>
+                    <td class="key" title="ready_order_admin">ready_order_admin</td>
+                    <td class="key" title="ready_order_admin">
+                      ready_order_admin                                          </td>
+                    <td>cakeouflage@gmail.com</td>
+                    <td>sent</td>
+                    <td>2026-05-26 00:11:32</td>
+                  </tr>
+                                                    <tr class="">
+                    <td>210</td>
+                    <td class="key" title="ready_order_customer">ready_order_customer</td>
+                    <td class="key" title="ready_order_customer">
+                      ready_order_customer                                          </td>
+                    <td>byoc.qa.20260526001126@example.com</td>
+                    <td>sent</td>
+                    <td>2026-05-26 00:11:32</td>
+                  </tr>
+                                                    <tr class="">
+                    <td>209</td>
+                    <td class="key" title="payment_confirmed_admin">payment_confirmed_admin</td>
+                    <td class="key" title="payment_confirmed_admin">
+                      payment_confirmed_admin                                          </td>
+                    <td>cakeouflage@gmail.com</td>
+                    <td>sent</td>
+                    <td>2026-05-26 00:11:31</td>
+                  </tr>
+                                                    <tr class="">
+                    <td>208</td>
+                    <td class="key" title="payment_confirmed_customer">payment_confirmed_customer</td>
+                    <td class="key" title="payment_confirmed_customer">
+                      payment_confirmed_customer                                          </td>
+                    <td>byoc.qa.20260526001126@example.com</td>
+                    <td>sent</td>
+                    <td>2026-05-26 00:11:31</td>
+                  </tr>
+                                                    <tr class="">
+                    <td>207</td>
+                    <td class="key" title="online_order_received_admin">online_order_received_admin</td>
+                    <td class="key" title="online_order_received_admin">
+                      online_order_received_admin                                          </td>
+                    <td>cakeouflage@gmail.com</td>
+                    <td>sent</td>
+                    <td>2026-05-26 00:11:29</td>
+                  </tr>
+                                                    <tr class="">
+                    <td>206</td>
+                    <td class="key" title="online_order_received_customer">online_order_received_customer</td>
+                    <td class="key" title="online_order_received_customer">
+                      online_order_received_customer                                          </td>
+                    <td>byoc.qa.20260526001126@example.com</td>
+                    <td>sent</td>
+                    <td>2026-05-26 00:11:29</td>
+                  </tr>
+                                                    <tr class="">
+                    <td>205</td>
+                    <td class="key" title="byoc_order_confirmed_admin">byoc_order_confirmed_admin</td>
+                    <td class="key" title="byoc_order_confirmed_admin">
+                      byoc_order_confirmed_admin                                          </td>
+                    <td>cakeouflage@gmail.com</td>
+                    <td>sent</td>
+                    <td>2026-05-26 00:11:29</td>
+                  </tr>
+                                                    <tr class="">
+                    <td>204</td>
+                    <td class="key" title="byoc_order_confirmed_customer">byoc_order_confirmed_customer</td>
+                    <td class="key" title="byoc_order_confirmed_customer">
+                      byoc_order_confirmed_customer                                          </td>
+                    <td>byoc.qa.20260526001126@example.com</td>
+                    <td>sent</td>
+                    <td>2026-05-26 00:11:29</td>
+                  </tr>
+                                                    <tr class="">
+                    <td>203</td>
+                    <td class="key" title="order_delivered_admin">order_delivered_admin</td>
+                    <td class="key" title="order_delivered_admin">
+                      order_delivered_admin                                          </td>
+                    <td>cakeouflage@gmail.com</td>
+                    <td>sent</td>
+                    <td>2026-05-26 00:11:24</td>
+                  </tr>
+                                                    <tr class="">
+                    <td>202</td>
+                    <td class="key" title="order_delivered_customer">order_delivered_customer</td>
+                    <td class="key" title="order_delivered_customer">
+                      order_delivered_customer                                          </td>
+                    <td>manual.qa.20260526001116@example.com</td>
+                    <td>sent</td>
+                    <td>2026-05-26 00:11:24</td>
+                  </tr>
+                                                    <tr class="">
+                    <td>201</td>
+                    <td class="key" title="ready_order_admin">ready_order_admin</td>
+                    <td class="key" title="ready_order_admin">
+                      ready_order_admin                                          </td>
+                    <td>cakeouflage@gmail.com</td>
+                    <td>sent</td>
+                    <td>2026-05-26 00:11:23</td>
+                  </tr>
+                                                    <tr class="">
+                    <td>200</td>
+                    <td class="key" title="ready_order_customer">ready_order_customer</td>
+                    <td class="key" title="ready_order_customer">
+                      ready_order_customer                                          </td>
+                    <td>manual.qa.20260526001116@example.com</td>
+                    <td>sent</td>
+                    <td>2026-05-26 00:11:23</td>
+                  </tr>
+                                                    <tr class="">
+                    <td>199</td>
+                    <td class="key" title="payment_confirmed_admin">payment_confirmed_admin</td>
+                    <td class="key" title="payment_confirmed_admin">
+                      payment_confirmed_admin                                          </td>
+                    <td>cakeouflage@gmail.com</td>
+                    <td>sent</td>
+                    <td>2026-05-26 00:11:23</td>
+                  </tr>
+                                                    <tr class="">
+                    <td>198</td>
+                    <td class="key" title="payment_confirmed_customer">payment_confirmed_customer</td>
+                    <td class="key" title="payment_confirmed_customer">
+                      payment_confirmed_customer                                          </td>
+                    <td>manual.qa.20260526001116@example.com</td>
+                    <td>sent</td>
+                    <td>2026-05-26 00:11:22</td>
+                  </tr>
+                                                    <tr class="">
+                    <td>197</td>
+                    <td class="key" title="order_delivered_admin">order_delivered_admin</td>
+                    <td class="key" title="order_delivered_admin">
+                      order_delivered_admin                                          </td>
+                    <td>cakeouflage@gmail.com</td>
+                    <td>sent</td>
+                    <td>2026-05-26 00:11:11</td>
+                  </tr>
+                              </tbody>
+            </table>
+          </div>
+              </section>
+
+      <section class="comm-diag__section">
+        <p class="comm-diag__title">CRM Trigger Jobs (last 25)</p>
+                  <div class="comm-diag-table-wrap">
+            <table class="comm-diag-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Requested Key</th>
+                  <th>Resolved Key</th>
+                  <th>Status</th>
+                  <th>Created</th>
+                </tr>
+              </thead>
+              <tbody>
+                                                    <tr class="">
+                    <td>274</td>
+                    <td class="key" title="ready_order">ready_order</td>
+                    <td class="key" title="ready_order">
+                      ready_order                                          </td>
+                    <td>completed</td>
+                    <td>2026-05-26 00:19:55</td>
+                  </tr>
+                                                    <tr class="">
+                    <td>271</td>
+                    <td class="key" title="payment_confirmed">payment_confirmed</td>
+                    <td class="key" title="payment_confirmed">
+                      payment_confirmed                                          </td>
+                    <td>completed</td>
+                    <td>2026-05-26 00:19:55</td>
+                  </tr>
+                                                    <tr class="">
+                    <td>266</td>
+                    <td class="key" title="ready_order">ready_order</td>
+                    <td class="key" title="ready_order">
+                      ready_order                                          </td>
+                    <td>completed</td>
+                    <td>2026-05-26 00:11:32</td>
+                  </tr>
+                                                    <tr class="">
+                    <td>263</td>
+                    <td class="key" title="payment_confirmed">payment_confirmed</td>
+                    <td class="key" title="payment_confirmed">
+                      payment_confirmed                                          </td>
+                    <td>completed</td>
+                    <td>2026-05-26 00:11:31</td>
+                  </tr>
+                                                    <tr class="">
+                    <td>260</td>
+                    <td class="key" title="online_order_received">online_order_received</td>
+                    <td class="key" title="online_order_received">
+                      online_order_received                                          </td>
+                    <td>completed</td>
+                    <td>2026-05-26 00:11:29</td>
+                  </tr>
+                                                    <tr class="">
+                    <td>253</td>
+                    <td class="key" title="ready_order">ready_order</td>
+                    <td class="key" title="ready_order">
+                      ready_order                                          </td>
+                    <td>completed</td>
+                    <td>2026-05-26 00:11:23</td>
+                  </tr>
+                                                    <tr class="">
+                    <td>250</td>
+                    <td class="key" title="payment_confirmed">payment_confirmed</td>
+                    <td class="key" title="payment_confirmed">
+                      payment_confirmed                                          </td>
+                    <td>completed</td>
+                    <td>2026-05-26 00:11:23</td>
+                  </tr>
+                                                    <tr class="">
+                    <td>245</td>
+                    <td class="key" title="ready_order">ready_order</td>
+                    <td class="key" title="ready_order">
+                      ready_order                                          </td>
+                    <td>completed</td>
+                    <td>2026-05-26 00:11:11</td>
+                  </tr>
+                                                    <tr class="">
+                    <td>242</td>
+                    <td class="key" title="payment_confirmed">payment_confirmed</td>
+                    <td class="key" title="payment_confirmed">
+                      payment_confirmed                                          </td>
+                    <td>completed</td>
+                    <td>2026-05-26 00:11:11</td>
+                  </tr>
+                                                    <tr class="">
+                    <td>239</td>
+                    <td class="key" title="online_order_received">online_order_received</td>
+                    <td class="key" title="online_order_received">
+                      online_order_received                                          </td>
+                    <td>completed</td>
+                    <td>2026-05-26 00:11:07</td>
+                  </tr>
+                                                    <tr class="">
+                    <td>233</td>
+                    <td class="key" title="ready_order">ready_order</td>
+                    <td class="key" title="ready_order">
+                      ready_order                                          </td>
+                    <td>completed</td>
+                    <td>2026-05-26 00:04:47</td>
+                  </tr>
+                                                    <tr class="">
+                    <td>230</td>
+                    <td class="key" title="payment_confirmed">payment_confirmed</td>
+                    <td class="key" title="payment_confirmed">
+                      payment_confirmed                                          </td>
+                    <td>completed</td>
+                    <td>2026-05-26 00:04:47</td>
+                  </tr>
+                                                    <tr class="">
+                    <td>227</td>
+                    <td class="key" title="online_order_received">online_order_received</td>
+                    <td class="key" title="online_order_received">
+                      online_order_received                                          </td>
+                    <td>completed</td>
+                    <td>2026-05-26 00:04:47</td>
+                  </tr>
+                                                    <tr class="">
+                    <td>220</td>
+                    <td class="key" title="ready_order">ready_order</td>
+                    <td class="key" title="ready_order">
+                      ready_order                                          </td>
+                    <td>completed</td>
+                    <td>2026-05-26 00:04:44</td>
+                  </tr>
+                                                    <tr class="">
+                    <td>217</td>
+                    <td class="key" title="payment_confirmed">payment_confirmed</td>
+                    <td class="key" title="payment_confirmed">
+                      payment_confirmed                                          </td>
+                    <td>completed</td>
+                    <td>2026-05-26 00:04:44</td>
+                  </tr>
+                                                    <tr class="">
+                    <td>212</td>
+                    <td class="key" title="ready_order">ready_order</td>
+                    <td class="key" title="ready_order">
+                      ready_order                                          </td>
+                    <td>completed</td>
+                    <td>2026-05-26 00:04:31</td>
+                  </tr>
+                                                    <tr class="">
+                    <td>209</td>
+                    <td class="key" title="payment_confirmed">payment_confirmed</td>
+                    <td class="key" title="payment_confirmed">
+                      payment_confirmed                                          </td>
+                    <td>completed</td>
+                    <td>2026-05-26 00:04:31</td>
+                  </tr>
+                                                    <tr class="">
+                    <td>206</td>
+                    <td class="key" title="online_order_received">online_order_received</td>
+                    <td class="key" title="online_order_received">
+                      online_order_received                                          </td>
+                    <td>completed</td>
+                    <td>2026-05-26 00:04:31</td>
+                  </tr>
+                                                    <tr class="">
+                    <td>198</td>
+                    <td class="key" title="ready_order">ready_order</td>
+                    <td class="key" title="ready_order">
+                      ready_order                                          </td>
+                    <td>completed</td>
+                    <td>2026-05-25 22:25:55</td>
+                  </tr>
+                                                    <tr class="">
+                    <td>195</td>
+                    <td class="key" title="ready_order">ready_order</td>
+                    <td class="key" title="ready_order">
+                      ready_order                                          </td>
+                    <td>completed</td>
+                    <td>2026-05-25 22:25:17</td>
+                  </tr>
+                                                    <tr class="">
+                    <td>192</td>
+                    <td class="key" title="payment_confirmed">payment_confirmed</td>
+                    <td class="key" title="payment_confirmed">
+                      payment_confirmed                                          </td>
+                    <td>completed</td>
+                    <td>2026-05-25 22:23:26</td>
+                  </tr>
+                                                    <tr class="">
+                    <td>189</td>
+                    <td class="key" title="payment_confirmed">payment_confirmed</td>
+                    <td class="key" title="payment_confirmed">
+                      payment_confirmed                                          </td>
+                    <td>completed</td>
+                    <td>2026-05-25 22:23:10</td>
+                  </tr>
+                                                    <tr class="">
+                    <td>186</td>
+                    <td class="key" title="payment_confirmed">payment_confirmed</td>
+                    <td class="key" title="payment_confirmed">
+                      payment_confirmed                                          </td>
+                    <td>completed</td>
+                    <td>2026-05-25 22:22:42</td>
+                  </tr>
+                                                    <tr class="">
+                    <td>175</td>
+                    <td class="key" title="payment_confirmed">payment_confirmed</td>
+                    <td class="key" title="payment_confirmed">
+                      payment_confirmed                                          </td>
+                    <td>completed</td>
+                    <td>2026-05-25 18:17:42</td>
+                  </tr>
+                                                    <tr class="">
+                    <td>172</td>
+                    <td class="key" title="online_order_received">online_order_received</td>
+                    <td class="key" title="online_order_received">
+                      online_order_received                                          </td>
+                    <td>completed</td>
+                    <td>2026-05-25 18:17:37</td>
+                  </tr>
+                              </tbody>
+            </table>
+          </div>
+              </section>
+    </div>
+  </div>
+
+</div><!-- /comm-shell -->
+
+<!-- ── Custom Values Slide-in Panel ──────────────────────────── -->
+<div id="customValuesPanel" class="cv-panel">
+  <div class="cv-panel__head">
+    <span>Custom Variables</span>
+    <button class="cv-close" onclick="toggleCustomValues()">✕</button>
+  </div>
+  <div id="cvPanelBody" class="cv-panel__body"></div>
+</div>
+<div id="cvOverlay" class="cv-overlay" onclick="toggleCustomValues()" style="display:none;"></div>
+<div id="cvToast" class="cv-toast"></div>
+
+<script>
+(function () {
+  const commCsrfToken = "91c496cc1ab3052eb79f08144a3d3db0e4aeeff075738292058ded5ab7067041";
+  const previewContext = {"email_logo_url":"/public/uploads/originals/branding/mainlogo_20260525182236_5b50adbc.png","business_name":"Cakeouflage","brand_primary_color":"#80001F","brand_secondary_color":"#140b0f","support_email":"support@cakeouflage.com","support_phone":"+91 00000 00000","support_whatsapp":"+91 00000 00000","support_whatsapp_url":"https://wa.me/910000000000","business_logo":"/public/uploads/originals/branding/mainlogo_20260525182236_5b50adbc.png","business_address":"Pathardi, Near raddsion, Nashik, maharshtra","business_website":"https://www.cakeouflage.com","currency_symbol":"Rs","currency_code":"INR","customer_name":"Priya Sharma","first_name":"Priya","customer_email":"priya.sharma@example.com","customer_phone":"+91 98765 43210","order_number":"CK1024","order_status":"confirmed","product_summary":"Chocolate Fantasy Cake x1","payment_status":"paid","payment_method":"upi","transaction_reference":"UPI-REF-424242","invoice_number":"INV-2026-0008","invoice_date":"2026-04-05","invoice_download_link":"https://cakeouflage.com/order_invoice.php?id=123","delivery_date":"2026-04-06","delivery_slot":"09:00-11:00","delivery_method":"delivery","delivery_address":"123 Celebration Street, Nashik","pickup_time":"05:30 PM","course_name":"Beginner Cake Workshop","batch_date":"2026-04-18","quote_number":"QTE-2026-0042","company_name":"Nashik Corporate Events LLP","cake_message":"Happy Birthday Sarah!","topper_choice":"Happy Birthday Topper","topper_price":"₹0","special_instructions":"No nuts please","item_details":"1× Chocolate Fantasy Cake","item_names":"Chocolate Fantasy Cake","item_count":"1","grand_total":"1850.00","payment_received_amount":"1850.00","coupon_discount":"0.00","coupon_code":"","refund_amount":"1250.00","refund_reason":"Quality Complaint","refund_status":"processed","business_address_line1":"Pathardi","business_address_line2":"Near raddsion","business_city":"Nashik","business_state":"maharshtra","business_postal_code":"","business_phone":"+919898989898","business_email":"cakouflage@gmail.com","business_gst_number":"","business_pan_number":"","navbar_logo_url":"/public/uploads/originals/branding/mainlogo_20260525182241_b1e64509.png","footer_logo_url":"/public/uploads/originals/branding/whitelogo_20260525182245_dcd21955.png","invoice_duplicate_copy":"on","allow_partial_payment":"0"};
+
+  function getCsrfToken() {
+    const metaToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+    return commCsrfToken || (window.__csrf ?? '') || metaToken;
+  }
+
+  // ── state ──────────────────────────────────────────────────────────
+  let allTemplates = [];
+  let activeChannel = 'email';
+  let selectedId    = null;
+  let previewOpen   = false;
+  const BYOC_WA_EVENT_KEY = 'build_your_cake_quote_whatsapp';
+
+  function renderPreviewHtml(html) {
+    return String(html || '').replace(/{{\s*([^{}\s]+)\s*}}/g, (match, key) => {
+      const value = previewContext[key];
+      return value === undefined || value === null || value === '' ? match : String(value);
+    });
+  }
+
+  // ── Custom variable groups ──────────────────────────────────────────
+  const CV_GROUPS = [{"label":"Customer","vars":[{"name":"Customer Name","token":"{{customer_name}}"},{"name":"First Name","token":"{{first_name}}"},{"name":"Customer Email","token":"{{customer_email}}"},{"name":"Customer Phone","token":"{{customer_phone}}"}]},{"label":"Order","vars":[{"name":"Order Number","token":"{{order_number}}"},{"name":"Order Status","token":"{{order_status}}"},{"name":"Fulfillment Status","token":"{{fulfillment_status}}"},{"name":"Delivery Date","token":"{{delivery_date}}"},{"name":"Product Summary","token":"{{product_summary}}"}]},{"label":"Payment","vars":[{"name":"Payment Status","token":"{{payment_status}}"},{"name":"Payment Method","token":"{{payment_method}}"},{"name":"Transaction Reference","token":"{{transaction_reference}}"},{"name":"Payment Received Amount","token":"{{payment_received_amount}}"}]},{"label":"Coupon","vars":[{"name":"Coupon Code","token":"{{coupon_code}}"},{"name":"Coupon Discount","token":"{{coupon_discount}}"},{"name":"Grand Total","token":"{{grand_total}}"}]},{"label":"Refund","vars":[{"name":"Refund Amount","token":"{{refund_amount}}"},{"name":"Refund Reason","token":"{{refund_reason}}"},{"name":"Refund Status","token":"{{refund_status}}"}]},{"label":"Business","vars":[{"name":"Business Logo","token":"{{business_logo}}"},{"name":"Business Name","token":"{{business_name}}"},{"name":"Support Email","token":"{{support_email}}"},{"name":"Support Phone","token":"{{support_phone}}"},{"name":"Support WhatsApp","token":"{{support_whatsapp}}"},{"name":"Support WhatsApp URL","token":"{{support_whatsapp_url}}"},{"name":"Business Address","token":"{{business_address}}"},{"name":"Business Website","token":"{{business_website}}"},{"name":"Currency Symbol","token":"{{currency_symbol}}"}]},{"label":"Delivery","vars":[{"name":"Delivery Slot","token":"{{delivery_slot}}"},{"name":"Delivery Method","token":"{{delivery_method}}"},{"name":"Delivery Address","token":"{{delivery_address}}"}]},{"label":"Invoice","vars":[{"name":"Invoice Number","token":"{{invoice_number}}"},{"name":"Invoice Date","token":"{{invoice_date}}"},{"name":"Invoice Download Link","token":"{{invoice_download_link}}"}]}];
+
+  // ── pretty labels ───────────────────────────────────────────────────
+  const EVENT_LABELS = {
+    online_order_received_customer: 'Order Placed Online (Customer)',
+    online_order_received_admin:    'Order Placed Online (Admin)',
+    manual_order_received_customer: 'Order Received (Customer)',
+    manual_order_received_admin:    'Order Received (Admin)',
+    payment_confirmed_customer:     'Payment Confirmed',
+    payment_confirmed_admin:        'Payment Confirmed (Admin)',
+    ready_order_customer:           'Order Ready',
+    ready_order_admin:              'Order Ready (Admin)',
+    order_delivered_customer:       'Order Delivered (Customer)',
+    order_delivered_admin:          'Order Delivered (Admin)',
+    reject_order_customer:          'Order Rejected',
+    reject_order_admin:             'Order Rejected (Admin)',
+    partial_refund_processed_customer: 'Partial Refund Processed (Customer)',
+    partial_refund_processed_admin:    'Partial Refund Processed (Admin)',
+    full_refund_processed_customer:    'Full Refund Processed (Customer)',
+    full_refund_processed_admin:       'Full Refund Processed (Admin)',
+    refund_processed_customer:         'Refund Processed (Customer)',
+    refund_processed_admin:            'Refund Processed (Admin)',
+    follow_up_review_email:         'Follow-up Review',
+    annual_reorder_email:           'Annual Reorder',
+    birthday_greeting_email:        'Birthday Greeting',
+    birthday_preorder_email:        'Birthday Preorder',
+    anniversary_greeting_email:     'Anniversary Greeting',
+    anniversary_preorder_email:     'Anniversary Preorder',
+    celebration_combined_email:     'Celebration Combined',
+    password_reset:                 'Password Reset',
+    invoice_paid:                   'Invoice Paid',
+  };
+  function prettyKey(key) {
+    return EVENT_LABELS[key] || key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  }
+
+  // ── HTML pretty-printer ────────────────────────────────────────────
+  function formatHtml(html) {
+    if (!html || !html.trim()) return html;
+    // Normalise: collapse existing whitespace between tags, then add newline
+    let s = html.replace(/>\s*</g, '>\n<').trim();
+    const INLINE = /^<(a|abbr|acronym|b|bdo|big|br|button|cite|code|dfn|em|i|img|input|kbd|label|map|object|output|q|s|samp|select|small|span|strong|sub|sup|textarea|time|tt|u|var)[\s\/>/]/i;
+    const VOID   = /^<(area|base|br|col|embed|hr|img|input|link|meta|param|source|track|wbr)(\s|>|\/)/i;
+    let depth = 0;
+    const indent = (n) => '  '.repeat(Math.max(0, n));
+    const lines  = s.split('\n');
+    const out    = [];
+    for (let raw of lines) {
+      const line = raw.trim();
+      if (!line) continue;
+      // DOCTYPE / comments stay at current depth without changing it
+      if (/^<!/.test(line)) { out.push(indent(depth) + line); continue; }
+      // Closing tag → dedent first
+      if (/^<\//.test(line)) {
+        depth = Math.max(0, depth - 1);
+        out.push(indent(depth) + line);
+        continue;
+      }
+      // Self-closing / void tags → no depth change
+      if (VOID.test(line) || /\/>$/.test(line)) {
+        out.push(indent(depth) + line);
+        continue;
+      }
+      // Inline tags — keep at current depth, no indent bump
+      if (INLINE.test(line)) {
+        out.push(indent(depth) + line);
+        continue;
+      }
+      // Opening tag
+      out.push(indent(depth) + line);
+      if (/^<[^/!][^>]*>(?!.*<\/[^>]+>)/.test(line)) depth++;
+    }
+    return out.join('\n');
+  }
+
+  // ── get editor HTML ─────────────────────────────────────────────────
+  function getEditorHTML() {
+    const t = allTemplates.find(x => x.id == selectedId);
+    if (!t) return '';
+    if (t.channel !== 'email') return document.getElementById('waBodyInput').value;
+    const editor = window.tinymce && tinymce.get('tinymceEditor');
+    return editor ? editor.getContent() : '';
+  }
+
+  // ── Custom Values panel ─────────────────────────────────────────────
+  window.toggleCustomValues = function () {
+    const panel   = document.getElementById('customValuesPanel');
+    const overlay = document.getElementById('cvOverlay');
+    const isOpen  = panel.classList.contains('open');
+    if (isOpen) {
+      panel.classList.remove('open');
+      overlay.style.display = 'none';
+    } else {
+      panel.classList.add('open');
+      overlay.style.display = '';
+    }
+  };
+
+  window.copyVar = function (token) {
+    navigator.clipboard.writeText(token).then(() => {
+      showToast('Copied: ' + token);
+    }).catch(() => {
+      const tmp = document.createElement('textarea');
+      tmp.value = token;
+      document.body.appendChild(tmp);
+      tmp.select();
+      document.execCommand('copy');
+      document.body.removeChild(tmp);
+      showToast('Copied!');
+    });
+  };
+
+  window.insertVar = function (token) {
+    const t = allTemplates.find(x => x.id == selectedId);
+    if (!t) return;
+    if (t.channel !== 'email') {
+      const ta  = document.getElementById('waBodyInput');
+      const pos = ta.selectionStart;
+      ta.value  = ta.value.slice(0, pos) + token + ta.value.slice(ta.selectionEnd);
+      ta.selectionStart = ta.selectionEnd = pos + token.length;
+      ta.focus();
+    } else {
+      // Insert into TinyMCE at cursor position
+      const editor = window.tinymce && tinymce.get('tinymceEditor');
+      if (editor) {
+        editor.insertContent(token);
+        editor.focus();
+      } else {
+        showToast('Editor not ready — please wait');
+        return;
+      }
+    }
+    showToast('Inserted: ' + token);
+  };
+
+  function showToast(msg) {
+    const el = document.getElementById('cvToast');
+    if (!el) return;
+    el.textContent   = msg;
+    el.style.opacity = '1';
+    clearTimeout(el._tid);
+    el._tid = setTimeout(() => { el.style.opacity = '0'; }, 1800);
+  }
+
+  // ── build Custom Values panel content ──────────────────────────────
+  function buildCvPanel() {
+    const body = document.getElementById('cvPanelBody');
+    if (!body) return;
+    body.innerHTML = CV_GROUPS.map(g => `
+      <div class="cv-group">
+        <div class="cv-group__label">${g.label}</div>
+        ${g.vars.map(v => `
+          <div class="cv-chip">
+            <span class="cv-chip__token">${v.token}</span>
+            <span class="cv-chip__name">${v.name}</span>
+            <div class="cv-chip__actions">
+              <button class="cv-btn cv-btn--copy" title="Copy" onclick="copyVar('${v.token}')">📋</button>
+              <button class="cv-btn cv-btn--insert" title="Insert at cursor" onclick="insertVar('${v.token}')">➕</button>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `).join('');
+  }
+
+  // ── channel switch ──────────────────────────────────────────────────
+  window.switchChannel = function (ch, tab) {
+    activeChannel = ch;
+    document.querySelectorAll('.comm-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    selectedId = null;
+    renderList();
+    clearPane();
+  };
+
+  // ── fetch all templates once ────────────────────────────────────────
+  async function loadTemplates() {
+    try {
+      const r = await fetch('/api/admin/communication/templates', { credentials: 'same-origin' });
+      const j = await r.json();
+      allTemplates = j.data?.items ?? [];
+      renderList();
+    } catch (e) {
+      document.getElementById('commList').innerHTML =
+        '<div class="comm-loading" style="color:#991b1b;">Failed to load templates.</div>';
+    }
+  }
+
+  // ── render list ─────────────────────────────────────────────────────
+  function renderList() {
+    const list     = document.getElementById('commList');
+    const filtered = allTemplates.filter(t => t.channel === activeChannel);
+    if (!filtered.length) {
+      list.innerHTML = '<div class="comm-loading">No ' + activeChannel + ' templates found.</div>';
+      return;
+    }
+    list.innerHTML = filtered.map(t => `
+      <div class="comm-list-item${t.id == selectedId ? ' selected' : ''}"
+           data-id="${t.id}" onclick="selectTemplate(${t.id})">
+        <div class="comm-list-item__label">${prettyKey(t.event_key)}</div>
+        <div class="comm-list-item__key">${t.event_key}</div>
+        <span class="comm-list-item__badge ${t.is_active == 1 ? 'badge-active' : 'badge-inactive'}">
+          ${t.is_active == 1 ? 'Active' : 'Inactive'}
+        </span>
+      </div>
+    `).join('');
+  }
+
+  // ── select template ─────────────────────────────────────────────────
+  window.selectTemplate = function (id) {
+    selectedId    = id;
+    const t       = allTemplates.find(x => x.id == id);
+    if (!t) return;
+
+    const isEmail = t.channel === 'email';
+    renderList();
+
+    // Subject field
+    document.getElementById('subjectWrap').style.display = isEmail ? '' : 'none';
+    document.getElementById('subjectInput').value        = t.subject ?? '';
+
+    // Show/hide editor areas
+    document.getElementById('editorToolbarWrap').style.display = isEmail ? '' : 'none';
+    document.getElementById('waBodyWrap').style.display         = isEmail ? 'none' : '';
+    document.getElementById('btnPreview').style.display         = isEmail ? '' : 'none';
+    document.getElementById('btnSendTest').style.display        = isEmail ? '' : 'none';
+    if (!isEmail) {
+      const tp = document.getElementById('testEmailPanel');
+      if (tp) { tp.style.display = 'none'; }
+    }
+
+    if (!isEmail) {
+      document.getElementById('waBodyInput').value = t.body_template ?? '';
+    } else {
+      // Email — load into TinyMCE
+      const rawHtml = t.body_template ?? '';
+      const editor = window.tinymce && tinymce.get('tinymceEditor');
+      if (editor) {
+        editor.setContent(rawHtml);
+      } else {
+        // TinyMCE not yet ready; store for the init callback
+        window._pendingEditorContent = rawHtml;
+      }
+    }
+
+    // Active toggle
+    document.getElementById('activeToggle').checked = t.is_active == 1;
+
+    // Reset preview
+    previewOpen = false;
+    document.getElementById('previewWrap').classList.remove('visible');
+    document.getElementById('btnPreview').textContent = '👁 Preview';
+
+    // Show editor
+    document.getElementById('commPaneEmpty').style.display = 'none';
+    document.getElementById('commEditor').style.display    = 'flex';
+    clearStatus();
+  };
+
+  // ── preview ─────────────────────────────────────────────────────────
+  window.togglePreview = function () {
+    previewOpen = !previewOpen;
+    const wrap = document.getElementById('previewWrap');
+    const btn  = document.getElementById('btnPreview');
+    if (previewOpen) {
+      const html = renderPreviewHtml(getEditorHTML());
+      document.getElementById('previewFrame').srcdoc = '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head><body style="margin:0;background:#f2eef0;">' + html + '</body></html>';
+      wrap.classList.add('visible');
+      btn.textContent = '✕ Close Preview';
+    } else {
+      wrap.classList.remove('visible');
+      btn.textContent = '👁 Preview';
+    }
+  };
+
+  // ── save ────────────────────────────────────────────────────────────
+  window.saveTemplate = async function () {
+    if (!selectedId) return;
+    const t = allTemplates.find(x => x.id == selectedId);
+    if (!t) return;
+
+    const body = getEditorHTML().trim();
+    if (!body) { showStatus('Body cannot be empty.', false); return; }
+
+    const payload = {
+      body_template: body,
+      is_active: document.getElementById('activeToggle').checked ? 1 : 0,
+      _csrf: getCsrfToken(),
+    };
+    if (t.channel === 'email') {
+      payload.subject = document.getElementById('subjectInput').value.trim();
+    }
+
+    const btn  = document.getElementById('btnSave');
+    const spin = document.getElementById('saveSpin');
+    btn.disabled       = true;
+    spin.style.display = 'inline-block';
+    clearStatus();
+
+    try {
+      const r = await fetch('/api/admin/communication/templates/' + selectedId, {
+        method:      'PATCH',
+        credentials: 'same-origin',
+        headers:     {
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-CSRF-Token': getCsrfToken(),
+        },
+        body:        JSON.stringify(payload),
+      });
+      const j = await r.json();
+      if (j.success) {
+        const idx = allTemplates.findIndex(x => x.id == selectedId);
+        if (idx !== -1) {
+          if (payload.subject !== undefined) allTemplates[idx].subject = payload.subject;
+          allTemplates[idx].body_template = payload.body_template;
+          allTemplates[idx].is_active     = payload.is_active;
+        }
+        renderList();
+        showStatus('Saved!', true);
+      } else {
+        showStatus(j.message || 'Save failed.', false);
+      }
+    } catch (e) {
+      showStatus('Network error.', false);
+    } finally {
+      btn.disabled       = false;
+      spin.style.display = 'none';
+    }
+  };
+
+  // ── test email ──────────────────────────────────────────────────────
+  window.openTestEmailPanel = function () {
+    const panel = document.getElementById('testEmailPanel');
+    if (!panel) return;
+    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    document.getElementById('testEmailStatus').textContent = '';
+  };
+
+  window.sendTestEmail = async function () {
+    if (!selectedId) return;
+    const email = document.getElementById('testEmailRecipient').value.trim();
+    if (!email || !email.includes('@')) {
+      document.getElementById('testEmailStatus').style.color = '#9f1239';
+      document.getElementById('testEmailStatus').textContent = '✗ Please enter a valid email address.';
+      return;
+    }
+
+    const spin = document.getElementById('testEmailSpin');
+    spin.style.display = 'inline-block';
+    document.getElementById('testEmailStatus').textContent = 'Sending…';
+
+    try {
+      const r = await fetch('/api/admin/communication/templates/' + selectedId + '/test', {
+        method:      'POST',
+        credentials: 'same-origin',
+        headers:     {
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-CSRF-Token': getCsrfToken(),
+        },
+        body: JSON.stringify({ email: email, _csrf: getCsrfToken() }),
+      });
+      const j = await r.json();
+      const statusEl = document.getElementById('testEmailStatus');
+      if (j.success) {
+        statusEl.style.color = '#166534';
+        statusEl.textContent = '✓ ' + j.message;
+      } else {
+        statusEl.style.color = '#9f1239';
+        statusEl.textContent = '✗ ' + (j.message || 'Send failed.');
+      }
+    } catch (e) {
+      document.getElementById('testEmailStatus').style.color = '#9f1239';
+      document.getElementById('testEmailStatus').textContent = '✗ Network error: ' + e.message;
+    } finally {
+      spin.style.display = 'none';
+    }
+  };
+
+  // ── helpers ─────────────────────────────────────────────────────────
+  function clearPane() {
+    document.getElementById('commPaneEmpty').style.display = '';
+    document.getElementById('commEditor').style.display    = 'none';
+    previewOpen = false;
+    document.getElementById('previewWrap').classList.remove('visible');
+    clearStatus();
+  }
+  function showStatus(msg, ok) {
+    const el   = document.getElementById('commStatus');
+    el.textContent = msg;
+    el.className   = 'comm-status ' + (ok ? 'ok' : 'err');
+  }
+  function clearStatus() {
+    document.getElementById('commStatus').className = 'comm-status';
+  }
+
+  function setByocWaStatus(message, ok) {
+    const el = document.getElementById('byocWaStatus');
+    if (!el) return;
+    el.textContent = message || '';
+    el.className = 'wa-bind-status ' + (ok ? 'ok' : 'err');
+  }
+
+  async function loadByocWhatsAppBinding() {
+    const select = document.getElementById('byocWaTemplateSelect');
+    const active = document.getElementById('byocWaMappingActive');
+    const meta = document.getElementById('byocWaMeta');
+    if (!select || !active || !meta) return;
+
+    try {
+      const r = await fetch('/api/admin/whatsapp/mappings', { credentials: 'same-origin' });
+      const j = await r.json();
+      const approved = j.data?.approved_templates || [];
+      const mappings = j.data?.items || [];
+
+      select.innerHTML = '<option value="">Select approved WhatsApp template</option>';
+      approved.forEach((t) => {
+        const opt = document.createElement('option');
+        opt.value = String(t.id || '');
+        const name = t.internal_name || t.meta_template_name || ('Template #' + t.id);
+        opt.textContent = name + ' (' + (t.meta_template_name || 'no-meta-name') + ')';
+        select.appendChild(opt);
+      });
+
+      const match = mappings.find((m) => String(m.event_key || '') === BYOC_WA_EVENT_KEY);
+      if (match) {
+        if (match.template_id) {
+          select.value = String(match.template_id);
+        }
+        active.value = String(Number(match.is_active || 0));
+        meta.innerHTML = 'Event Key: <strong>' + BYOC_WA_EVENT_KEY + '</strong> | Current: <strong>' + (match.internal_name || match.meta_template_name || ('Template #' + match.template_id)) + '</strong>';
+      } else {
+        meta.innerHTML = 'Event Key: <strong>' + BYOC_WA_EVENT_KEY + '</strong> | Current: <em>Not bound</em>';
+      }
+      setByocWaStatus('', true);
+    } catch (e) {
+      setByocWaStatus('Unable to load WhatsApp mapping.', false);
+    }
+  }
+
+  window.saveByocWhatsAppBinding = async function () {
+    const select = document.getElementById('byocWaTemplateSelect');
+    const active = document.getElementById('byocWaMappingActive');
+    const btn = document.getElementById('byocWaSaveBtn');
+    if (!select || !active || !btn) return;
+
+    const templateId = parseInt(select.value || '0', 10);
+    if (Number.isNaN(templateId) || templateId <= 0) {
+      setByocWaStatus('Select an approved template first.', false);
+      return;
+    }
+
+    btn.disabled = true;
+    setByocWaStatus('Saving...', true);
+    try {
+      const r = await fetch('/api/admin/whatsapp/mappings/' + encodeURIComponent(BYOC_WA_EVENT_KEY), {
+        method: 'PATCH',
+        credentials: 'same-origin',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-CSRF-Token': getCsrfToken(),
+        },
+        body: JSON.stringify({
+          template_id: templateId,
+          is_active: parseInt(active.value || '1', 10) === 1 ? 1 : 0,
+          _csrf: getCsrfToken(),
+        }),
+      });
+      const j = await r.json();
+      if (!j.success) {
+        setByocWaStatus(j.message || 'Failed to save binding.', false);
+        return;
+      }
+      setByocWaStatus('Binding saved.', true);
+      await loadByocWhatsAppBinding();
+    } catch (e) {
+      setByocWaStatus('Network error while saving binding.', false);
+    } finally {
+      btn.disabled = false;
+    }
+  };
+
+  // ── init ────────────────────────────────────────────────────────────
+  buildCvPanel();
+  loadTemplates();
+  loadByocWhatsAppBinding();
+})();
+</script>
+<script src="https://cdn.tiny.cloud/1/91n6hff31u1xzckbtb4b2qmq31gv9orsmjd5cxwxwvtpe0qe/tinymce/8/tinymce.min.js" referrerpolicy="origin" crossorigin="anonymous"></script>
+<script>
+(function () {
+  'use strict';
+  // Wait for TinyMCE CDN to be available then initialise
+  function waitAndInit() {
+    if (typeof tinymce !== 'undefined') {
+      var ta = document.getElementById('tinymceEditor');
+      if (!ta) return;
+      tinymce.init({
+        selector: '#tinymceEditor',
+        plugins: [
+          'anchor', 'autolink', 'charmap', 'codesample', 'emoticons', 'image', 'link',
+          'lists', 'media', 'searchreplace', 'table', 'visualblocks', 'wordcount',
+          'advcode', 'mergetags', 'autoresize', 'quickbars', 'help'
+        ],
+        toolbar: 'undo redo | blocks fontfamily fontsize | bold italic underline strikethrough | ' +
+                 'forecolor backcolor | align lineheight | link image media table mergetags | ' +
+                 'numlist bullist indent outdent | emoticons charmap | ' +
+                 'searchreplace code | removeformat | help',
+        height: 520,
+        entity_encoding: 'raw',
+        entities: '160,nbsp',
+        verify_html: false,
+        mergetags_prefix: '{{',
+        mergetags_suffix: '}}',
+        mergetags_list: [{"title":"Customer","menu":[{"value":"customer_name","title":"Customer Name"},{"value":"first_name","title":"First Name"},{"value":"customer_email","title":"Customer Email"},{"value":"customer_phone","title":"Customer Phone"}]},{"title":"Order","menu":[{"value":"order_number","title":"Order Number"},{"value":"order_status","title":"Order Status"},{"value":"fulfillment_status","title":"Fulfillment Status"},{"value":"delivery_date","title":"Delivery Date"},{"value":"product_summary","title":"Product Summary"}]},{"title":"Payment","menu":[{"value":"payment_status","title":"Payment Status"},{"value":"payment_method","title":"Payment Method"},{"value":"transaction_reference","title":"Transaction Reference"},{"value":"payment_received_amount","title":"Payment Received Amount"}]},{"title":"Coupon","menu":[{"value":"coupon_code","title":"Coupon Code"},{"value":"coupon_discount","title":"Coupon Discount"},{"value":"grand_total","title":"Grand Total"}]},{"title":"Refund","menu":[{"value":"refund_amount","title":"Refund Amount"},{"value":"refund_reason","title":"Refund Reason"},{"value":"refund_status","title":"Refund Status"}]},{"title":"Business","menu":[{"value":"business_logo","title":"Business Logo"},{"value":"business_name","title":"Business Name"},{"value":"support_email","title":"Support Email"},{"value":"support_phone","title":"Support Phone"},{"value":"support_whatsapp","title":"Support WhatsApp"},{"value":"support_whatsapp_url","title":"Support WhatsApp URL"},{"value":"business_address","title":"Business Address"},{"value":"business_website","title":"Business Website"},{"value":"currency_symbol","title":"Currency Symbol"}]},{"title":"Delivery","menu":[{"value":"delivery_slot","title":"Delivery Slot"},{"value":"delivery_method","title":"Delivery Method"},{"value":"delivery_address","title":"Delivery Address"}]},{"title":"Invoice","menu":[{"value":"invoice_number","title":"Invoice Number"},{"value":"invoice_date","title":"Invoice Date"},{"value":"invoice_download_link","title":"Invoice Download Link"}]}],
+        images_upload_url: '/api/admin/media/upload',
+        images_upload_handler: function (blobInfo) {
+          return new Promise(function (resolve, reject) {
+            var fd = new FormData();
+            fd.append('file', blobInfo.blob(), blobInfo.filename());
+            var csrf = typeof getCsrfToken === 'function' ? getCsrfToken()
+                     : ((document.querySelector('meta[name="csrf-token"]') || {}).content || '');
+            fd.append('_csrf', csrf);
+            fetch('/api/admin/media/upload', {
+              method: 'POST',
+              credentials: 'same-origin',
+              headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': csrf },
+              body: fd,
+            }).then(function (r) { return r.json(); }).then(function (j) {
+              if (j && j.success && j.data && j.data.url) { resolve(j.data.url); }
+              else { reject({ message: j.message || 'Upload failed', remove: true }); }
+            }).catch(function (err) {
+              reject({ message: err.message || 'Upload error', remove: true });
+            });
+          });
+        },
+        setup: function (editor) {
+          window._tinyEmailEditor = editor;
+          editor.on('init', function () {
+            if (window._pendingEditorContent !== undefined) {
+              editor.setContent(window._pendingEditorContent);
+              delete window._pendingEditorContent;
+            }
+          });
+        }
+      });
+    } else {
+      setTimeout(waitAndInit, 100);
+    }
+  }
+  waitAndInit();
+})();
+</script>

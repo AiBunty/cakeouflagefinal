@@ -1,0 +1,18 @@
+[2026-05-27T11:37:06] Release id=20260527113706-03e71c7
+[2026-05-27T11:37:06] Git branch=hotfix/live-runtime-stabilization-v3 commit=03e71c7 dirty=True
+[2026-05-27T11:37:06] WhatIf=True RunMigration=False RunValidation=False
+[2026-05-27T11:37:06] Running pre-deploy validation gate
+[2026-05-27T11:37:41] Deployment failed: Pre-deploy validation failed: [2026-05-27T11:37:08] Validation start
+[2026-05-27T11:37:08] FTP host=ftp.theboxerp.com user=admin@cakeouflage.com
+[2026-05-27T11:37:08] DB host=mysql.gb.stackcp.com db=cakeouflageweb-353032394d0c
+[2026-05-27T11:37:19] Writable check PASS path=storage
+[2026-05-27T11:37:27] Writable check PASS path=uploads
+[2026-05-27T11:37:34] Writable check PASS path=public/uploads
+[2026-05-27T11:37:37] WARNING could not determine production DB server charset from diagnostics payload
+[2026-05-27T11:37:39] HTTP https://cakeouflage.com/ => 200
+[31;1mInvoke-WebRequest: [0mD:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\deploy\runtime\Deploy.Common.ps1:316:17[0m
+[31;1m[0m[36;1mLine |[0m
+[31;1m[0m[36;1m[36;1m 316 | [0m     $response = [36;1mInvoke-WebRequest -Uri $Url -Method Get[0m
+[31;1m[0m[36;1m[36;1m[0m[36;1m[0m[36;1m     | [31;1m                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+[31;1m[0m[36;1m[36;1m[0m[36;1m[0m[36;1m[31;1m[31;1m[36;1m     | [31;1mCannot follow an insecure redirection by default. Reissue the command[0m
+[31;1m[0m[36;1m[36;1m[0m[36;1m[0m[36;1m[31;1m[31;1m[36;1m[31;1m[36;1m     | [31;1mspecifying the -AllowInsecureRedirect switch.[0m

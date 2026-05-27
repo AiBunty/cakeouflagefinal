@@ -1,0 +1,8 @@
+[2026-05-26T21:34:09] Validation start
+[2026-05-26T21:34:09] FTP host=ftp.theboxerp.com user=admin@cakeouflage.com
+[2026-05-26T21:34:09] DB host=mysql.gb.stackcp.com db=cakeouflageweb-353032394d0c
+[2026-05-26T21:34:13] FTP connectivity OK host=ftp.theboxerp.com user=admin@cakeouflage.com
+[2026-05-26T21:34:21] Writable check PASS path=storage
+[2026-05-26T21:34:29] Writable check PASS path=uploads
+[2026-05-26T21:34:37] Writable check PASS path=public/uploads
+[2026-05-26T21:34:38] DB connectivity OK version=10.6.18-MariaDB-log charset=latin1 collation=latin1_swedish_ci

@@ -1,0 +1,18 @@
+{
+  "order_id": 31,
+  "refund_amount": 100.0,
+  "refund_request_status": 200,
+  "refund_id": 15,
+  "refund_approve_status": 422,
+  "request_response": {
+    "success": true,
+    "message": "Refund request submitted. A separate approver must process it.",
+    "refund_amount": 100,
+    "refund_id": 15,
+    "refund_number": "RFD-20260526-73D1C403"
+  },
+  "approve_response": {
+    "success": false,
+    "message": "Dual-approval enforced: requester cannot approve/process the same refund."
+  }
+}

@@ -107,7 +107,8 @@
             <div class="shop-toolbar__right">
               <div class="shop-search-wrap">
                 <svg class="shop-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                <input id="shopSearch" type="search" class="shop-search-input" placeholder="Search cakes..." />
+                <input id="shopSearch" data-live-search-input="shop-toolbar" type="search" class="shop-search-input" placeholder="Search cakes..." />
+                <div id="shopToolbarSearchDropdown" class="search-dropdown" role="listbox" aria-label="Search suggestions" hidden></div>
               </div>
               <select id="shopSort" class="shop-sort-select">
                 <option value="latest">Latest</option>

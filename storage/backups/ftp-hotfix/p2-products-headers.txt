@@ -1,0 +1,17 @@
+HTTP/1.1 302 Found
+date: Tue, 26 May 2026 05:26:38 GMT
+content-type: text/html; charset=UTF-8
+content-length: 0
+server: Apache
+x-powered-by: PHP/8.2.31
+expires: Thu, 19 Nov 1981 08:52:00 GMT
+cache-control: no-store, no-cache, must-revalidate
+pragma: no-cache
+x-provided-by: StackCDN
+location: login.php
+access-control-allow-methods: GET, POST, PUT, DELETE, OPTIONS
+access-control-allow-headers: Content-Type, Authorization, X-Requested-With
+x-origin-cache-status: MISS
+x-cdn-cache-status: MISS
+x-via: SIN1
+

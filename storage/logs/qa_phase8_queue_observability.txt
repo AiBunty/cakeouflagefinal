@@ -1,0 +1,18 @@
++----------------------+-----------+----------+-----+
+| job_type             | status    | attempts | cnt |
++----------------------+-----------+----------+-----+
+| crm_trigger_push     | queued    |        0 |   5 |
+| crm_trigger_push     | completed |        1 |   5 |
+| media_image_optimize | queued    |        0 |   1 |
+| media_image_optimize | failed    |        2 |   6 |
+| media_image_optimize | failed    |        3 |   5 |
+| media_image_optimize | failed    |        4 |   7 |
+| send_communication   | queued    |        0 |  24 |
+| send_communication   | completed |        1 |  94 |
++----------------------+-----------+----------+-----+
++--------+-----+
+| status | cnt |
++--------+-----+
+| queued |  24 |
+| sent   |  94 |
++--------+-----+

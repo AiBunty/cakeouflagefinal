@@ -29,7 +29,7 @@ $query = "
     LIMIT 50
 ";
 
-$result = $mysqli->query($query);
+$result = $conn->query($query);
 $versions = $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
 ?>
 

@@ -127,6 +127,7 @@ $pickupSlots   = array_filter($initSlots, fn($s) => $s['slot_type'] === 'pickup'
 @media (max-width: 520px) {
     .form-row-2 { grid-template-columns: 1fr; }
     .slot-actions { gap: 6px; }
+    .holiday-controls { grid-template-columns: 1fr; }
 }
 
 /* Exception inline list */
@@ -143,6 +144,80 @@ $pickupSlots   = array_filter($initSlots, fn($s) => $s['slot_type'] === 'pickup'
 .btn-refresh { padding: 7px 18px; font-size: .82rem; font-weight: 600; background: var(--admin-burgundy);
                color: #fff; border: none; border-radius: 9px; cursor: pointer; }
 .btn-refresh:hover { background: #5f0017; }
+
+/* Holiday panel */
+.holiday-panel {
+    border: 1.5px solid #e8dde0;
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 2px 8px rgba(128,0,31,.04);
+    padding: 14px;
+    margin-bottom: 18px;
+}
+.holiday-panel__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+.holiday-panel__title {
+    margin: 0;
+    color: var(--admin-burgundy);
+    font-size: .95rem;
+    font-weight: 700;
+}
+.holiday-panel__sub {
+    margin: 2px 0 0;
+    font-size: .76rem;
+    color: var(--admin-muted);
+}
+.holiday-controls {
+    display: grid;
+    grid-template-columns: 1.2fr 1fr 2fr auto auto;
+    gap: 8px;
+    align-items: end;
+    margin-bottom: 10px;
+}
+.holiday-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+.holiday-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    border-bottom: 1px solid #f0e6e9;
+    padding: 8px 0;
+    font-size: .8rem;
+}
+.holiday-item:last-child { border-bottom: none; }
+.holiday-meta { color: var(--admin-muted); font-size: .75rem; }
+.holiday-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: 6px;
+    border-radius: 999px;
+    padding: 2px 8px;
+    font-size: .68rem;
+    font-weight: 700;
+    border: 1px solid #fecaca;
+    color: #991b1b;
+    background: #fff1f2;
+}
+.holiday-remove {
+    background: transparent;
+    color: #b91c1c;
+    border: 1px solid #fecaca;
+    border-radius: 8px;
+    padding: 4px 8px;
+    font-size: .72rem;
+    cursor: pointer;
+}
+.holiday-remove:hover { background: #fff1f2; }
 
 /* Add slot FAB */
 .fab { position: fixed; bottom: 28px; right: 28px; width: 52px; height: 52px;
@@ -191,6 +266,41 @@ $pickupSlots   = array_filter($initSlots, fn($s) => $s['slot_type'] === 'pickup'
         <input type="date" id="usageDatePicker" value="<?= htmlspecialchars($today) ?>">
         <button class="btn-refresh" onclick="refreshUsage()">Refresh</button>
         <span id="usageStatus" style="font-size:.78rem;color:var(--admin-muted)"></span>
+    </div>
+
+    <div class="holiday-panel">
+        <div class="holiday-panel__head">
+            <div>
+                <h3 class="holiday-panel__title">Holiday Closures (Phase 1)</h3>
+                <p class="holiday-panel__sub">Create date-based closures by delivery, pickup, or all slots.</p>
+            </div>
+            <button class="btn-sm btn-sm--ghost" onclick="loadHolidayList()">Reload</button>
+        </div>
+
+        <div class="holiday-controls">
+            <div class="form-group" style="margin-bottom:0">
+                <label for="holidayDate">Holiday Date</label>
+                <input type="date" class="form-input" id="holidayDate">
+            </div>
+            <div class="form-group" style="margin-bottom:0">
+                <label for="holidayType">Applies To</label>
+                <select class="form-input" id="holidayType">
+                    <option value="all">All Slots</option>
+                    <option value="delivery">Delivery Only</option>
+                    <option value="pickup">Pickup Only</option>
+                </select>
+            </div>
+            <div class="form-group" style="margin-bottom:0">
+                <label for="holidayNote">Note</label>
+                <input type="text" class="form-input" id="holidayNote" placeholder="e.g. Public holiday closure">
+            </div>
+            <button class="btn-sm btn-sm--primary" onclick="addHoliday()">Add Holiday</button>
+            <button class="btn-sm btn-sm--ghost" onclick="clearHolidayForm()">Clear</button>
+        </div>
+
+        <ul id="holidayListEl" class="holiday-list">
+            <li style="color:var(--admin-muted);font-size:.8rem">Loading holidays...</li>
+        </ul>
     </div>
 
     <!-- Tabs -->
@@ -383,6 +493,11 @@ $pickupSlots   = array_filter($initSlots, fn($s) => $s['slot_type'] === 'pickup'
 let _allSlots  = <?= json_encode(array_values($initSlots)) ?>;
 let _viewDate  = '<?= $today ?>';
 let _activeTab = 'delivery';
+const _holidayWindowDays = 60;
+const _csrfToken = (() => {
+    const meta = document.querySelector('meta[name="csrf-token"]');
+    return meta ? String(meta.getAttribute('content') || '') : '';
+})();
 
 /* ── Helpers ────────────────────────────────────────────────────── */
 function toast(msg, type = 'ok') {
@@ -483,7 +598,9 @@ async function refreshUsage() {
     _viewDate = date;
     document.getElementById('usageStatus').textContent = 'Refreshing…';
     try {
-        const r   = await fetch(`/api/admin/slots/usage?date=${date}`);
+        const r   = await fetch(`/api/admin/slots/usage?date=${date}`, {
+            headers: _csrfToken ? { 'X-CSRF-Token': _csrfToken } : {}
+        });
         const obj = await r.json();
         if (!obj.success) throw new Error(obj.message);
         _allSlots = obj.data.slots.map(s => ({
@@ -492,6 +609,7 @@ async function refreshUsage() {
             effective_capacity: s.effective_capacity,
         }));
         rerenderGrids();
+        await loadHolidayList();
         document.getElementById('usageStatus').textContent = 'Updated at ' + new Date().toLocaleTimeString();
     } catch (e) {
         document.getElementById('usageStatus').textContent = 'Error: ' + e.message;
@@ -510,6 +628,109 @@ function rerenderGrids() {
         : '<p style="color:var(--admin-muted);font-size:.85rem">No pickup slots defined yet.</p>';
     document.getElementById('tabCount-delivery').textContent = `(${delivery.length})`;
     document.getElementById('tabCount-pickup').textContent   = `(${pickup.length})`;
+}
+
+function clearHolidayForm() {
+    document.getElementById('holidayDate').value = _viewDate;
+    document.getElementById('holidayType').value = 'all';
+    document.getElementById('holidayNote').value = '';
+}
+
+async function loadHolidayList() {
+    const listEl = document.getElementById('holidayListEl');
+    if (!listEl) return;
+    listEl.innerHTML = '<li style="color:var(--admin-muted);font-size:.8rem">Loading holidays...</li>';
+
+    const from = _viewDate;
+    const toDate = new Date(from + 'T00:00:00');
+    toDate.setDate(toDate.getDate() + _holidayWindowDays);
+    const to = toDate.toISOString().slice(0, 10);
+
+    try {
+        const resp = await fetch(`/api/admin/holidays?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&slot_type=all`, {
+            headers: _csrfToken ? { 'X-CSRF-Token': _csrfToken } : {}
+        });
+        const payload = await resp.json();
+        if (!payload.success) {
+            throw new Error(payload.message || 'Unable to load holidays');
+        }
+
+        const entries = payload.data && Array.isArray(payload.data.entries) ? payload.data.entries : [];
+        if (entries.length === 0) {
+            listEl.innerHTML = '<li style="color:var(--admin-muted);font-size:.8rem">No holiday closures in the current window.</li>';
+            return;
+        }
+
+        listEl.innerHTML = entries.map((entry) => {
+            const date = String(entry.exception_date || '');
+            const type = String(entry.slot_type || 'all');
+            const note = String(entry.note || '').trim();
+            const affected = parseInt(entry.affected_slots || 0, 10) || 0;
+            const isEmergency = /emergency/i.test(note);
+            const noteText = note !== '' ? esc(note) : 'No note';
+            return `
+                <li class="holiday-item">
+                    <div>
+                        <div>
+                            <strong>${esc(date)}</strong> - ${esc(type)}
+                            ${isEmergency ? '<span class="holiday-tag">Emergency</span>' : ''}
+                        </div>
+                        <div class="holiday-meta">${affected} slot(s) closed - ${noteText}</div>
+                    </div>
+                    <button class="holiday-remove" onclick="deleteHoliday('${esc(date)}','${esc(type)}')">Remove</button>
+                </li>
+            `;
+        }).join('');
+    } catch (e) {
+        listEl.innerHTML = `<li style="color:#991b1b;font-size:.8rem">Failed to load holidays: ${esc(e.message || 'Unknown error')}</li>`;
+    }
+}
+
+async function addHoliday() {
+    const holidayDate = document.getElementById('holidayDate').value;
+    const slotType = document.getElementById('holidayType').value;
+    const note = document.getElementById('holidayNote').value.trim();
+
+    if (!holidayDate) {
+        toast('Please select a holiday date.', 'err');
+        return;
+    }
+
+    try {
+        const payload = await apiFetch('/api/admin/holidays', 'POST', {
+            holiday_date: holidayDate,
+            slot_type: slotType,
+            note: note || null,
+        });
+        if (!payload.success) {
+            throw new Error(payload.message || 'Unable to add holiday');
+        }
+        toast(payload.message || 'Holiday closure saved.', 'ok');
+        clearHolidayForm();
+        await refreshUsage();
+    } catch (e) {
+        toast('Holiday add failed: ' + e.message, 'err');
+    }
+}
+
+async function deleteHoliday(holidayDate, slotType) {
+    if (!holidayDate) return;
+    if (!confirm(`Remove holiday closure on ${holidayDate} (${slotType})?`)) return;
+
+    try {
+        const resp = await fetch(`/api/admin/holidays?holiday_date=${encodeURIComponent(holidayDate)}&slot_type=${encodeURIComponent(slotType)}`, {
+            method: 'DELETE',
+            headers: _csrfToken ? { 'X-CSRF-Token': _csrfToken } : {}
+        });
+        const payload = await resp.json();
+        if (!payload.success) {
+            throw new Error(payload.message || 'Unable to remove holiday');
+        }
+        toast(payload.message || 'Holiday closure removed.', 'ok');
+        await refreshUsage();
+    } catch (e) {
+        toast('Holiday remove failed: ' + e.message, 'err');
+    }
 }
 
 /* ── Create modal ───────────────────────────────────────────────── */
@@ -604,7 +825,9 @@ async function loadExceptionList(slotId) {
     const el = document.getElementById('excListEl');
     el.innerHTML = '<li style="color:var(--admin-muted);font-size:.8rem">Loading…</li>';
     try {
-        const r = await fetch('/api/admin/slots/' + slotId + '/exceptions');
+        const r = await fetch('/api/admin/slots/' + slotId + '/exceptions', {
+            headers: _csrfToken ? { 'X-CSRF-Token': _csrfToken } : {}
+        });
         const obj = await r.json();
         // Currently SlotService.listExceptions is called via a future GET route;
         // fall back to empty list if not yet wired
@@ -669,19 +892,20 @@ async function confirmEmergencyClose() {
     if (!date) { toast('Please pick a date.', 'err'); return; }
     if (!confirm(`Close ALL active slots on ${date}? This cannot be undone automatically.`)) return;
 
-    // Close every active slot for this date
-    const activeSlots = _allSlots.filter(s => parseInt(s.is_active) === 1);
-    let ok = 0, fail = 0;
-    for (const s of activeSlots) {
-        try {
-            const r = await apiFetch(`/api/admin/slots/${s.id}/exceptions`, 'POST', {
-                exception_date: date, is_closed: 1, note,
-            });
-            if (r.success) ok++; else fail++;
-        } catch { fail++; }
+    try {
+        const r = await apiFetch('/api/admin/holidays', 'POST', {
+            holiday_date: date,
+            slot_type: 'all',
+            note,
+        });
+        if (!r.success) throw new Error(r.message || 'Emergency close failed');
+        const affected = parseInt(r.data && r.data.affected_slots ? r.data.affected_slots : 0, 10) || 0;
+        toast(`Emergency close applied to ${affected} slot(s).`, 'ok');
+    } catch (e) {
+        toast('Emergency close failed: ' + e.message, 'err');
+        return;
     }
 
-    toast(`Emergency close: ${ok} slot(s) closed${fail ? ', ' + fail + ' failed' : ''}.`, fail ? 'err' : 'ok');
     closeModal('emergencyModal');
     await refreshUsage();
 }
@@ -690,9 +914,17 @@ async function confirmEmergencyClose() {
 async function apiFetch(url, method, body) {
     const opts = {
         method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+            'Content-Type': 'application/json',
+            ...(_csrfToken ? { 'X-CSRF-Token': _csrfToken } : {}),
+        },
     };
-    if (body !== null && body !== undefined) opts.body = JSON.stringify(body);
+    if (body !== null && body !== undefined) {
+        const payload = (typeof body === 'object' && body !== null)
+            ? { ...body, _csrf: _csrfToken }
+            : body;
+        opts.body = JSON.stringify(payload);
+    }
     const r   = await fetch(url, opts);
     const obj = await r.json();
     return obj;
@@ -700,6 +932,11 @@ async function apiFetch(url, method, body) {
 
 /* ── Auto-refresh every 60 s ────────────────────────────────────── */
 setInterval(refreshUsage, 60000);
+
+document.addEventListener('DOMContentLoaded', () => {
+    clearHolidayForm();
+    loadHolidayList();
+});
 </script>
 
 <?php

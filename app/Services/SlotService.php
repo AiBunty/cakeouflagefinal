@@ -399,9 +399,88 @@ final class SlotService
             $res = $resStmt->fetch(PDO::FETCH_ASSOC);
 
             if (!$res) {
-                // No hold record — order had no slot, confirm is a no-op
+                // Backfill: if order has slot metadata but no hold row, create a confirmed reservation.
+                $orderStmt = $this->pdo->prepare(
+                    'SELECT id, slot_id, scheduled_slot
+                     FROM orders
+                     WHERE id = :order_id
+                     LIMIT 1
+                     FOR UPDATE'
+                );
+                $orderStmt->execute(['order_id' => $orderId]);
+                $order = $orderStmt->fetch(PDO::FETCH_ASSOC);
+
+                $slotId = (int)($order['slot_id'] ?? 0);
+                $scheduledSlot = trim((string)($order['scheduled_slot'] ?? ''));
+                $date = $scheduledSlot !== '' ? date('Y-m-d', strtotime($scheduledSlot)) : '';
+                if ($slotId <= 0 || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+                    if (!$alreadyInTransaction) { $this->pdo->commit(); }
+                    return ['success' => true, 'message' => 'No slot reservation to confirm.'];
+                }
+
+                $slotMetaStmt = $this->pdo->prepare(
+                    'SELECT s.slot_label, s.slot_name, s.max_orders,
+                            COALESCE(ex.override_capacity, s.max_orders) AS effective_capacity,
+                            COALESCE(ex.is_closed, 0) AS is_closed
+                     FROM order_slots s
+                     LEFT JOIN order_slot_exceptions ex
+                       ON ex.slot_id = s.id AND ex.exception_date = :booking_date
+                     WHERE s.id = :slot_id AND s.is_active = 1
+                     LIMIT 1'
+                );
+                $slotMetaStmt->execute(['slot_id' => $slotId, 'booking_date' => $date]);
+                $slotMeta = $slotMetaStmt->fetch(PDO::FETCH_ASSOC);
+                if (!$slotMeta || (int)($slotMeta['is_closed'] ?? 0) === 1) {
+                    if (!$alreadyInTransaction) { $this->pdo->rollBack(); }
+                    return [
+                        'success' => false,
+                        'message' => 'Selected slot is no longer available for confirmation.',
+                        'waitlist' => true,
+                    ];
+                }
+
+                $cap = (int)($slotMeta['effective_capacity'] ?? $slotMeta['max_orders'] ?? 0);
+                $confirmed = $this->countConfirmed($slotId, $date, $orderId);
+                if ($cap > 0 && $confirmed >= $cap) {
+                    if (!$alreadyInTransaction) { $this->pdo->rollBack(); }
+                    return [
+                        'success' => false,
+                        'message' => 'Slot is now fully booked by other confirmed orders. Please review manually.',
+                        'waitlist' => true,
+                    ];
+                }
+
+                $this->pdo->prepare(
+                    'INSERT INTO slot_reservations (order_id, slot_id, booking_date, reservation_status, confirmed_at, created_at, updated_at)
+                     VALUES (:order_id, :slot_id, :booking_date, "confirmed", NOW(), NOW(), NOW())
+                     ON DUPLICATE KEY UPDATE
+                        slot_id = VALUES(slot_id),
+                        booking_date = VALUES(booking_date),
+                        reservation_status = "confirmed",
+                        confirmed_at = NOW(),
+                        updated_at = NOW()'
+                )->execute([
+                    'order_id' => $orderId,
+                    'slot_id' => $slotId,
+                    'booking_date' => $date,
+                ]);
+
+                $this->pdo->prepare(
+                    'INSERT INTO slot_capacities (slot_id, booking_date, booked_count)
+                     VALUES (:slot_id, :date, 1)
+                     ON DUPLICATE KEY UPDATE booked_count = booked_count + 1'
+                )->execute(['slot_id' => $slotId, 'date' => $date]);
+
                 if (!$alreadyInTransaction) { $this->pdo->commit(); }
-                return ['success' => true, 'message' => 'No slot reservation to confirm.'];
+
+                $this->logEvent($slotId, $date, $orderId, 'confirmed_backfill',
+                    $confirmed + 1, $cap, 'Confirmed payment backfilled slot reservation row');
+
+                return [
+                    'success' => true,
+                    'message' => 'Slot confirmed successfully.',
+                    'slot_label' => (string)($slotMeta['slot_label'] ?? ''),
+                ];
             }
 
             if ((string)$res['reservation_status'] === 'confirmed') {

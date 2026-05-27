@@ -14,6 +14,27 @@ if (is_string($requestUri) && parse_url($requestUri, PHP_URL_PATH) === '/db_prob
 
 require __DIR__ . '/app/bootstrap.php';
 
+if (defined('APP_DEBUG') && APP_DEBUG) {
+    register_shutdown_function(static function (): void {
+        $uri = (string)($_SERVER['REQUEST_URI'] ?? '');
+        $path = (string)(parse_url($uri, PHP_URL_PATH) ?? '');
+        if (strpos($path, '/api/') !== 0) {
+            return;
+        }
+
+        $logPath = __DIR__ . '/storage/logs/api-response.log';
+        $payload = [
+            'ts' => date('c'),
+            'method' => (string)($_SERVER['REQUEST_METHOD'] ?? 'GET'),
+            'uri' => $uri,
+            'status' => http_response_code(),
+            'remote_addr' => (string)($_SERVER['REMOTE_ADDR'] ?? ''),
+        ];
+
+        @file_put_contents($logPath, json_encode($payload, JSON_UNESCAPED_SLASHES) . PHP_EOL, FILE_APPEND);
+    });
+}
+
 // Normalize deployed subdirectory base path from env or script location.
 $configuredBasePath = trim((string) App\Core\Env::get('APP_BASE_PATH', ''));
 $basePath = '';

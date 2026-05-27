@@ -1,0 +1,12 @@
+HTTP/1.1 200 OK
+Date: Tue, 26 May 2026 07:55:10 GMT
+Server: Apache/2.4.67 (Debian)
+X-Powered-By: PHP/8.2.31
+Set-Cookie: cakeouflage_sid=992b8e3915f9b36e446be04e2d1ce5e7; expires=Tue, 26 May 2026 09:55:10 GMT; Max-Age=7200; path=/; HttpOnly; SameSite=Lax
+Expires: Thu, 19 Nov 1981 08:52:00 GMT
+Cache-Control: no-store, no-cache, must-revalidate
+Pragma: no-cache
+Vary: Accept-Encoding
+Transfer-Encoding: chunked
+Content-Type: text/html; charset=UTF-8
+

@@ -19,6 +19,7 @@ $currentPath = $currentPath ?? (parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_UR
 $navTree = $navTree ?? [];
 $shopActive = strpos($currentPath, '/shop') === 0 || strpos($currentPath, '/category') === 0;
 $customCakeActive = $currentPath === '/custom-cake-inquiry';
+$isCustomerAuthenticated = \App\Services\AuthManager::isCustomerAuthenticated();
 ?>
 <div class="mobile-drawer-backdrop" id="mobileBackdrop" aria-hidden="true"></div>
 
@@ -26,7 +27,7 @@ $customCakeActive = $currentPath === '/custom-cake-inquiry';
   <div class="mobile-drawer__panel">
     <div class="mobile-drawer__head">
     <a href="<?= $base ?>/" class="site-logo mobile-drawer__brand">
-  <img src="<?= $base ?>/client/assets/images/mainlogo.svg" alt="Cakeouflage Logo" class="mobile-logo">
+  <img src="<?= htmlspecialchars((string)($siteConfig['branding']['navbar_logo_url'] ?? '/client/assets/images/mainlogo.svg'), ENT_QUOTES, 'UTF-8') ?>" alt="Cakeouflage Logo" class="mobile-logo" onerror="<?= htmlspecialchars((string)($siteConfig['branding']['navbar_logo_onerror'] ?? "this.onerror=null;this.src='/client/assets/images/mainlogo.svg';"), ENT_QUOTES, 'UTF-8') ?>">
   
 </a>
    
@@ -109,10 +110,12 @@ $customCakeActive = $currentPath === '/custom-cake-inquiry';
 
     <div class="mobile-drawer__footer">
       <div class="mobile-drawer__utility-list">
-      <a href="<?= $base ?>/account" class="mobile-drawer__utility-link">
-  My Account
-</a>
-      <a href="<?= $base ?>/orders" class="mobile-drawer__utility-link">Track Order</a>
+      <a href="<?= $base ?>/category" class="mobile-drawer__utility-link">Order Now</a>
+      <a href="<?= $base . ($isCustomerAuthenticated ? '/account/dashboard.php' : '/account/login.php') ?>" class="mobile-drawer__utility-link"><?= $isCustomerAuthenticated ? 'Dashboard' : 'Sign In' ?></a>
+      <a href="<?= $base ?>/orders" class="mobile-drawer__utility-link"><?= $isCustomerAuthenticated ? 'My Orders' : 'Track Order' ?></a>
+      <?php if ($isCustomerAuthenticated): ?>
+      <a href="<?= $base ?>/account/logout.php" class="mobile-drawer__utility-link">Logout</a>
+      <?php endif; ?>
       </div>
       <a href="<?= $base ?>/cart" class="btn btn--primary btn--block mobile-drawer__cta">
         <svg viewBox="0 0 24 24" width="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>

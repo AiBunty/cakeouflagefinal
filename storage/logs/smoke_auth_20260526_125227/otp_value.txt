@@ -1,0 +1,7 @@
+
+Warning: require(D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\storage\logs\smoke_auth_20260526_125227/../../app/Core/Env.php): Failed to open stream: No such file or directory in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\storage\logs\smoke_auth_20260526_125227\get_otp.php on line 2
+
+Fatal error: Uncaught Error: Failed opening required 'D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\storage\logs\smoke_auth_20260526_125227/../../app/Core/Env.php' (include_path='.;C:\php\pear') in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\storage\logs\smoke_auth_20260526_125227\get_otp.php:2
+Stack trace:
+#0 {main}
+thrown in D:\GITHUB Projects\Cakeouflage E-commerce\cakeouflage-ecommerce\storage\logs\smoke_auth_20260526_125227\get_otp.php on line 2

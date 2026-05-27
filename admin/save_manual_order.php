@@ -51,7 +51,7 @@ function ensure_manual_order_crm_setting(mysqli $conn): array
 {
     $settingKey = 'manual_order_received';
 
-    $seedStmt = $conn->prepare('INSERT INTO crm_settings (setting_key, endpoint, api_token, is_enabled) VALUES (?, "", "", 0) AS new ON DUPLICATE KEY UPDATE setting_key = new.setting_key');
+    $seedStmt = $conn->prepare('INSERT INTO crm_settings (setting_key, endpoint, api_token, is_enabled) VALUES (?, "", "", 0) ON DUPLICATE KEY UPDATE setting_key = VALUES(setting_key)');
     $seedStmt->bind_param('s', $settingKey);
     $seedStmt->execute();
 

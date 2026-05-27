@@ -1,0 +1,8 @@
+Queue retry policy audit (Phase 9)
+- File: app/Core/QueueWorker.php
+- Generic job requeue: yes, when attempts < 5.
+- Delay formula: min(30, max(1, attempts * 2)) minutes.
+- Terminal fail at attempts >= 5.
+- Media permanent capability failures (No WebP encoder available) now fail immediately without requeue.
+- CRM trigger jobs fail immediately (no requeue loop).
+Assessment: Retry/backoff policy is bounded and stable for current workload.

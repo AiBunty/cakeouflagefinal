@@ -1,15 +1,13 @@
 <?php
+require_once __DIR__ . '/AdminErrorHandler.php';
+
+// Bootstrap first so admin pages and /api/admin share identical session config.
+require_once __DIR__ . '/../../app/bootstrap.php';
+
 if (session_status() === PHP_SESSION_NONE) {
-    // Must match the session name used by app/bootstrap.php
     session_name('cakeouflage_sid');
     session_start();
 }
-
-require_once __DIR__ . '/AdminErrorHandler.php';
-
-// Load the App\ PSR-4 autoloader + vendor packages so that App\Core\Csrf,
-// App\Core\Database, App\Services\* etc. are all available in admin pages.
-require_once __DIR__ . '/../../app/bootstrap.php';
 
 require_once __DIR__ . '/db.php';
 

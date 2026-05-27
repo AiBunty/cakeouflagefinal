@@ -1,0 +1,6 @@
+[2026-05-26T21:36:58] Release id=20260526213658-03e71c7
+[2026-05-26T21:36:58] Git branch=hotfix/live-runtime-stabilization-v3 commit=03e71c7 dirty=True
+[2026-05-26T21:36:59] WhatIf=True RunMigration=False RunValidation=False
+[2026-05-26T21:36:59] Running pre-deploy validation gate
+[2026-05-26T21:37:43] Pre-deploy validation gate PASS
+[2026-05-26T21:37:43] Deployment failed: WinSCP CLI not found. Install WinSCP and ensure WinSCP.com is available.

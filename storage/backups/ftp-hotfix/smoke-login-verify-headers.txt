@@ -1,0 +1,16 @@
+HTTP/1.1 302 Found
+date: Tue, 26 May 2026 05:34:03 GMT
+server: Apache
+x-powered-by: PHP/8.2.31
+expires: Thu, 19 Nov 1981 08:52:00 GMT
+cache-control: no-store, no-cache, must-revalidate
+pragma: no-cache
+set-cookie: cakeouflage_sid=7c23f7f252d96f40602d6a7e00549ce4; path=/
+x-provided-by: StackCDN
+location: dashboard.php
+access-control-allow-methods: GET, POST, PUT, DELETE, OPTIONS
+access-control-allow-headers: Content-Type, Authorization, X-Requested-With
+content-length: 0
+content-type: text/html; charset=UTF-8
+x-via: SIN1
+

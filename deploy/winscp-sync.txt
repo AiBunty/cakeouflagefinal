@@ -1,0 +1,6 @@
+option batch abort
+option confirm off
+open __SESSION_URL__
+cd /
+synchronize remote -transfer=binary -delete -criteria=time -filemask="__FILEMASK__" "__LOCAL_ROOT__" "/"
+exit

@@ -1,0 +1,13 @@
+{
+  "forbiddenPaths": [
+    ".env",
+    ".env.production",
+    "uploads/",
+    "public/uploads/",
+    "storage/logs/",
+    "storage/sessions/"
+  ],
+  "requiresValidationGate": true,
+  "allowsDestructiveSql": false,
+  "notes": "Policy reference for deployment scripts and SOP."
+}

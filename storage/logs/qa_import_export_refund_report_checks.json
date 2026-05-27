@@ -1,0 +1,26 @@
+[
+  {
+    "endpoint": "/api/admin/import/template",
+    "status": 200,
+    "content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "ok": true
+  },
+  {
+    "endpoint": "/api/admin/import/products/export",
+    "status": 200,
+    "content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "ok": true
+  },
+  {
+    "endpoint": "/api/admin/orders/export",
+    "status": 200,
+    "content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "ok": true
+  },
+  {
+    "endpoint": "/api/admin/refunds/report",
+    "status": 200,
+    "content_type": "application/json; charset=utf-8",
+    "ok": true
+  }
+]

@@ -1,0 +1,8 @@
+{
+  "timestamp": "2026-05-26T12:51:48.9279722+05:30",
+  "email": "qa.auth.20260526_125141@cakeouflage.com",
+  "proof_dir": "storage/logs/smoke_auth_20260526_125141",
+  "otp_length": 2,
+  "send_ok": null,
+  "verify_ok": null
+}

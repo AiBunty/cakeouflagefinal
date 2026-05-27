@@ -1,0 +1,7 @@
+{
+  "body": {
+    "success": true,
+    "message": "OTP sent to email"
+  },
+  "status": 200
+}

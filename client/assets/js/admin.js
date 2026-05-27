@@ -168,8 +168,7 @@ document.addEventListener("DOMContentLoaded", () => {
         form.elements.slug.value = product.slug || "";
         form.elements.sku.value = product.sku || "";
         form.elements.collection_category_id.value = product.collection_category_id || "";
-        form.elements.short_description.value = product.short_description || "";
-        form.elements.long_description.value = product.long_description || "";
+        form.elements.description.value = product.description || product.long_description || product.short_description || "";
         form.elements.starting_price.value = product.starting_price || "";
         form.elements.base_price.value = product.base_price || "";
         form.elements.stock_quantity.value = product.stock_quantity || 0;
@@ -463,6 +462,11 @@ document.addEventListener("DOMContentLoaded", () => {
         event.preventDefault();
         const payload = Object.fromEntries(new FormData(form).entries());
         payload.slug = payload.slug || toSlug(payload.name);
+
+        const canonicalDescription = String(payload.description || "").trim();
+        payload.description = canonicalDescription;
+        payload.short_description = canonicalDescription.slice(0, 250);
+        payload.long_description = canonicalDescription;
 
         try {
           if (editingId > 0) {

@@ -44,7 +44,7 @@ if (empty($signatureCollections)) {
         [
             'name' => 'Wedding Cakes',
             'slug' => 'wedding-cakes',
-            'href' => '/custom-cake-inquiry',
+          'href' => '/category',
             'image' => $homeAssetBase . '/collection-wedding.svg',
             'meta' => 'Statement pieces',
             'note' => 'Tall tiers, floral finishes, and premium dessert-table styling.',
@@ -149,7 +149,7 @@ if (empty($bestsellerProducts)) {
         [
             'name' => 'Pearl Tier Celebration',
             'slug' => 'pearl-tier-celebration',
-            'href' => '/custom-cake-inquiry',
+          'href' => '/category',
             'thumb' => $homeAssetBase . '/product-pearl-tier.svg',
             'min_price' => 2199,
             'short_description' => 'A polished statement cake for milestone celebrations and premium orders.',
@@ -699,7 +699,7 @@ $healthyMime = home_video_mime_from_extension($healthyExt);
     <div class="cake-categories__grid">
 
       <!-- Wedding Cakes -->
-<a href="<?= $baseUrl ?>/custom-cake-inquiry" class="cake-cat-card">
+<a href="<?= $baseUrl ?>/category" class="cake-cat-card">
   <div class="cake-cat-card__media">
     <img
       src="/client/assets/images/showcase/wedding.jpg"
@@ -717,7 +717,7 @@ $healthyMime = home_video_mime_from_extension($healthyExt);
 </a>
 
       <!-- Birthday & Anniversary -->
-      <a href="<?= $baseUrl ?>/custom-cake-inquiry" class="cake-cat-card">
+      <a href="<?= $baseUrl ?>/category" class="cake-cat-card">
         <div class="cake-cat-card__media">
           <img
            src="/client/assets/images/showcase/birthday.jpg"
@@ -736,7 +736,7 @@ $healthyMime = home_video_mime_from_extension($healthyExt);
       </a>
 
       <!-- Baby Shower -->
-   <a href="<?= $baseUrl ?>/custom-cake-inquiry" class="cake-cat-card">
+  <a href="<?= $baseUrl ?>/category" class="cake-cat-card">
         <div class="cake-cat-card__media">
           <img
             src="/client/assets/images/showcase/babyshower.jpg"
@@ -754,7 +754,7 @@ $healthyMime = home_video_mime_from_extension($healthyExt);
       </a>
 
       <!-- Corporate Cakes -->
-<a href="<?= $baseUrl ?>/custom-cake-inquiry" class="cake-cat-card">
+<a href="<?= $baseUrl ?>/category" class="cake-cat-card">
         <div class="cake-cat-card__media">
           <img
             src="/client/assets/images/showcase/corporate.jpg"

@@ -1,0 +1,13 @@
+[2026-05-27T11:39:09] Validation start
+[2026-05-27T11:39:09] FTP host=ftp.theboxerp.com user=admin@cakeouflage.com
+[2026-05-27T11:39:09] DB host=mysql.gb.stackcp.com db=cakeouflageweb-353032394d0c
+[2026-05-27T11:39:12] FTP connectivity OK host=ftp.theboxerp.com user=admin@cakeouflage.com
+[2026-05-27T11:39:20] Writable check PASS path=storage
+[2026-05-27T11:39:27] Writable check PASS path=uploads
+[2026-05-27T11:39:35] Writable check PASS path=public/uploads
+[2026-05-27T11:39:37] DB connectivity OK version=10.6.18-MariaDB-log charset=latin1 collation=latin1_swedish_ci
+[2026-05-27T11:39:37] WARNING could not determine production DB server charset from diagnostics payload
+[2026-05-27T11:39:38] HTTP https://cakeouflage.com/ => 200
+[2026-05-27T11:39:39] HTTP https://cakeouflage.com/account => 200
+[2026-05-27T11:39:40] HTTP https://cakeouflage.com/admin/login.php => 200
+[2026-05-27T11:39:40] HTTP https://cakeouflage.com/api/health/db => 200

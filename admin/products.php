@@ -1,5 +1,12 @@
 <?php
 session_name('cakeouflage_sid');
+if (session_status() === PHP_SESSION_NONE) {
+  $sessionDir = dirname(__DIR__) . '/storage/sessions';
+  if (!is_dir($sessionDir)) {
+    @mkdir($sessionDir, 0775, true);
+  }
+  @session_save_path($sessionDir);
+}
 session_start();
 if (!isset($_SESSION['admin'])) {
     header("Location: login.php");
@@ -10,6 +17,9 @@ require_once __DIR__ . '/includes/db.php';
 require_once __DIR__ . '/includes/image_helpers.php';
 require_once __DIR__ . '/../app/bootstrap.php';
 require_once __DIR__ . '/../app/Services/UnifiedMediaService.php';
+
+$storeFoodMode = getDietaryMode($conn);
+$foodTypeOptions = getDietaryTypeOptions($storeFoodMode);
 
 function prod_h(string $value): string {
   return htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
@@ -287,12 +297,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string)($_POST['action'] ?? '') ==
 
   $slug = prod_unique_slug($conn, prod_slugify($name), $id);
   $isChefSpecial = isset($_POST['is_chef_special']) ? 1 : 0;
+  $dietaryType = normalizeDietaryType((string)($_POST['dietary_type'] ?? 'veg'), $storeFoodMode);
   $dietaryTag = trim((string)($_POST['dietary_tag'] ?? 'regular'));
   $allowedDietary = prod_get_enum_values($conn, 'products', 'dietary_tag', ['regular', 'eggless', 'vegan', 'sugar_free']);
   if (!in_array($dietaryTag, $allowedDietary, true)) {
     $dietaryTag = in_array('regular', $allowedDietary, true) ? 'regular' : (string)($allowedDietary[0] ?? 'regular');
   }
-  $isVeg = isset($_POST['is_veg']) ? 1 : 0;
+  $isVeg = dietaryTypeToIsVeg($dietaryType);
   $topperEnabled = isset($_POST['topper_enabled']) ? 1 : 0;
   $noteEnabled = isset($_POST['note_enabled']) ? 1 : 0;
 
@@ -306,17 +317,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string)($_POST['action'] ?? '') ==
       'starting_price = ?',
       'collection_category_id = ?',
       'short_description = ?',
+      'description = ?',
+      'long_description = ?',
       'featured_image = ?',
       'availability_status = ?',
       'is_chef_special = ?',
       'dietary_tag = ?',
     ];
-    $types = 'ssdisssis';
+    $types = 'ssdisssssis';
     $values = [
       $name,
       $slug,
       $basePrice,
       $categoryId,
+      $description,
+      $description,
       $description,
       $newImagePath,
       $availabilityStatus,
@@ -328,6 +343,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string)($_POST['action'] ?? '') ==
       $updateAssignments[] = 'is_veg = ?';
       $types .= 'i';
       $values[] = $isVeg;
+    }
+    if (prod_column_exists($conn, 'products', 'dietary_type')) {
+      $updateAssignments[] = 'dietary_type = ?';
+      $types .= 's';
+      $values[] = $dietaryType;
     }
     if (prod_column_exists($conn, 'products', 'topper_enabled')) {
       $updateAssignments[] = 'topper_enabled = ?';
@@ -351,14 +371,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string)($_POST['action'] ?? '') ==
       throw new RuntimeException('Product update failed: ' . $updateStmt->error);
     }
 
-    $weights = ['1', '1.5', '2', '2.5', '3', '4'];
-    foreach ($weights as $weight) {
-      $variantPrice = $basePrice * (float)$weight;
-      $variantStmt = safePrepare($conn, 'UPDATE product_variants SET price = ? WHERE product_id = ? AND weight_or_size = ?');
-      $variantStmt->bind_param('dis', $variantPrice, $id, $weight);
-      $variantStmt->execute();
-      $variantStmt->close();
-    }
+    // Dynamic variant model: do not assume fixed weight buckets.
+    // Keep the user-defined variants intact and sync base price to the default variant only.
+    $variantStmt = safePrepare(
+      $conn,
+      'UPDATE product_variants
+          SET price = ?
+        WHERE product_id = ?
+          AND is_default = 1
+        ORDER BY id ASC
+        LIMIT 1'
+    );
+    $variantStmt->bind_param('di', $basePrice, $id);
+    $variantStmt->execute();
+    $variantStmt->close();
 
     prod_enforce_two_image_slots($conn, $id, $newImagePath, $newImage2Path);
 
@@ -1275,7 +1301,7 @@ require_once __DIR__ . '/layout.php';
                     data-name="<?php echo prod_h((string)$row['name']); ?>"
                     data-base-price="<?php echo (float)($row['starting_price'] ?? 0); ?>"
                     data-category-id="<?php echo (int)($row['collection_category_id'] ?? 0); ?>"
-                    data-description="<?php echo prod_h((string)($row['short_description'] ?? '')); ?>"
+                    data-description="<?php echo prod_h((string)($row['description'] ?? ($row['short_description'] ?? ($row['long_description'] ?? '')))); ?>"
                     data-current-image="<?php echo prod_h((string)($row['featured_image'] ?? '')); ?>"
                     data-preview-image="<?php echo prod_h(prod_resolve_image_url((string)($row['featured_image'] ?? ''))); ?>"
                     data-image2-url="<?php echo prod_h(prod_resolve_optional_image_url((string)($row['image2_url'] ?? ''))); ?>"
@@ -1322,12 +1348,13 @@ require_once __DIR__ . '/layout.php';
                 data-name="<?php echo prod_h((string)$row['name']); ?>"
                 data-base-price="<?php echo (float)($row['starting_price'] ?? 0); ?>"
                 data-category-id="<?php echo (int)($row['collection_category_id'] ?? 0); ?>"
-                data-description="<?php echo prod_h((string)($row['short_description'] ?? '')); ?>"
+                data-description="<?php echo prod_h((string)($row['description'] ?? ($row['short_description'] ?? ($row['long_description'] ?? '')))); ?>"
                 data-current-image="<?php echo prod_h((string)($row['featured_image'] ?? '')); ?>"
                 data-preview-image="<?php echo prod_h(prod_resolve_image_url((string)($row['featured_image'] ?? ''))); ?>"
                 data-image2-url="<?php echo prod_h(prod_resolve_optional_image_url((string)($row['image2_url'] ?? ''))); ?>"
                 data-chef-special="<?php echo (int)($row['is_chef_special'] ?? 0); ?>"
                 data-availability="<?php echo prod_h((string)($row['availability_status'] ?? 'in_stock')); ?>"
+                data-dietary-type="<?php echo prod_h((string)($row['dietary_type'] ?? ((int)($row['is_veg'] ?? 1) === 1 ? 'veg' : 'nonveg'))); ?>"
                 data-dietary="<?php echo prod_h((string)($row['dietary_tag'] ?? 'regular')); ?>"
                 data-is-veg="<?php echo (int)($row['is_veg'] ?? 1); ?>"
                 data-topper-enabled="<?php echo (int)($row['topper_enabled'] ?? 1); ?>"
@@ -1393,7 +1420,16 @@ require_once __DIR__ . '/layout.php';
             </div>
 
             <div class="prod-editor-field">
-              <label for="prodEditDietary">Dietary Type</label>
+              <label for="prodEditDietaryType">Food Type</label>
+              <select id="prodEditDietaryType" name="dietary_type">
+                <?php foreach ($foodTypeOptions as $foodType): ?>
+                  <option value="<?php echo prod_h($foodType); ?>"><?php echo prod_h($foodType === 'nonveg' ? 'Non-Veg' : 'Veg'); ?></option>
+                <?php endforeach; ?>
+              </select>
+            </div>
+
+            <div class="prod-editor-field">
+              <label for="prodEditDietary">Dietary Tag</label>
               <select id="prodEditDietary" name="dietary_tag">
                 <option value="regular">Regular</option>
                 <option value="eggless">Eggless</option>
@@ -1426,9 +1462,6 @@ require_once __DIR__ . '/layout.php';
           <div class="prod-feature-grid">
             <div class="prod-feature-item">
               <label><input type="checkbox" name="is_chef_special" id="prodEditChefSpecial" value="1"> Chef's Special</label>
-            </div>
-            <div class="prod-feature-item">
-              <label><input type="checkbox" name="is_veg" id="prodEditIsVeg" value="1"> Veg</label>
             </div>
             <div class="prod-feature-item">
               <label><input type="checkbox" name="topper_enabled" id="prodEditTopperEnabled" value="1" checked> Enable Topper Selection</label>
@@ -1563,12 +1596,12 @@ require_once __DIR__ . '/layout.php';
       if (prodEditImage) prodEditImage.value = '';
       if (prodEditImage2) prodEditImage2.value = '';
       if (prodEditChefSpecial) prodEditChefSpecial.checked = Number(button.getAttribute('data-chef-special') || '0') === 1;
+      const prodEditDietaryType = document.getElementById('prodEditDietaryType');
       const prodEditDietary = document.getElementById('prodEditDietary');
-      const prodEditIsVeg = document.getElementById('prodEditIsVeg');
       const prodEditTopperEnabled = document.getElementById('prodEditTopperEnabled');
       const prodEditNoteEnabled   = document.getElementById('prodEditNoteEnabled');
+      if (prodEditDietaryType) prodEditDietaryType.value = button.getAttribute('data-dietary-type') || 'veg';
       if (prodEditDietary) prodEditDietary.value = button.getAttribute('data-dietary') || 'regular';
-      if (prodEditIsVeg) prodEditIsVeg.checked = Number(button.getAttribute('data-is-veg') || '1') === 1;
       if (prodEditTopperEnabled) prodEditTopperEnabled.checked = Number(button.getAttribute('data-topper-enabled') ?? '1') === 1;
       if (prodEditNoteEnabled) prodEditNoteEnabled.checked = Number(button.getAttribute('data-note-enabled') ?? '1') === 1;
 

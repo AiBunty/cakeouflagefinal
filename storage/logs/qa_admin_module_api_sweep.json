@@ -1,0 +1,158 @@
+[
+  {
+    "check": "import_template",
+    "status": 500,
+    "ok": false,
+    "body_head": "Unhandled exception: Call to undefined method PhpOffice\\PhpSpreadsheet\\Worksheet\\Worksheet::setCellValueByColumnAndRow()\n/var/www/html/app/Services/ExcelService.php:136\n"
+  },
+  {
+    "check": "products_export",
+    "status": 500,
+    "ok": false,
+    "body_head": "Unhandled exception: SQLSTATE[42000]: Syntax error or access violation: 1064 You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version "
+  },
+  {
+    "check": "import_logs",
+    "status": 200,
+    "ok": true,
+    "body_head": "{\"success\":true,\"message\":\"ok\",\"data\":{\"items\":[]}}"
+  },
+  {
+    "check": "orders_export",
+    "status": 500,
+    "ok": false,
+    "body_head": "Unhandled exception: Call to undefined method PhpOffice\\PhpSpreadsheet\\Worksheet\\Worksheet::setCellValueByColumnAndRow()\n/var/www/html/app/Services/ExcelService.php:70\n"
+  },
+  {
+    "check": "business_settings_page",
+    "status": 200,
+    "ok": true,
+    "body_head": "\r\n<!DOCTYPE html>\r\n<html lang=\"en\">\r\n<head>\r\n  <meta charset=\"UTF-8\">\r\n  <title>Admin Login - Cakeouflage</title>\r\n  <meta name=\"viewport\" content=\"width=device-width, initial-scal"
+  },
+  {
+    "check": "communications_page",
+    "status": 200,
+    "ok": true,
+    "body_head": "\r\n<!DOCTYPE html>\r\n<html lang=\"en\">\r\n<head>\r\n  <meta charset=\"UTF-8\">\r\n  <title>Admin Login - Cakeouflage</title>\r\n  <meta name=\"viewport\" content=\"width=device-width, initial-scal"
+  },
+  {
+    "check": "communications_logs",
+    "status": 200,
+    "ok": true,
+    "body_head": "{\"success\":true,\"message\":\"ok\",\"data\":{\"items\":[{\"id\":219,\"channel\":\"email\",\"event_key\":\"order_delivered_admin\",\"recipient\":\"cakeouflage@gmail.com\",\"status\":\"queued\",\"provider_mess"
+  },
+  {
+    "check": "crm_settings_page",
+    "status": 200,
+    "ok": true,
+    "body_head": "\r\n<!DOCTYPE html>\r\n<html lang=\"en\">\r\n<head>\r\n  <meta charset=\"UTF-8\">\r\n  <title>Admin Login - Cakeouflage</title>\r\n  <meta name=\"viewport\" content=\"width=device-width, initial-scal"
+  },
+  {
+    "check": "crm_report_page",
+    "status": 200,
+    "ok": true,
+    "body_head": "\r\n<!DOCTYPE html>\r\n<html lang=\"en\">\r\n<head>\r\n  <meta charset=\"UTF-8\">\r\n  <title>Admin Login - Cakeouflage</title>\r\n  <meta name=\"viewport\" content=\"width=device-width, initial-scal"
+  },
+  {
+    "check": "followups_page",
+    "status": 200,
+    "ok": true,
+    "body_head": "\r\n<!DOCTYPE html>\r\n<html lang=\"en\">\r\n<head>\r\n  <meta charset=\"UTF-8\">\r\n  <title>Admin Login - Cakeouflage</title>\r\n  <meta name=\"viewport\" content=\"width=device-width, initial-scal"
+  },
+  {
+    "check": "reminders_api",
+    "status": 200,
+    "ok": true,
+    "body_head": "{\"success\":true,\"message\":\"ok\",\"data\":{\"items\":[{\"id\":1,\"reminder_type\":\"follow_up\",\"title\":\"Quarterly reorder reminder\",\"reminder_on\":\"2026-08-25 16:07:00\",\"status\":\"pending\",\"not"
+  },
+  {
+    "check": "sales_register_page",
+    "status": 200,
+    "ok": true,
+    "body_head": "\r\n<!DOCTYPE html>\r\n<html lang=\"en\">\r\n<head>\r\n  <meta charset=\"UTF-8\">\r\n  <title>Admin Login - Cakeouflage</title>\r\n  <meta name=\"viewport\" content=\"width=device-width, initial-scal"
+  },
+  {
+    "check": "reports_summary",
+    "status": 200,
+    "ok": true,
+    "body_head": "{\"success\":true,\"message\":\"ok\",\"data\":{\"retail_orders\":13,\"b2b_orders\":0,\"pending_invoices\":1,\"queued_communications\":15,\"failed_communications\":0,\"whatsapp_approved_templates\":0,\""
+  },
+  {
+    "check": "finance_summary",
+    "status": 200,
+    "ok": true,
+    "body_head": "{\"success\":true,\"message\":\"ok\",\"data\":{\"total_invoices\":7,\"paid_invoices\":7,\"unpaid_invoices\":0,\"overdue_invoices\":0,\"part_paid_invoices\":0,\"retail_receivables\":0,\"b2b_receivables\""
+  },
+  {
+    "check": "finance_ageing",
+    "status": 200,
+    "ok": true,
+    "body_head": "{\"success\":true,\"message\":\"ok\",\"data\":{\"items\":[{\"ageing_bucket\":\"0_7\",\"invoice_count\":1,\"balance_due\":\"1603.80\"}]}}"
+  },
+  {
+    "check": "refund_report",
+    "status": 500,
+    "ok": false,
+    "body_head": "Unhandled exception: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'rt.settlement_reference' in 'SELECT'\n/var/www/html/app/Controllers/AdminApiController.php:7041\n"
+  },
+  {
+    "check": "coupons_page",
+    "status": 200,
+    "ok": true,
+    "body_head": "\r\n<!DOCTYPE html>\r\n<html lang=\"en\">\r\n<head>\r\n  <meta charset=\"UTF-8\">\r\n  <title>Admin Login - Cakeouflage</title>\r\n  <meta name=\"viewport\" content=\"width=device-width, initial-scal"
+  },
+  {
+    "check": "toppers_public_api",
+    "status": 200,
+    "ok": true,
+    "body_head": "{\"success\":true,\"data\":[{\"id\":1,\"name\":\"No Topper\",\"price\":\"0.00\",\"description\":null},{\"id\":2,\"name\":\"Happy Birthday\",\"price\":\"0.00\",\"description\":null},{\"id\":3,\"name\":\"Happy Anniv"
+  },
+  {
+    "check": "sub_user_manage_page",
+    "status": 200,
+    "ok": true,
+    "body_head": "\r\n<!DOCTYPE html>\r\n<html lang=\"en\">\r\n<head>\r\n  <meta charset=\"UTF-8\">\r\n  <title>Admin Login - Cakeouflage</title>\r\n  <meta name=\"viewport\" content=\"width=device-width, initial-scal"
+  },
+  {
+    "check": "sub_user_admin_users_page",
+    "status": 200,
+    "ok": true,
+    "body_head": "\r\n<!DOCTYPE html>\r\n<html lang=\"en\">\r\n<head>\r\n  <meta charset=\"UTF-8\">\r\n  <title>Admin Login - Cakeouflage</title>\r\n  <meta name=\"viewport\" content=\"width=device-width, initial-scal"
+  },
+  {
+    "check": "system_smtp_get",
+    "status": 200,
+    "ok": true,
+    "body_head": "{\"success\":true,\"message\":\"ok\",\"data\":{\"settings\":{}}}"
+  },
+  {
+    "check": "system_whatsapp_get",
+    "status": 200,
+    "ok": true,
+    "body_head": "{\"success\":true,\"message\":\"ok\",\"data\":{\"settings\":{}}}"
+  },
+  {
+    "check": "media_center_page",
+    "status": 200,
+    "ok": true,
+    "body_head": "<!DOCTYPE html>\r\n<html lang=\"en\">\r\n<head>\r\n    <meta charset=\"UTF-8\" />\r\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\r\n  <title>Media Manager</title>\r"
+  },
+  {
+    "check": "media_list",
+    "status": 200,
+    "ok": true,
+    "body_head": "{\"success\":true,\"message\":\"ok\",\"data\":{\"items\":[{\"path\":\"/uploads/media/guard-seed-1.webp\",\"url\":\"/uploads/media/guard-seed-1.webp\",\"name\":\"guard-seed-1.webp\",\"size\":75198,\"updated"
+  },
+  {
+    "check": "media_processing_summary",
+    "status": 200,
+    "ok": true,
+    "body_head": "{\"success\":true,\"message\":\"Media processing summary\",\"data\":{\"counts\":{\"pending\":25,\"processing\":0,\"completed\":0,\"failed\":0},\"storage\":{\"original_bytes\":0,\"optimized_bytes\":0,\"savi"
+  },
+  {
+    "check": "media_processing_jobs",
+    "status": 200,
+    "ok": true,
+    "body_head": "{\"success\":true,\"message\":\"Media processing jobs\",\"data\":{\"items\":[{\"id\":25,\"module_name\":\"byoc\",\"entity_type\":\"payment_proof\",\"entity_id\":0,\"original_path\":\"/public/uploads/origin"
+  }
+]

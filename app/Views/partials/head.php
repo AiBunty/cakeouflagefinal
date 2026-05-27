@@ -53,7 +53,7 @@
   </script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="icon" type="image/svg+xml" href="/client/assets/images/mainlogo.svg" />
+  <link rel="icon" type="image/svg+xml" href="<?= htmlspecialchars((string)($siteConfig['branding']['favicon_url'] ?? '/client/assets/images/mainlogo.svg'), ENT_QUOTES, 'UTF-8') ?>" />
   <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Cormorant+Garamond:ital@0;1&family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=League+Spartan:wght@600;700&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&display=swap" rel="stylesheet">
@@ -66,8 +66,6 @@
 <link rel="stylesheet" href="/client/assets/css/responsive.css" />
 <link rel="stylesheet" href="/client/assets/css/customer-dashboard.css?v=<?= filemtime(__DIR__ . '/../../../client/assets/css/customer-dashboard.css') ?>" />
 <?php if ($isCategoryRoute): ?>
-<link rel="preload" as="image" href="/client/assets/images/category/hero-bg.webp" fetchpriority="high" />
-<link rel="preload" as="image" href="/client/assets/images/category/hero-bg-mobile.webp" media="(max-width: 768px)" />
 <link rel="stylesheet" href="/client/category/category.css?v=<?= filemtime(__DIR__ . '/../../../client/category/category.css') ?>" />
 <link rel="stylesheet" href="/client/assets/css/category-hero-v2.css?v=<?= filemtime(__DIR__ . '/../../../client/assets/css/category-hero-v2.css') ?>" />
 <?php endif; ?>

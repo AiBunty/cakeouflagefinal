@@ -1,0 +1,2087 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Admin Panel</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="csrf-token" content="91c496cc1ab3052eb79f08144a3d3db0e4aeeff075738292058ded5ab7067041">
+<script src="/client/assets/js/scroll-preserve.js?v=1779732726"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Poppins:wght@400;500;600;700&display=swap');
+
+:root {
+  --admin-burgundy: #80001F;
+  --admin-burgundy-dark: #5f0017;
+  --admin-soft-pink: #F8D8DE;
+  --admin-ink: #2d1f25;
+  --admin-muted: #7a6870;
+  --admin-surface: #fffdfd;
+  --sidebar-w: 272px;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: 'Poppins', sans-serif;
+  background: linear-gradient(145deg, #fffafb 0%, #fdeef1 56%, #fae4ea 100%);
+  color: var(--admin-ink);
+}
+
+.dashboard {
+  display: flex;
+  min-height: 100vh;
+}
+
+/* ── Sidebar shell ─────────────────────────────── */
+.sidebar {
+  width: var(--sidebar-w);
+  background: linear-gradient(180deg, #8d0a2d 0%, #740020 54%, #560017 100%);
+  color: #fff;
+  min-height: 100vh;
+  position: fixed;
+  inset: 0 auto 0 0;
+  border-right: 1px solid rgba(255,255,255,0.1);
+  box-shadow: 14px 0 34px rgba(74,8,30,0.22);
+  display: flex;
+  flex-direction: column;
+  z-index: 1001;
+}
+
+/* ── Logo header ───────────────────────────────── */
+.sidebar__head {
+  padding: 22px 20px 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.12);
+  flex-shrink: 0;
+}
+.sidebar__head img {
+  display: block;
+  width: 148px;
+  max-width: 100%;
+  filter: brightness(0) invert(1);
+}
+.sidebar__kicker {
+  margin: 7px 0 0;
+  font-size: 0.67rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.55);
+}
+
+/* ── Search ────────────────────────────────────── */
+.nav-search-wrap {
+  padding: 12px 14px 6px;
+  flex-shrink: 0;
+}
+.nav-search {
+  width: 100%;
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 8px;
+  padding: 7px 10px 7px 30px;
+  color: #fff;
+  font-size: 0.8rem;
+  font-family: inherit;
+  outline: none;
+  transition: background 150ms, border-color 150ms;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='rgba(255,255,255,0.45)'%3E%3Cpath fill-rule='evenodd' d='M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z' clip-rule='evenodd'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: 8px 50%;
+  background-size: 13px;
+}
+.nav-search::placeholder { color: rgba(255,255,255,0.4); }
+.nav-search:focus { background-color: rgba(255,255,255,0.16); border-color: rgba(255,255,255,0.38); }
+
+/* ── Scrollable body ───────────────────────────── */
+.sidebar__body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px 0 10px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.18) transparent;
+}
+.sidebar__body::-webkit-scrollbar { width: 4px; }
+.sidebar__body::-webkit-scrollbar-track { background: transparent; }
+.sidebar__body::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.18); border-radius: 2px; }
+
+/* ── Nav sections ──────────────────────────────── */
+.nav-section { padding: 6px 0 2px; }
+.nav-section + .nav-section {
+  border-top: 1px solid rgba(255,255,255,0.07);
+  margin-top: 2px;
+  padding-top: 8px;
+}
+
+.nav-section__toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 2px 18px 4px;
+  cursor: pointer;
+  color: rgba(255,255,255,0.45);
+  font-family: inherit;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  transition: color 140ms;
+}
+.nav-section__toggle:hover { color: rgba(255,255,255,0.75); }
+
+.nav-section__chevron {
+  font-size: 0.55rem;
+  transition: transform 220ms ease;
+  display: inline-block;
+  line-height: 1;
+}
+.nav-section.is-collapsed .nav-section__chevron { transform: rotate(-90deg); }
+
+.nav-section__items {
+  overflow: hidden;
+  transition: max-height 260ms ease;
+  max-height: 800px;
+}
+.nav-section.is-collapsed .nav-section__items { max-height: 0; }
+
+/* ── Nav items ─────────────────────────────────── */
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 14px 9px 16px;
+  margin: 1px 8px;
+  color: rgba(255,255,255,0.82);
+  text-decoration: none;
+  border-radius: 10px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: background 160ms, color 160ms, transform 160ms;
+  position: relative;
+}
+.nav-item:hover {
+  background: rgba(255,255,255,0.11);
+  color: #fff;
+  transform: translateX(2px);
+}
+.nav-item.is-active {
+  background: rgba(255,255,255,0.17);
+  color: #fff;
+  font-weight: 600;
+}
+.nav-item.is-active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 58%;
+  background: rgba(255,255,255,0.88);
+  border-radius: 0 3px 3px 0;
+}
+.nav-item.is-hidden { display: none; }
+
+.nav-item__icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  opacity: 0.8;
+  display: flex;
+  align-items: center;
+}
+.nav-item__icon svg { width: 16px; height: 16px; display: block; }
+.nav-item.is-active .nav-item__icon,
+.nav-item:hover .nav-item__icon { opacity: 1; }
+
+/* ── Footer ────────────────────────────────────── */
+.sidebar__footer {
+  flex-shrink: 0;
+  border-top: 1px solid rgba(255,255,255,0.12);
+  padding: 13px 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.sidebar__user-info { flex: 1; min-width: 0; }
+.sidebar__user-name {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sidebar__user-role {
+  font-size: 0.68rem;
+  color: rgba(255,255,255,0.5);
+  margin-top: 1px;
+}
+.sidebar__logout-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.09);
+  border: 1px solid rgba(255,255,255,0.18);
+  color: rgba(255,255,255,0.8);
+  text-decoration: none;
+  flex-shrink: 0;
+  transition: background 160ms, color 160ms, border-color 160ms;
+}
+.sidebar__logout-btn:hover {
+  background: rgba(220,50,50,0.3);
+  color: #fff;
+  border-color: rgba(220,50,50,0.5);
+}
+.sidebar__logout-btn svg { width: 16px; height: 16px; }
+
+/* ── Mobile toggle ─────────────────────────────── */
+.sidebar__toggle { display: none; }
+
+/* ── Main content ──────────────────────────────── */
+.main {
+  margin-left: var(--sidebar-w);
+  padding: 30px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* ── Header ────────────────────────────────────── */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+  background: rgba(255,255,255,0.82);
+  border: 1px solid rgba(128,0,31,0.1);
+  border-radius: 18px;
+  padding: 16px 20px;
+  backdrop-filter: blur(6px);
+}
+.header h1 {
+  margin: 0;
+  font-family: 'DM Serif Display', Georgia, serif;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  color: var(--admin-burgundy);
+  font-size: clamp(1.7rem, 2.7vw, 2.2rem);
+}
+.header__meta {
+  margin: 2px 0 0;
+  color: var(--admin-muted);
+  font-size: 0.85rem;
+}
+.logout {
+  background: var(--admin-burgundy);
+  color: white;
+  padding: 9px 16px;
+  border-radius: 999px;
+  text-decoration: none;
+  font-size: 0.84rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 600;
+  transition: background 180ms ease, transform 180ms ease;
+}
+.logout:hover {
+  background: var(--admin-burgundy-dark);
+  transform: translateY(-1px);
+}
+
+/* ── Cards / Table ─────────────────────────────── */
+.card {
+  background: var(--admin-surface);
+  padding: 22px;
+  border-radius: 18px;
+  border: 1px solid rgba(128,0,31,0.1);
+  box-shadow: 0 14px 30px rgba(96,18,45,0.08);
+}
+.cards {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 18px;
+}
+.table {
+  background: var(--admin-surface);
+  padding: 20px;
+  border-radius: 18px;
+  margin-top: 20px;
+  border: 1px solid rgba(128,0,31,0.1);
+  box-shadow: 0 12px 26px rgba(96,18,45,0.08);
+}
+.table h3 {
+  margin: 0 0 14px;
+  font-family: 'DM Serif Display', Georgia, serif;
+  font-size: 1.35rem;
+  font-weight: 400;
+  color: var(--admin-burgundy);
+}
+table { width: 100%; border-collapse: collapse; background: transparent; }
+th, td { padding: 12px 10px; text-align: left; }
+th { color: var(--admin-burgundy); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
+tr { border-bottom: 1px solid rgba(128,0,31,0.08); }
+
+/* ── Responsive ────────────────────────────────── */
+@media (max-width: 1080px) {
+  .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 860px) {
+  .sidebar__toggle {
+    display: block;
+    position: fixed;
+    top: 14px;
+    left: 14px;
+    z-index: 1100;
+    background: var(--admin-burgundy);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 9px 12px;
+    font-size: 1.1rem;
+    box-shadow: 0 2px 8px rgba(128,0,31,0.24);
+    cursor: pointer;
+  }
+  .sidebar {
+    width: 88vw;
+    max-width: 300px;
+    min-height: 100vh;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    box-shadow: 14px 0 34px rgba(74,8,30,0.24);
+  }
+  .sidebar.is-open { transform: translateX(0); }
+  .main { margin-left: 0; padding: 68px 16px 28px; }
+  .header { flex-direction: column; align-items: flex-start; }
+  .cards { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+
+<body>
+
+<button class="sidebar__toggle" id="sidebarToggle" aria-label="Toggle menu">&#9776;</button>
+
+<div class="dashboard">
+
+<aside class="sidebar" id="adminSidebar" role="navigation" aria-label="Admin Sidebar">
+
+  <div class="sidebar__head">
+        <img src="/public/uploads/originals/branding/mainlogo_20260525182241_b1e64509.png" alt="Cakeouflage">
+    <p class="sidebar__kicker">Admin Studio</p>
+  </div>
+
+  <div class="nav-search-wrap">
+    <input type="search" id="navSearch" class="nav-search" placeholder="Find a page&hellip;" autocomplete="off" aria-label="Search navigation">
+  </div>
+
+  <div class="sidebar__body" id="sidebarNav">
+                <div class="nav-section" id="navSec_sales">
+        <button class="nav-section__toggle" data-section="navSec_sales" aria-expanded="true">
+          Sales<span class="nav-section__chevron">&#9660;</span>
+        </button>
+        <div class="nav-section__items">
+                                  <a href="dashboard.php"
+               class="nav-item"
+               data-nav-title="dashboard"
+               >
+              <span class="nav-item__icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM11 13a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg></span>
+              <span class="nav-item__text">Dashboard</span>
+            </a>
+                                  <a href="orders.php"
+               class="nav-item"
+               data-nav-title="orders"
+               >
+              <span class="nav-item__icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"/><path fill-rule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clip-rule="evenodd"/></svg></span>
+              <span class="nav-item__text">Orders</span>
+            </a>
+                                  <a href="refunds.php"
+               class="nav-item"
+               data-nav-title="refunds"
+               >
+              <span class="nav-item__icon" aria-hidden="true"></span>
+              <span class="nav-item__text">Refunds</span>
+            </a>
+                                  <a href="bank-alerts.php"
+               class="nav-item"
+               data-nav-title="payment verification"
+               >
+              <span class="nav-item__icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M10 2a6 6 0 00-6 6v2.586l-.707.707A1 1 0 004 13h12a1 1 0 00.707-1.707L16 10.586V8a6 6 0 00-6-6zm-2 13a2 2 0 104 0H8z" clip-rule="evenodd"/></svg></span>
+              <span class="nav-item__text">Payment Verification</span>
+            </a>
+                                  <a href="manual_order.php"
+               class="nav-item is-active"
+               data-nav-title="manual order punch"
+               aria-current="page">
+              <span class="nav-item__icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"/></svg></span>
+              <span class="nav-item__text">Manual Order Punch</span>
+            </a>
+                                  <a href="production_plan.php"
+               class="nav-item"
+               data-nav-title="production plan"
+               >
+              <span class="nav-item__icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2H3V4zm0 4h14v8a1 1 0 01-1 1H4a1 1 0 01-1-1V8zm3 2a1 1 0 000 2h2a1 1 0 100-2H6zm0 3a1 1 0 100 2h5a1 1 0 100-2H6z" clip-rule="evenodd"/></svg></span>
+              <span class="nav-item__text">Production Plan</span>
+            </a>
+                                  <a href="slots.php"
+               class="nav-item"
+               data-nav-title="slot management"
+               >
+              <span class="nav-item__icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd"/></svg></span>
+              <span class="nav-item__text">Slot Management</span>
+            </a>
+                  </div>
+      </div>
+                <div class="nav-section" id="navSec_catalog">
+        <button class="nav-section__toggle" data-section="navSec_catalog" aria-expanded="true">
+          Catalog<span class="nav-section__chevron">&#9660;</span>
+        </button>
+        <div class="nav-section__items">
+                                  <a href="products.php"
+               class="nav-item"
+               data-nav-title="products"
+               >
+              <span class="nav-item__icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M3 1a1 1 0 000 2h1.22l.305 1.222a.997.997 0 00.01.042l1.358 5.43-.893.892C3.74 11.846 4.632 14 6.414 14H15a1 1 0 000-2H6.414l1-1H14a1 1 0 00.894-.553l3-6A1 1 0 0017 3H6.28l-.31-1.243A1 1 0 005 1H3zM16 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM6.5 18a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/></svg></span>
+              <span class="nav-item__text">Products</span>
+            </a>
+                                  <a href="categories.php"
+               class="nav-item"
+               data-nav-title="categories"
+               >
+              <span class="nav-item__icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"/></svg></span>
+              <span class="nav-item__text">Categories</span>
+            </a>
+                                  <a href="banners.php"
+               class="nav-item"
+               data-nav-title="media center"
+               >
+              <span class="nav-item__icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clip-rule="evenodd"/></svg></span>
+              <span class="nav-item__text">Media Center</span>
+            </a>
+                                  <a href="coupons.php"
+               class="nav-item"
+               data-nav-title="coupons"
+               >
+              <span class="nav-item__icon" aria-hidden="true"></span>
+              <span class="nav-item__text">Coupons</span>
+            </a>
+                                  <a href="toppers.php"
+               class="nav-item"
+               data-nav-title="cake toppers"
+               >
+              <span class="nav-item__icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg></span>
+              <span class="nav-item__text">Cake Toppers</span>
+            </a>
+                                  <a href="import-products.php"
+               class="nav-item"
+               data-nav-title="import products"
+               >
+              <span class="nav-item__icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd"/></svg></span>
+              <span class="nav-item__text">Import Products</span>
+            </a>
+                  </div>
+      </div>
+                <div class="nav-section" id="navSec_crm">
+        <button class="nav-section__toggle" data-section="navSec_crm" aria-expanded="true">
+          CRM<span class="nav-section__chevron">&#9660;</span>
+        </button>
+        <div class="nav-section__items">
+                                  <a href="follow_ups.php"
+               class="nav-item"
+               data-nav-title="follow ups"
+               >
+              <span class="nav-item__icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z"/></svg></span>
+              <span class="nav-item__text">Follow Ups</span>
+            </a>
+                                  <a href="build-your-own-cake.php"
+               class="nav-item"
+               data-nav-title="build your own cake"
+               >
+              <span class="nav-item__icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M10 2a3 3 0 013 3v1h1a2 2 0 012 2v2a4 4 0 01-4 4H8a4 4 0 01-4-4V8a2 2 0 012-2h1V5a3 3 0 013-3zm1 4V5a1 1 0 10-2 0v1h2zm-1 11a3 3 0 003-3v-1H7v1a3 3 0 003 3z"/></svg></span>
+              <span class="nav-item__text">Build Your Own Cake</span>
+            </a>
+                                  <a href="crm_settings.php"
+               class="nav-item"
+               data-nav-title="crm settings"
+               >
+              <span class="nav-item__icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"/></svg></span>
+              <span class="nav-item__text">CRM Settings</span>
+            </a>
+                                  <a href="communications.php"
+               class="nav-item"
+               data-nav-title="communications"
+               >
+              <span class="nav-item__icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z"/><path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z"/></svg></span>
+              <span class="nav-item__text">Communications</span>
+            </a>
+                                  <a href="crm_push_logs.php"
+               class="nav-item"
+               data-nav-title="crm push logs"
+               >
+              <span class="nav-item__icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zm6-4a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zm6-3a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z"/></svg></span>
+              <span class="nav-item__text">CRM Push Logs</span>
+            </a>
+                  </div>
+      </div>
+                <div class="nav-section" id="navSec_reports">
+        <button class="nav-section__toggle" data-section="navSec_reports" aria-expanded="true">
+          Reports<span class="nav-section__chevron">&#9660;</span>
+        </button>
+        <div class="nav-section__items">
+                                  <a href="sales_register.php"
+               class="nav-item"
+               data-nav-title="sales register"
+               >
+              <span class="nav-item__icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M3 3a1 1 0 000 2h14a1 1 0 100-2H3zm0 5a1 1 0 000 2h14a1 1 0 100-2H3zm0 5a1 1 0 000 2h8a1 1 0 100-2H3z"/></svg></span>
+              <span class="nav-item__text">Sales Register</span>
+            </a>
+                                  <a href="collections_queue.php"
+               class="nav-item"
+               data-nav-title="collections queue"
+               >
+              <span class="nav-item__icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h9a2 2 0 002-2V9a1 1 0 10-2 0v6H4V5h9a1 1 0 100-2H4zm10.293.293a1 1 0 011.414 0l2 2a1 1 0 010 1.414l-5.5 5.5a1 1 0 01-.39.243l-2 .667a1 1 0 01-1.265-1.265l.667-2a1 1 0 01.243-.39l5.5-5.5z" clip-rule="evenodd"/></svg></span>
+              <span class="nav-item__text">Collections Queue</span>
+            </a>
+                                  <a href="sales_report.php"
+               class="nav-item"
+               data-nav-title="sales report"
+               >
+              <span class="nav-item__icon" aria-hidden="true"></span>
+              <span class="nav-item__text">Sales Report</span>
+            </a>
+                                  <a href="cash_report.php"
+               class="nav-item"
+               data-nav-title="cash report"
+               >
+              <span class="nav-item__icon" aria-hidden="true"></span>
+              <span class="nav-item__text">Cash Report</span>
+            </a>
+                                  <a href="bank_report.php"
+               class="nav-item"
+               data-nav-title="bank report"
+               >
+              <span class="nav-item__icon" aria-hidden="true"></span>
+              <span class="nav-item__text">Bank Report</span>
+            </a>
+                                  <a href="collection_report.php"
+               class="nav-item"
+               data-nav-title="collection report"
+               >
+              <span class="nav-item__icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v.092a4.535 4.535 0 00-1.676.662C6.602 7.234 6 8.009 6 9c0 .99.602 1.765 1.324 2.246.48.32 1.054.545 1.676.662v1.941c-.391-.127-.68-.317-.843-.504a1 1 0 10-1.51 1.31c.562.649 1.413 1.076 2.353 1.253V16a1 1 0 102 0v-.092a4.535 4.535 0 001.676-.662C13.398 14.766 14 13.991 14 13c0-.99-.602-1.765-1.324-2.246A4.535 4.535 0 0011 10.092V8.151c.391.127.68.317.843.504a1 1 0 101.511-1.31c-.563-.649-1.413-1.076-2.354-1.253V6z" clip-rule="evenodd"/></svg></span>
+              <span class="nav-item__text">Collection Report</span>
+            </a>
+                                  <a href="crm_report.php"
+               class="nav-item"
+               data-nav-title="crm report"
+               >
+              <span class="nav-item__icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V7.414A2 2 0 0015.414 6L12 2.586A2 2 0 0010.586 2H6zm2 10a1 1 0 10-2 0v3a1 1 0 102 0v-3zm2-3a1 1 0 011 1v5a1 1 0 11-2 0v-5a1 1 0 011-1zm4-1a1 1 0 10-2 0v7a1 1 0 102 0V8z" clip-rule="evenodd"/></svg></span>
+              <span class="nav-item__text">CRM Report</span>
+            </a>
+                                  <a href="coupon_report.php"
+               class="nav-item"
+               data-nav-title="coupon report"
+               >
+              <span class="nav-item__icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M17.707 9.293a1 1 0 010 1.414l-7 7a1 1 0 01-1.414 0l-7-7A.997.997 0 012 10V5a3 3 0 013-3h5c.256 0 .512.098.707.293l7 7zM5 6a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg></span>
+              <span class="nav-item__text">Coupon Report</span>
+            </a>
+                                  <a href="celebration_report.php"
+               class="nav-item"
+               data-nav-title="celebration report"
+               >
+              <span class="nav-item__icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M10 2a1 1 0 011 1v1.09a5.002 5.002 0 013.535 2.082l.772-.445a1 1 0 111 1.732l-.773.446A4.978 4.978 0 0115 10c0 .703-.145 1.373-.406 1.98l.774.447a1 1 0 11-1 1.732l-.774-.447A5.001 5.001 0 0111 15.91V17a1 1 0 11-2 0v-1.09a5.002 5.002 0 01-3.535-2.082l-.772.445a1 1 0 11-1-1.732l.773-.446A4.978 4.978 0 015 10c0-.703.145-1.373.406-1.98l-.774-.447a1 1 0 011-1.732l.774.447A5.001 5.001 0 019 4.09V3a1 1 0 011-1zm0 4a4 4 0 100 8 4 4 0 000-8z"/></svg></span>
+              <span class="nav-item__text">Celebration Report</span>
+            </a>
+                  </div>
+      </div>
+                <div class="nav-section" id="navSec_system">
+        <button class="nav-section__toggle" data-section="navSec_system" aria-expanded="true">
+          System<span class="nav-section__chevron">&#9660;</span>
+        </button>
+        <div class="nav-section__items">
+                                  <a href="business-settings.php"
+               class="nav-item"
+               data-nav-title="business settings"
+               >
+              <span class="nav-item__icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 110 2h-3a1 1 0 01-1-1v-2a1 1 0 00-1-1H9a1 1 0 00-1 1v2a1 1 0 01-1 1H4a1 1 0 110-2V4zm3 1h2v2H7V5zm2 4H7v2h2V9zm2-4h2v2h-2V5zm2 4h-2v2h2V9z" clip-rule="evenodd"/></svg></span>
+              <span class="nav-item__text">Business Settings</span>
+            </a>
+                                  <a href="maintenance.php"
+               class="nav-item"
+               data-nav-title="maintenance"
+               >
+              <span class="nav-item__icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clip-rule="evenodd"/></svg></span>
+              <span class="nav-item__text">Maintenance</span>
+            </a>
+                                  <a href="form-test-harness-report.php"
+               class="nav-item"
+               data-nav-title="form test harness"
+               >
+              <span class="nav-item__icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V8.414A2 2 0 0017.414 7l-4.414-4.414A2 2 0 0011.586 2H4zm2 6a1 1 0 100 2h8a1 1 0 100-2H6zm0 3a1 1 0 100 2h5a1 1 0 100-2H6z" clip-rule="evenodd"/></svg></span>
+              <span class="nav-item__text">Form Test Harness</span>
+            </a>
+                                  <a href="admin_users.php"
+               class="nav-item"
+               data-nav-title="sub users"
+               >
+              <span class="nav-item__icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z"/></svg></span>
+              <span class="nav-item__text">Sub Users</span>
+            </a>
+                  </div>
+      </div>
+      </div>
+
+  <div class="sidebar__footer">
+    <div class="sidebar__user-info">
+      <div class="sidebar__user-name">Dcore</div>
+      <div class="sidebar__user-role"></div>
+    </div>
+    <a href="logout.php" class="sidebar__logout-btn" title="Logout" aria-label="Logout">
+      <svg viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path fill-rule="evenodd" d="M3 3a1 1 0 011 1v12a1 1 0 11-2 0V4a1 1 0 011-1zm7.707 3.293a1 1 0 010 1.414L9.414 9H17a1 1 0 110 2H9.414l1.293 1.293a1 1 0 01-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+    </a>
+  </div>
+
+</aside>
+
+<div class="main">
+
+<div class="header">
+  <div>
+    <h1>Manual Order Punch</h1>
+    <p class="header__meta">
+      Cakeouflage Admin Panel
+          </p>
+  </div>
+  <a href="logout.php" class="logout">Logout</a>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* Mobile toggle */
+  var sidebar = document.getElementById('adminSidebar');
+  var toggle  = document.getElementById('sidebarToggle');
+  if (sidebar && toggle) {
+    toggle.addEventListener('click', function () { sidebar.classList.toggle('is-open'); });
+    document.addEventListener('click', function (e) {
+      if (window.innerWidth > 860 || !sidebar.classList.contains('is-open')) { return; }
+      if (!sidebar.contains(e.target) && !toggle.contains(e.target)) { sidebar.classList.remove('is-open'); }
+    });
+  }
+
+  /* Section collapse — persisted in localStorage */
+  var LS_KEY = 'cakeo_nav_collapsed_v1';
+  function getCollapsed() { try { return JSON.parse(localStorage.getItem(LS_KEY) || '[]'); } catch(e) { return []; } }
+  function setCollapsed(arr) { try { localStorage.setItem(LS_KEY, JSON.stringify(arr)); } catch(e) {} }
+
+  // Restore on load
+  getCollapsed().forEach(function (id) {
+    var el = document.getElementById(id);
+    if (!el) { return; }
+    el.classList.add('is-collapsed');
+    var btn = el.querySelector('.nav-section__toggle');
+    if (btn) { btn.setAttribute('aria-expanded', 'false'); }
+  });
+
+  document.querySelectorAll('.nav-section__toggle').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var id  = btn.getAttribute('data-section');
+      var sec = document.getElementById(id);
+      if (!sec) { return; }
+      var now = sec.classList.toggle('is-collapsed');
+      btn.setAttribute('aria-expanded', now ? 'false' : 'true');
+      var list = getCollapsed();
+      if (now) { if (list.indexOf(id) < 0) { list.push(id); } }
+      else { list = list.filter(function (x) { return x !== id; }); }
+      setCollapsed(list);
+    });
+  });
+
+  /* Sidebar scroll persistence — save before leaving, restore on load */
+  var SCROLL_KEY = 'cakeo_sidebar_scroll_v1';
+  var sidebarBody = document.querySelector('.sidebar__body');
+  if (sidebarBody) {
+    var savedScroll = parseInt(sessionStorage.getItem(SCROLL_KEY) || '0', 10);
+    if (savedScroll > 0) { sidebarBody.scrollTop = savedScroll; }
+    window.addEventListener('beforeunload', function () {
+      sessionStorage.setItem(SCROLL_KEY, String(sidebarBody.scrollTop));
+    });
+  }
+
+  /* Nav search */
+  var searchEl = document.getElementById('navSearch');
+  if (searchEl) {
+    searchEl.addEventListener('input', function () {
+      var q = searchEl.value.trim().toLowerCase();
+      var items = document.querySelectorAll('#sidebarNav .nav-item');
+      items.forEach(function (item) {
+        item.classList.toggle('is-hidden', q.length > 0 && (item.getAttribute('data-nav-title') || '').indexOf(q) < 0);
+      });
+      document.querySelectorAll('.nav-section').forEach(function (sec) {
+        if (q.length === 0) {
+          sec.style.display = '';
+          var id = sec.id;
+          var collapsed = getCollapsed().indexOf(id) >= 0;
+          sec.classList.toggle('is-collapsed', collapsed);
+        } else {
+          sec.classList.remove('is-collapsed');
+          sec.style.display = sec.querySelectorAll('.nav-item:not(.is-hidden)').length === 0 ? 'none' : '';
+        }
+      });
+    });
+  }
+
+})();
+</script>
+
+<style>
+  .manual-order-wrap {
+    max-width: 1000px;
+    background: #fff;
+    border: 1px solid rgba(128, 0, 31, 0.14);
+    border-radius: 18px;
+    box-shadow: 0 16px 34px rgba(68, 16, 34, 0.1);
+    overflow: hidden;
+  }
+
+  .manual-order-head {
+    padding: 16px 20px;
+    border-bottom: 1px solid rgba(128, 0, 31, 0.12);
+    background: linear-gradient(180deg, #fff8fa 0%, #fff 100%);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .manual-order-head h3 {
+    margin: 0;
+    color: #80001F;
+    font-family: 'DM Serif Display', Georgia, serif;
+    font-weight: 400;
+  }
+
+  .manual-order-head a {
+    color: #80001F;
+    font-size: 0.86rem;
+    text-decoration: none;
+  }
+
+  .manual-order-body {
+    padding: 20px;
+    display: grid;
+    gap: 16px;
+  }
+
+  .manual-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .manual-field {
+    display: grid;
+    gap: 6px;
+  }
+
+  .manual-field label {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #80001F;
+    font-weight: 700;
+  }
+
+  .manual-field input,
+  .manual-field select,
+  .manual-field textarea {
+    width: 100%;
+    border: 1px solid rgba(128, 0, 31, 0.2);
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 0.94rem;
+    color: #2e1f25;
+    background: #fff;
+  }
+
+  .manual-field input.is-locked {
+    background: #f3f4f6;
+    color: #4b5563;
+    border-color: #d1d5db;
+  }
+
+  .customer-status {
+    font-size: 0.75rem;
+    color: #6b7280;
+    min-height: 1.1rem;
+  }
+
+  .customer-status.match {
+    color: #166534;
+  }
+
+  .customer-status.new {
+    color: #9f1239;
+  }
+
+  .customer-lookup-wrap {
+    position: relative;
+  }
+
+  .customer-lookup-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background: #fff;
+    border: 1px solid rgba(128, 0, 31, 0.2);
+    border-radius: 10px;
+    box-shadow: 0 12px 24px rgba(68, 16, 34, 0.14);
+    max-height: 220px;
+    overflow-y: auto;
+    z-index: 30;
+    display: none;
+  }
+
+  .customer-lookup-dropdown.active {
+    display: block;
+  }
+
+  .customer-option {
+    border: 0;
+    width: 100%;
+    text-align: left;
+    background: #fff;
+    padding: 10px 12px;
+    cursor: pointer;
+    border-bottom: 1px solid rgba(128, 0, 31, 0.08);
+  }
+
+  .customer-option:last-child {
+    border-bottom: 0;
+  }
+
+  .customer-option:hover {
+    background: #fff4f7;
+  }
+
+  .customer-option strong {
+    display: block;
+    color: #2e1f25;
+    font-size: 0.86rem;
+  }
+
+  .customer-option small {
+    color: #7f6973;
+    font-size: 0.75rem;
+  }
+
+  .manual-field textarea {
+    min-height: 96px;
+    resize: vertical;
+  }
+
+  .manual-note {
+    font-size: 0.82rem;
+    color: #7f6973;
+  }
+
+  .manual-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 4px;
+  }
+
+  .btn-manual-primary {
+    border: 0;
+    border-radius: 10px;
+    padding: 10px 18px;
+    background: #80001F;
+    color: #fff;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .btn-manual-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .pos-mode-toggle {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .pos-mode-btn {
+    flex: 1;
+    padding: 11px 10px;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+  }
+  .pos-mode-btn--active {
+    background: #80001F;
+    color: #fff;
+    border: 2px solid #80001F;
+  }
+  .pos-mode-btn--inactive {
+    background: #fff;
+    color: #80001F;
+    border: 2px solid rgba(128,0,31,0.35);
+  }
+  .pos-ready-notice {
+    background: #f0fdf4;
+    border: 1px solid #86efac;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 0.85rem;
+    margin-bottom: 14px;
+    color: #166534;
+    display: none;
+  }
+
+  .btn-manual-secondary {
+    border: 1px solid rgba(128, 0, 31, 0.24);
+    border-radius: 10px;
+    padding: 10px 18px;
+    background: #fff;
+    color: #80001F;
+    font-weight: 600;
+    text-decoration: none;
+  }
+
+  .btn-icon {
+    border: 1px solid rgba(128, 0, 31, 0.24);
+    border-radius: 8px;
+    padding: 8px 12px;
+    background: #fff;
+    color: #80001F;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 0.85rem;
+  }
+
+  .notice {
+    border-radius: 11px;
+    padding: 10px 12px;
+    font-size: 0.86rem;
+  }
+
+  .notice.success {
+    background: #ecfdf3;
+    color: #166534;
+    border: 1px solid #bbf7d0;
+  }
+
+  .notice.error {
+    background: #fff1f2;
+    color: #9f1239;
+    border: 1px solid #fecdd3;
+  }
+
+  .items-section {
+    border: 1px solid rgba(128, 0, 31, 0.12);
+    border-radius: 12px;
+    padding: 14px;
+    background: #fafaf8;
+  }
+
+  .items-section h4 {
+    margin: 0 0 12px;
+    color: #80001F;
+    font-size: 0.92rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .search-wrapper {
+    position: relative;
+    margin-bottom: 12px;
+  }
+
+  .search-input {
+    width: 100%;
+    border: 1px solid rgba(128, 0, 31, 0.2);
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 0.94rem;
+    color: #2e1f25;
+  }
+
+  .search-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: #fff;
+    border: 1px solid rgba(128, 0, 31, 0.2);
+    border-top: 0;
+    border-radius: 0 0 10px 10px;
+    max-height: 320px;
+    overflow-y: auto;
+    z-index: 10;
+    display: none;
+  }
+
+  .search-dropdown.active {
+    display: block;
+  }
+
+  .search-result {
+    padding: 10px 12px;
+    border-bottom: 1px solid rgba(128, 0, 31, 0.08);
+    cursor: pointer;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+
+  .search-result:hover {
+    background: #f5f5f5;
+  }
+
+  .search-result-thumb {
+    width: 40px;
+    height: 40px;
+    border-radius: 6px;
+    background: #efefef;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .search-result-info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .search-result-name {
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: #111;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .search-result-price {
+    font-size: 0.8rem;
+    color: #666;
+  }
+
+  .search-result-badges {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: 4px;
+  }
+
+  .search-result-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: #fff0f4;
+    color: #80001F;
+    font-size: 0.72rem;
+    font-weight: 700;
+  }
+
+  .items-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 12px;
+  }
+
+  .items-table thead tr {
+    background: #efefef;
+  }
+
+  .items-table th {
+    padding: 8px;
+    text-align: left;
+    font-weight: 700;
+    font-size: 0.8rem;
+    color: #80001F;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .items-table td {
+    padding: 10px 8px;
+    border-bottom: 1px solid rgba(128, 0, 31, 0.1);
+  }
+
+  .items-table tr:last-child td {
+    border-bottom: 0;
+  }
+
+  .item-name-cell {
+    font-weight: 600;
+    color: #111;
+  }
+
+  .item-remove {
+    background: #ff6b6b;
+    color: #fff;
+    border: 0;
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 0.75rem;
+    cursor: pointer;
+  }
+
+  .item-qty-input,
+  .item-price-input {
+    width: 70px;
+    border: 1px solid rgba(128, 0, 31, 0.2);
+    border-radius: 6px;
+    padding: 6px 8px;
+    font-size: 0.85rem;
+  }
+
+  .item-topper-select,
+  .item-note-input {
+    width: 100%;
+    border: 1px solid rgba(128, 0, 31, 0.2);
+    border-radius: 6px;
+    padding: 6px 8px;
+    font-size: 0.84rem;
+    background: #fff;
+  }
+
+  .item-note-input {
+    min-height: 66px;
+    resize: vertical;
+  }
+
+  .item-detail-stack {
+    display: grid;
+    gap: 6px;
+  }
+
+  .item-detail-hint {
+    font-size: 0.72rem;
+    color: #7f6973;
+  }
+
+  .order-total-box {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    background: #fff8fa;
+    border: 1px solid rgba(128, 0, 31, 0.2);
+    border-radius: 10px;
+    padding: 14px;
+    margin-top: 12px;
+  }
+
+  .total-row {
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .total-label {
+    font-weight: 600;
+    color: #80001F;
+  }
+
+  .total-value {
+    font-weight: 700;
+    color: #111;
+  }
+
+  .add-buttons {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+  }
+
+  @media (max-width: 760px) {
+    .manual-grid {
+      grid-template-columns: 1fr;
+    }
+    .order-total-box {
+      grid-template-columns: 1fr;
+    }
+    .item-qty-input,
+    .item-price-input {
+      width: 60px;
+    }
+  }
+</style>
+
+<div class="manual-order-wrap">
+  <div class="manual-order-head">
+    <h3>Create Manual Order</h3>
+    <a href="orders.php">Back to Orders</a>
+  </div>
+
+  <form action="manual_order.php" method="post" class="manual-order-body" id="manualOrderForm">
+    
+    <input type="hidden" name="idempotency_key" value="2b27eb5b3cba6703b67b28d28c3383f2">
+    <input type="hidden" name="order_items" id="orderItemsInput" value="[]">
+    <input type="hidden" name="matched_user_id" id="matchedUserId" value="0">
+    <input type="hidden" name="order_mode" id="orderModeInput" value="scheduled_custom">
+
+    <!-- Order Mode Toggle -->
+    <div class="pos-mode-toggle">
+      <button type="button" id="modeScheduledBtn" onclick="setOrderMode('scheduled_custom')" class="pos-mode-btn pos-mode-btn--active">📅 Scheduled Order</button>
+      <button type="button" id="modeReadyPosBtn" onclick="setOrderMode('ready_pos')" class="pos-mode-btn pos-mode-btn--inactive">⚡ Ready Cake POS</button>
+    </div>
+    <div class="pos-ready-notice" id="readyPosNotice">
+      ⚡ <strong>Ready Cake POS:</strong> For over-the-counter cakes already made. No slot booking required. Order auto-confirmed.
+    </div>
+
+    <div class="manual-grid">
+      <div class="manual-field">
+        <label for="customer_phone">Customer Mobile (Master)</label>
+        <div class="customer-lookup-wrap">
+          <input type="tel" id="customer_phone" name="customer_phone" required maxlength="20" placeholder="Enter mobile number" pattern="[0-9+\-\s]{7,20}" autocomplete="off">
+          <div id="customerLookupDropdown" class="customer-lookup-dropdown"></div>
+        </div>
+        <div id="customerLookupStatus" class="customer-status">Enter mobile first. Existing customer data auto-fills.</div>
+      </div>
+      <div class="manual-field">
+        <label for="customer_name">Customer Name</label>
+        <input type="text" id="customer_name" name="customer_name" required maxlength="120" autocomplete="off">
+      </div>
+      <div class="manual-field">
+        <label for="customer_email">Customer Email</label>
+        <input type="email" id="customer_email" name="customer_email" required maxlength="190" placeholder="name@example.com" autocomplete="off">
+      </div>
+      <div class="manual-field">
+        <label for="fulfilment_mode">Fulfilment Mode</label>
+        <select id="fulfilment_mode" name="fulfilment_mode" onchange="togglePorterNotice(this.value)">
+          <option value="pickup">Pickup</option>
+          <option value="delivery">Delivery</option>
+          <option value="custom_delivery">Custom Delivery</option>
+        </select>
+      </div>
+      <div id="porterNoticeManual" style="display:none; background:#f0f9ff; border:1px solid #bae6fd; border-radius:8px; padding:10px 14px; font-size:0.85rem; margin-bottom:8px; color:#0c4a6e;">
+        🚚 <strong>Porter Delivery:</strong> Charges are collected directly by the Porter partner at delivery. Estimated &#x20b9;80–₹150 within Nashik.
+      </div>
+      <div class="manual-field">
+        <label for="order_status">Order Status</label>
+        <select id="order_status" name="order_status">
+          <option value="pending">Pending</option>
+          <option value="confirmed" selected>Confirmed</option>
+          <option value="in_preparation">Order Ready</option>
+          <option value="completed">Completed</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
+      </div>
+      <div class="manual-field">
+        <label for="payment_status">Payment Status</label>
+        <select id="payment_status" name="payment_status" onchange="toggleAdvanceAmountField(this.value)">
+          <option value="paid" selected>Paid</option>
+          <option value="pending">Pending Verification</option>
+          <option value="credit">Credit</option>
+        </select>
+      </div>
+      <div class="manual-field">
+        <label for="payment_method">Payment Mode</label>
+        <select id="payment_method" name="payment_method">
+          <option value="upi_manual" selected>Bank</option>
+          <option value="gateway">Gateway</option>
+          <option value="credit">Credit</option>
+        </select>
+      </div>
+      <div class="manual-field">
+        <label for="coupon_code">Coupon Code (optional)</label>
+        <input type="text" id="coupon_code" name="coupon_code" maxlength="50" placeholder="e.g. SAVE50" style="text-transform:uppercase">
+      </div>
+      <div class="manual-field" id="slotBookingDateField">
+        <label for="slot_booking_date">Booking Date (Slot System)</label>
+        <input type="date" id="slot_booking_date" name="slot_booking_date" min="2026-05-26">
+      </div>
+      <div class="manual-field" id="slotPickerField" style="display:none;">
+        <label for="slot_id">Slot</label>
+        <select id="slot_id" name="slot_id">
+          <option value="0">Select date first...</option>
+        </select>
+        <input type="hidden" name="slot_label" id="slotLabelInput">
+      </div>
+    </div>
+
+    <div class="items-section">
+      <h4>Order Items</h4>
+      <div class="search-wrapper">
+        <input type="text" id="productSearch" class="search-input" placeholder="Search products by name or SKU...">
+        <div class="search-dropdown" id="searchDropdown"></div>
+      </div>
+      <table class="items-table" id="itemsTable" style="display:none">
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th style="width:170px">Variant</th>
+            <th style="width:80px">Qty</th>
+            <th style="width:100px">Unit Price</th>
+            <th style="width:170px">Topper</th>
+            <th style="width:220px">Note on Cake</th>
+            <th style="width:100px">Line Total</th>
+            <th style="width:50px"></th>
+          </tr>
+        </thead>
+        <tbody id="itemsTableBody"></tbody>
+      </table>
+      <div class="add-buttons">
+        <button type="button" class="btn-icon" onclick="toggleCustomItem()">+ Custom Item</button>
+      </div>
+      <div id="customItemForm" style="display:none; margin-top:12px; border: 1px solid rgba(128, 0, 31, 0.2); padding: 10px; border-radius: 8px;">
+        <div style="display:grid; grid-template-columns: 1fr 80px 100px; gap: 8px;">
+          <input type="text" id="customItemName" placeholder="Item name" maxlength="180">
+          <input type="number" id="customItemQty" placeholder="Qty" min="1" value="1">
+          <input type="number" id="customItemPrice" placeholder="Price" min="0" step="0.01">
+        </div>
+        <div style="display:flex; gap:8px; margin-top:8px;">
+          <button type="button" class="btn-icon" onclick="addCustomItem()">Add Item</button>
+          <button type="button" class="btn-icon" onclick="toggleCustomItem()" style="background:#fff1f2;color:#9f1239;">Cancel</button>
+        </div>
+      </div>
+      <div class="order-total-box">
+        <div style="grid-column:1/-1">
+          <div class="total-row">
+            <span class="total-label">Order Total:</span>
+            <span class="total-value" id="orderTotal">Rs 0.00</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="manual-grid">
+      <div class="manual-field">
+        <label for="billing_address_line1">Address Line 1</label>
+        <input type="text" id="billing_address_line1" name="billing_address_line1" maxlength="190" placeholder="House / Flat / Street">
+      </div>
+      <div class="manual-field">
+        <label for="billing_address_line2">Address Line 2</label>
+        <input type="text" id="billing_address_line2" name="billing_address_line2" maxlength="190" placeholder="Area / Landmark">
+      </div>
+      <div class="manual-field">
+        <label for="billing_city">City</label>
+        <input type="text" id="billing_city" name="billing_city" maxlength="100" placeholder="Nashik">
+      </div>
+      <div class="manual-field">
+        <label for="billing_state">State</label>
+        <input type="text" id="billing_state" name="billing_state" maxlength="100" placeholder="Maharashtra">
+      </div>
+      <div class="manual-field">
+        <label for="billing_postal_code">Postal Code</label>
+        <input type="text" id="billing_postal_code" name="billing_postal_code" maxlength="15" placeholder="422001">
+      </div>
+      <div class="manual-field">
+        <label for="delivery_maps_link">Google Maps Link (optional)</label>
+        <input type="url" id="delivery_maps_link" name="delivery_maps_link" maxlength="600" placeholder="https://maps.app.goo.gl/...">
+      </div>
+    </div>
+
+    <div class="manual-field">
+      <label for="admin_note">Internal Note (Optional)</label>
+      <textarea id="admin_note" name="admin_note" maxlength="800" placeholder="Any fulfilment details for operations team."></textarea>
+    </div>
+
+    <p class="manual-note">Mobile number is mandatory and acts as source of truth for customer identity. Existing mobile auto-locks customer name/email for faster POS-style punching.</p>
+
+    <div class="manual-actions">
+      <a href="orders.php" class="btn-manual-secondary">Cancel</a>
+      <button type="submit" class="btn-manual-primary" id="submitBtn">Create Manual Order</button>
+    </div>
+  </form>
+</div>
+
+<!-- Invoice Print Modal -->
+<div id="invoiceModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:9000; align-items:center; justify-content:center;">
+  <div style="background:#fff; border-radius:18px; box-shadow:0 20px 60px rgba(0,0,0,0.25); max-width:420px; width:90%; padding:32px 28px; text-align:center;">
+    <div style="font-size:2.8rem; margin-bottom:10px;">🎂</div>
+    <h3 style="margin:0 0 6px; color:#80001F; font-family:'DM Serif Display',Georgia,serif; font-size:1.4rem;">Order Created!</h3>
+    <p id="invoiceModalOrderNum" style="margin:0 0 20px; color:#5f4c55; font-size:0.95rem;"></p>
+    <p id="invoiceModalHint" style="margin:0 0 24px; color:#7f6973; font-size:0.88rem;">Would you like to print the invoice now?</p>
+    <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap;">
+      <button id="invoicePrintBtn" onclick="printInvoiceNow()" class="btn-manual-primary" style="min-width:140px; font-size:0.95rem;">🖨 Print Invoice</button>
+      <a id="invoiceGoOrders" href="orders.php" class="btn-manual-secondary" style="min-width:140px; text-align:center; font-size:0.95rem;">Go to Orders</a>
+    </div>
+  </div>
+</div>
+
+<script>
+  let orderItems = [];
+  let searchDebounceTimer;
+  let customerLookupTimer;
+  let latestSearchResults = [];
+  let availableToppers = [];
+
+  const ACTIVE_SLOTS = [{"id":1,"slot_name":"Morning Delivery","slot_label":"10:00 AM – 12:00 PM","slot_type":"delivery"},{"id":2,"slot_name":"Afternoon Delivery","slot_label":"12:00 PM – 03:00 PM","slot_type":"delivery"},{"id":3,"slot_name":"Evening Delivery","slot_label":"05:00 PM – 08:00 PM","slot_type":"delivery"},{"id":4,"slot_name":"Morning Pickup","slot_label":"10:00 AM – 12:00 PM","slot_type":"pickup"},{"id":5,"slot_name":"Afternoon Pickup","slot_label":"12:00 PM – 03:00 PM","slot_type":"pickup"},{"id":6,"slot_name":"Evening Pickup","slot_label":"05:00 PM – 08:00 PM","slot_type":"pickup"}];
+
+  function togglePorterNotice(value) {
+    const notice = document.getElementById('porterNoticeManual');
+    if (notice) notice.style.display = (value === 'delivery' || value === 'custom_delivery') ? 'block' : 'none';
+  }
+  function toggleAdvanceAmountField(value) {
+    // Partial-payment inputs were removed in full-payment-only mode.
+    const field = document.getElementById('advanceAmountField');
+    if (field) field.style.display = 'none';
+  }
+
+  function setOrderMode(mode) {
+    document.getElementById('orderModeInput').value = mode;
+    const scheduledBtn   = document.getElementById('modeScheduledBtn');
+    const posBtn         = document.getElementById('modeReadyPosBtn');
+    const posNotice      = document.getElementById('readyPosNotice');
+    const bookingDateFld = document.getElementById('slotBookingDateField');
+    const slotPickerFld  = document.getElementById('slotPickerField');
+    const fulfilSelect   = document.getElementById('fulfilment_mode');
+    const statusSelect   = document.getElementById('order_status');
+    if (mode === 'ready_pos') {
+      posBtn.classList.replace('pos-mode-btn--inactive', 'pos-mode-btn--active');
+      scheduledBtn.classList.replace('pos-mode-btn--active', 'pos-mode-btn--inactive');
+      posNotice.style.display = 'block';
+      if (bookingDateFld) bookingDateFld.style.display  = 'none';
+      if (slotPickerFld)  slotPickerFld.style.display   = 'none';
+      if (fulfilSelect) { fulfilSelect.value = 'pickup'; togglePorterNotice('pickup'); }
+      if (statusSelect)   statusSelect.value = 'confirmed';
+    } else {
+      scheduledBtn.classList.replace('pos-mode-btn--inactive', 'pos-mode-btn--active');
+      posBtn.classList.replace('pos-mode-btn--active', 'pos-mode-btn--inactive');
+      posNotice.style.display = 'none';
+      if (bookingDateFld) bookingDateFld.style.display  = '';
+      updateSlotDropdown();
+    }
+  }
+
+  function updateSlotDropdown() {
+    const dateVal      = document.getElementById('slot_booking_date')?.value || '';
+    const fulfilMode   = document.getElementById('fulfilment_mode')?.value || 'delivery';
+    const slotSelect   = document.getElementById('slot_id');
+    const slotPickerFld = document.getElementById('slotPickerField');
+    if (!slotSelect) return;
+    if (!dateVal) {
+      slotSelect.innerHTML = '<option value="0">Select date first...</option>';
+      if (slotPickerFld) slotPickerFld.style.display = 'none';
+      return;
+    }
+    const mode = (fulfilMode === 'pickup') ? 'pickup' : 'delivery';
+    const filtered = ACTIVE_SLOTS.filter(s => !s.slot_type || s.slot_type === mode || s.slot_type === 'both');
+    if (filtered.length === 0) {
+      slotSelect.innerHTML = '<option value="0">No slots available</option>';
+    } else {
+      slotSelect.innerHTML = '<option value="0">\u2014 Select a slot \u2014</option>' +
+        filtered.map(s => `<option value="${s.id}">${escapeHtml(s.slot_label || s.slot_name)}</option>`).join('');
+    }
+    if (slotPickerFld) slotPickerFld.style.display = '';
+    document.getElementById('slotLabelInput').value = '';
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    document.getElementById('slot_id')?.addEventListener('change', function () {
+      const selected = ACTIVE_SLOTS.find(s => String(s.id) === this.value);
+      document.getElementById('slotLabelInput').value = selected ? (selected.slot_label || selected.slot_name) : '';
+    });
+    document.getElementById('slot_booking_date')?.addEventListener('change', updateSlotDropdown);
+    document.getElementById('fulfilment_mode')?.addEventListener('change', function () {
+      if (document.getElementById('orderModeInput').value !== 'ready_pos') updateSlotDropdown();
+    });
+    // Initialise to scheduled mode
+    setOrderMode('scheduled_custom');
+  });
+
+  const productSearch = document.getElementById('productSearch');
+  const searchDropdown = document.getElementById('searchDropdown');
+  const itemsTableBody = document.getElementById('itemsTableBody');
+  const itemsTable = document.getElementById('itemsTable');
+  const orderItemsInput = document.getElementById('orderItemsInput');
+  const submitBtn = document.getElementById('submitBtn');
+  const customerPhoneInput = document.getElementById('customer_phone');
+  const customerNameInput = document.getElementById('customer_name');
+  const customerEmailInput = document.getElementById('customer_email');
+  const matchedUserIdInput = document.getElementById('matchedUserId');
+  const customerLookupStatus = document.getElementById('customerLookupStatus');
+  const customerLookupDropdown = document.getElementById('customerLookupDropdown');
+  const paymentStatusInput = document.getElementById('payment_status');
+  const paymentMethodInput = document.getElementById('payment_method');
+
+  function escapeHtml(value) {
+    return String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function normalizeVariantOptions(variants) {
+    if (!Array.isArray(variants)) {
+      return [];
+    }
+
+    return variants
+      .filter(v => v && Number(v.id) > 0)
+      .map(v => {
+        const base = Number(v.price) || 0;
+        const discounted = Number(v.discount_price) || 0;
+        const finalPrice = discounted > 0 && discounted < base ? discounted : base;
+        const parts = [String(v.label || '').trim(), String(v.size || '').trim()].filter(Boolean);
+        return {
+          id: Number(v.id),
+          label: parts.join(' - ') || 'Variant',
+          price: finalPrice,
+        };
+      });
+  }
+
+  function loadAvailableToppers() {
+    return fetch('/api/toppers')
+      .then(r => r.json())
+      .then(data => {
+        availableToppers = data && data.success && Array.isArray(data.data) ? data.data : [];
+        renderItemsTable();
+      })
+      .catch(() => {
+        availableToppers = [];
+        renderItemsTable();
+      });
+  }
+
+  function resolveTopperById(topperId) {
+    const normalizedId = Number(topperId) || 0;
+    if (normalizedId <= 0 || !Array.isArray(availableToppers)) {
+      return null;
+    }
+
+    return availableToppers.find(topper => Number(topper.id) === normalizedId) || null;
+  }
+
+  function normalizePhoneInput(value) {
+    return String(value || '').replace(/\D+/g, '').slice(0, 20);
+  }
+
+  function lockCustomerIdentity() {
+    customerNameInput.readOnly = true;
+    customerEmailInput.readOnly = true;
+    customerNameInput.classList.add('is-locked');
+    customerEmailInput.classList.add('is-locked');
+  }
+
+  function unlockCustomerIdentity() {
+    matchedUserIdInput.value = '0';
+    customerNameInput.readOnly = false;
+    customerEmailInput.readOnly = false;
+    customerNameInput.classList.remove('is-locked');
+    customerEmailInput.classList.remove('is-locked');
+  }
+
+  function updateCustomerStatus(message, type) {
+    customerLookupStatus.textContent = message;
+    customerLookupStatus.classList.remove('match', 'new');
+    if (type === 'match') {
+      customerLookupStatus.classList.add('match');
+    }
+    if (type === 'new') {
+      customerLookupStatus.classList.add('new');
+    }
+  }
+
+  function closeCustomerDropdown() {
+    customerLookupDropdown.classList.remove('active');
+    customerLookupDropdown.innerHTML = '';
+  }
+
+  function applyCustomerMatch(customer) {
+    if (!customer || Number(customer.id) <= 0) {
+      return;
+    }
+    matchedUserIdInput.value = String(customer.id);
+    customerPhoneInput.value = normalizePhoneInput(customer.phone || customer.normalized_phone || customerPhoneInput.value);
+    customerNameInput.value = String(customer.full_name || '');
+    customerEmailInput.value = String(customer.email || '');
+    lockCustomerIdentity();
+    const ordersInfo = Number(customer.total_orders || 0) > 0
+      ? ` | Orders: ${Number(customer.total_orders || 0)}`
+      : '';
+    updateCustomerStatus(`Customer matched and locked (${customer.phone || customer.normalized_phone || ''})${ordersInfo}`, 'match');
+    closeCustomerDropdown();
+  }
+
+  function renderCustomerCandidates(customers) {
+    if (!Array.isArray(customers) || customers.length === 0) {
+      closeCustomerDropdown();
+      return;
+    }
+
+    customerLookupDropdown.innerHTML = customers.map((c, idx) => `
+      <button type="button" class="customer-option" data-customer-index="${idx}">
+        <strong>${escapeHtml(c.full_name || 'Unnamed Customer')} | ${escapeHtml(c.phone || '')}</strong>
+        <small>${escapeHtml(c.email || 'No email')} | Orders: ${Number(c.total_orders || 0)}${c.last_order_number ? ' | Last: ' + escapeHtml(c.last_order_number) : ''}</small>
+      </button>
+    `).join('');
+    customerLookupDropdown.classList.add('active');
+
+    customerLookupDropdown.onclick = function (e) {
+      const option = e.target.closest('.customer-option[data-customer-index]');
+      if (!option) {
+        return;
+      }
+      const idx = Number(option.getAttribute('data-customer-index'));
+      if (!Number.isInteger(idx) || idx < 0 || idx >= customers.length) {
+        return;
+      }
+      applyCustomerMatch(customers[idx]);
+    };
+  }
+
+  function lookupCustomerByPhone(rawValue) {
+    const phone = normalizePhoneInput(rawValue);
+    customerPhoneInput.value = phone;
+
+    if (phone.length < 7) {
+      unlockCustomerIdentity();
+      updateCustomerStatus('Enter at least 7 digits to search existing customers.', 'new');
+      closeCustomerDropdown();
+      return;
+    }
+
+    fetch(`api/search-customers.php?q=${encodeURIComponent(phone)}&limit=6`)
+      .then(r => r.json())
+      .then(data => {
+        if (!data || data.success !== true) {
+          unlockCustomerIdentity();
+          updateCustomerStatus('Unable to search customer now. Continue with manual entry.', 'new');
+          closeCustomerDropdown();
+          return;
+        }
+
+        const customers = Array.isArray(data.customers) ? data.customers : [];
+        if (data.exact_match && data.exact_customer) {
+          applyCustomerMatch(data.exact_customer);
+          return;
+        }
+
+        if (customers.length > 0) {
+          unlockCustomerIdentity();
+          updateCustomerStatus('Multiple matches found. Select customer to lock details.', 'new');
+          renderCustomerCandidates(customers);
+          return;
+        }
+
+        unlockCustomerIdentity();
+        updateCustomerStatus('New mobile number. Enter customer name and email.', 'new');
+        closeCustomerDropdown();
+      })
+      .catch(() => {
+        unlockCustomerIdentity();
+        updateCustomerStatus('Lookup failed. Continue manually.', 'new');
+        closeCustomerDropdown();
+      });
+  }
+
+  customerPhoneInput.addEventListener('input', function () {
+    clearTimeout(customerLookupTimer);
+    customerLookupTimer = setTimeout(() => lookupCustomerByPhone(customerPhoneInput.value), 260);
+  });
+
+  customerPhoneInput.addEventListener('blur', function () {
+    lookupCustomerByPhone(customerPhoneInput.value);
+  });
+
+  document.addEventListener('click', function (e) {
+    if (!e.target.closest('.customer-lookup-wrap')) {
+      closeCustomerDropdown();
+    }
+  });
+
+  paymentStatusInput.addEventListener('change', function () {
+    if (paymentStatusInput.value === 'credit') {
+      paymentMethodInput.value = 'credit';
+    } else if (paymentMethodInput.value === 'credit') {
+      paymentMethodInput.value = 'upi_manual';
+    }
+  });
+
+  paymentMethodInput.addEventListener('change', function () {
+    if (paymentMethodInput.value === 'credit') {
+      paymentStatusInput.value = 'credit';
+    } else if (paymentStatusInput.value === 'credit') {
+      paymentStatusInput.value = 'paid';
+    }
+  });
+
+  productSearch.addEventListener('input', function() {
+    clearTimeout(searchDebounceTimer);
+    const query = this.value.trim();
+
+    if (query.length < 2) {
+      searchDropdown.classList.remove('active');
+      return;
+    }
+
+    searchDebounceTimer = setTimeout(() => {
+      fetch(`api/search-products.php?q=${encodeURIComponent(query)}&limit=10`)
+        .then(r => r.json())
+        .then(data => {
+          if (data.success && data.products.length > 0) {
+            latestSearchResults = Array.isArray(data.products) ? data.products : [];
+            searchDropdown.innerHTML = latestSearchResults.map((p, idx) => `
+              <div class="search-result" data-result-index="${idx}">
+                <div class="search-result-thumb">
+                  ${p.image ? '<img src="' + escapeHtml(p.image) + '" style="width:100%; height:100%; border-radius:4px; object-fit:cover;">' : '📦'}
+                </div>
+                <div class="search-result-info">
+                  <div class="search-result-name">${escapeHtml(p.name)}</div>
+                  <div class="search-result-price">Rs ${(Number(p.base_price) || 0).toFixed(2)}</div>
+                </div>
+              </div>
+            `).join('');
+            searchDropdown.classList.add('active');
+          } else {
+            latestSearchResults = [];
+            searchDropdown.innerHTML = '<div style="padding:12px; text-align:center; color:#999;">No products found</div>';
+            searchDropdown.classList.add('active');
+          }
+        })
+        .catch(e => {
+          console.error('Search error:', e);
+          searchDropdown.classList.remove('active');
+        });
+    }, 300);
+  });
+
+  document.addEventListener('click', function(e) {
+    if (!e.target.closest('.search-wrapper')) {
+      searchDropdown.classList.remove('active');
+    }
+  });
+
+  searchDropdown.addEventListener('click', function(e) {
+    const resultNode = e.target.closest('.search-result[data-result-index]');
+    if (!resultNode) {
+      return;
+    }
+
+    const index = Number(resultNode.getAttribute('data-result-index'));
+    if (!Number.isInteger(index) || index < 0 || index >= latestSearchResults.length) {
+      return;
+    }
+
+    addProduct(latestSearchResults[index]);
+  });
+
+  function addProduct(product) {
+    const productId = Number(product?.id) || 0;
+    const productName = String(product?.name || '').trim();
+    const basePrice = Number(product?.base_price) || 0;
+
+    if (productId <= 0 || productName === '') {
+      return;
+    }
+
+    const variantOptions = normalizeVariantOptions(product?.variants);
+    const defaultVariant = variantOptions.length > 0 ? variantOptions[0] : null;
+    const selectedVariantId = defaultVariant ? defaultVariant.id : null;
+
+    const effectivePrice = defaultVariant
+      ? Number(defaultVariant.price)
+      : basePrice;
+
+    const existingIndex = orderItems.findIndex((entry) =>
+      Number(entry.product_id) === productId &&
+      Number(entry.variant_id || 0) === Number(selectedVariantId || 0)
+    );
+    if (existingIndex >= 0) {
+      orderItems[existingIndex].quantity = Math.max(Number(orderItems[existingIndex].quantity) + 1, 1);
+      renderItemsTable();
+      productSearch.value = '';
+      searchDropdown.classList.remove('active');
+      return;
+    }
+
+    const item = {
+      product_id: productId,
+      name: productName,
+      unit_price: effectivePrice,
+      quantity: 1,
+      variant_id: selectedVariantId,
+      variant_label: defaultVariant ? defaultVariant.label : null,
+      variant_options: variantOptions,
+      topper_enabled: Boolean(product?.topper_enabled),
+      note_enabled: Boolean(product?.note_enabled),
+      cake_message: '',
+      topper_id: null,
+      topper_name_snapshot: null,
+      topper_price: 0,
+      is_custom_item: false
+    };
+
+    orderItems.push(item);
+    renderItemsTable();
+    productSearch.value = '';
+    searchDropdown.classList.remove('active');
+  }
+
+  function toggleCustomItem() {
+    const form = document.getElementById('customItemForm');
+    form.style.display = form.style.display === 'none' ? 'block' : 'none';
+  }
+
+  function addCustomItem() {
+    const name = document.getElementById('customItemName').value.trim();
+    const qty = parseInt(document.getElementById('customItemQty').value) || 1;
+    const price = parseFloat(document.getElementById('customItemPrice').value) || 0;
+
+    if (!name || price <= 0) {
+      alert('Please enter item name and valid price');
+      return;
+    }
+
+    orderItems.push({
+      product_id: 0,
+      name: name,
+      unit_price: price,
+      quantity: qty,
+      variant_id: null,
+      variant_label: null,
+      variant_options: [],
+      topper_enabled: false,
+      note_enabled: false,
+      cake_message: '',
+      topper_id: null,
+      topper_name_snapshot: null,
+      topper_price: 0,
+      is_custom_item: true
+    });
+
+    document.getElementById('customItemName').value = '';
+    document.getElementById('customItemQty').value = '1';
+    document.getElementById('customItemPrice').value = '';
+    
+    renderItemsTable();
+    toggleCustomItem();
+  }
+
+  function removeItem(index) {
+    orderItems.splice(index, 1);
+    renderItemsTable();
+  }
+
+  function updateItem(index, field, value) {
+    if (field === 'quantity') {
+      orderItems[index].quantity = Math.max(parseInt(value) || 1, 1);
+    } else if (field === 'unit_price') {
+      orderItems[index].unit_price = Math.max(parseFloat(value) || 0, 0);
+    }
+    renderItemsTable();
+  }
+
+  function updateVariant(index, selectedVariantId) {
+    if (!orderItems[index]) {
+      return;
+    }
+
+    const options = Array.isArray(orderItems[index].variant_options)
+      ? orderItems[index].variant_options
+      : [];
+
+    const normalizedId = Number(selectedVariantId) || 0;
+    if (normalizedId <= 0) {
+      orderItems[index].variant_id = null;
+      orderItems[index].variant_label = null;
+      renderItemsTable();
+      return;
+    }
+
+    const option = options.find(v => Number(v.id) === normalizedId);
+    if (!option) {
+      return;
+    }
+
+    orderItems[index].variant_id = option.id;
+    orderItems[index].variant_label = option.label;
+    orderItems[index].unit_price = Number(option.price) || 0;
+    renderItemsTable();
+  }
+
+  function updateTopper(index, selectedTopperId) {
+    if (!orderItems[index]) {
+      return;
+    }
+
+    const topper = resolveTopperById(selectedTopperId);
+    if (!selectedTopperId || !topper) {
+      orderItems[index].topper_id = null;
+      orderItems[index].topper_name_snapshot = null;
+      orderItems[index].topper_price = 0;
+      renderItemsTable();
+      return;
+    }
+
+    orderItems[index].topper_id = Number(topper.id);
+    orderItems[index].topper_name_snapshot = String(topper.name || '');
+    orderItems[index].topper_price = Number(topper.price) || 0;
+    renderItemsTable();
+  }
+
+  function updateCakeMessage(index, value) {
+    if (!orderItems[index]) {
+      return;
+    }
+
+    orderItems[index].cake_message = String(value || '').trim().substring(0, 200);
+  }
+
+  window.updateVariant = updateVariant;
+  window.updateItem = updateItem;
+  window.updateTopper = updateTopper;
+  window.updateCakeMessage = updateCakeMessage;
+  window.removeItem = removeItem;
+
+  function renderItemsTable() {
+    if (orderItems.length === 0) {
+      itemsTable.style.display = 'none';
+      itemsTableBody.innerHTML = '';
+      orderItemsInput.value = '[]';
+      document.getElementById('orderTotal').textContent = 'Rs 0.00';
+      submitBtn.disabled = true;
+      return;
+    }
+
+    submitBtn.disabled = false;
+    itemsTable.style.display = 'table';
+
+    let total = 0;
+    itemsTableBody.innerHTML = orderItems.map((item, idx) => {
+      const topperPrice = Number(item.topper_price) || 0;
+      const lineTotal = item.quantity * (Number(item.unit_price) + topperPrice);
+      total += lineTotal;
+      const variantOptions = Array.isArray(item.variant_options) ? item.variant_options : [];
+      const hasVariants = variantOptions.length > 0;
+      const selectedVariant = Number(item.variant_id || 0);
+      const selectedTopper = Number(item.topper_id || 0);
+      const topperCell = item.topper_enabled
+        ? `<div class="item-detail-stack">
+            <select class="item-topper-select" onchange="updateTopper(${idx}, this.value)">
+              <option value="">— No Topper —</option>
+              ${availableToppers.map(topper => {
+                const topperId = Number(topper.id) || 0;
+                const topperLabel = `${escapeHtml(topper.name || 'Topper')}${Number(topper.price) > 0 ? ' (+₹' + Number(topper.price).toFixed(2) + ')' : ''}`;
+                return `<option value="${topperId}" ${topperId === selectedTopper ? 'selected' : ''}>${topperLabel}</option>`;
+              }).join('')}
+            </select>
+            <div class="item-detail-hint">Topper price is added to this item total.</div>
+          </div>`
+        : '<span style="font-size:0.8rem;color:#8f7681;">—</span>';
+      const noteCell = item.note_enabled
+        ? `<textarea class="item-note-input" maxlength="200" placeholder="Note on cake" oninput="updateCakeMessage(${idx}, this.value)">${escapeHtml(item.cake_message || '')}</textarea>
+           <div class="item-detail-hint">Max 200 characters.</div>`
+        : '<span style="font-size:0.8rem;color:#8f7681;">—</span>';
+      const variantCell = hasVariants
+        ? `<select class="item-price-input" style="width:100%;" onchange="updateVariant(${idx}, this.value)">
+            ${variantOptions.map(v => `<option value="${v.id}" ${Number(v.id) === selectedVariant ? 'selected' : ''}>${escapeHtml(v.label)}</option>`).join('')}
+          </select>`
+        : '<span style="font-size:0.8rem;color:#8f7681;">Default</span>';
+      return `
+        <tr>
+          <td class="item-name-cell">${item.name}</td>
+          <td>${variantCell}</td>
+          <td><input type="number" class="item-qty-input" value="${item.quantity}" min="1" onchange="updateItem(${idx}, 'quantity', this.value)"></td>
+          <td><input type="number" class="item-price-input" value="${item.unit_price.toFixed(2)}" min="0" step="0.01" onchange="updateItem(${idx}, 'unit_price', this.value)"></td>
+          <td>${topperCell}</td>
+          <td>${noteCell}</td>
+          <td>Rs ${lineTotal.toFixed(2)}</td>
+          <td><button type="button" class="item-remove" onclick="removeItem(${idx})">Remove</button></td>
+        </tr>
+      `;
+    }).join('');
+
+    document.getElementById('orderTotal').textContent = 'Rs ' + total.toFixed(2);
+    orderItemsInput.value = JSON.stringify(orderItems);
+  }
+
+  // Form submission
+  document.getElementById('manualOrderForm').addEventListener('submit', function(e) {
+    const normalizedPhone = normalizePhoneInput(customerPhoneInput.value);
+    customerPhoneInput.value = normalizedPhone;
+    if (normalizedPhone.length < 10) {
+      e.preventDefault();
+      alert('Customer mobile number is mandatory (minimum 10 digits).');
+      return;
+    }
+
+    if (orderItems.length === 0) {
+      e.preventDefault();
+      alert('Please add at least one item to the order');
+    }
+
+    orderItemsInput.value = JSON.stringify(orderItems.map(item => ({
+      product_id: Number(item.product_id) || 0,
+      name: String(item.name || '').trim(),
+      unit_price: Number(item.unit_price) || 0,
+      quantity: Math.max(Number(item.quantity) || 1, 1),
+      variant_id: item.variant_id ? Number(item.variant_id) : null,
+      variant_label: item.variant_label || null,
+      cake_message: String(item.cake_message || '').trim().substring(0, 200),
+      topper_id: item.topper_id ? Number(item.topper_id) : null,
+      topper_name_snapshot: item.topper_name_snapshot || null,
+      topper_price: Number(item.topper_price) || 0,
+      is_custom_item: Boolean(item.is_custom_item)
+    })));
+  });
+
+  // Auto-open invoice modal after successful order creation
+  (function () {
+    const status = "";
+    const orderId = 0;
+    const orderNum = "";
+    const paymentStatus = "";
+    const invoiceAllowed = paymentStatus === 'paid';
+    if (status === 'success' && orderId > 0) {
+      const modal = document.getElementById('invoiceModal');
+      const numEl = document.getElementById('invoiceModalOrderNum');
+      const hintEl = document.getElementById('invoiceModalHint');
+      const printBtn = document.getElementById('invoicePrintBtn');
+      if (numEl && orderNum) {
+        numEl.textContent = 'Order: ' + orderNum;
+      }
+      if (hintEl && !invoiceAllowed) {
+        hintEl.textContent = 'Payment is not confirmed yet. Invoice will unlock only after payment is marked Paid.';
+      }
+      if (printBtn && !invoiceAllowed) {
+        printBtn.disabled = true;
+        printBtn.style.opacity = '0.45';
+        printBtn.style.cursor = 'not-allowed';
+        printBtn.title = 'Invoice unlocks only after payment is confirmed.';
+      }
+      modal.style.display = 'flex';
+
+      window.printInvoiceNow = function () {
+        if (!invoiceAllowed) {
+          return;
+        }
+        window.open('order_invoice.php?id=' + orderId, '_blank');
+        modal.style.display = 'none';
+        window.location.href = 'orders.php';
+      };
+
+      document.getElementById('invoiceGoOrders').addEventListener('click', function () {
+        modal.style.display = 'none';
+      });
+
+      // Close modal on backdrop click
+      modal.addEventListener('click', function (e) {
+        if (e.target === modal) {
+          modal.style.display = 'none';
+          window.location.href = 'orders.php';
+        }
+      });
+    }
+  })();
+
+  loadAvailableToppers();
+</script>

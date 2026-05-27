@@ -590,21 +590,22 @@ $screenshotRequired  = isset($screenshotRequired)  ? (bool)$screenshotRequired  
               <div class="checkout-step__num">1</div>
               <div>
                 <p class="checkout-step__heading">Contact &amp; Verification</p>
-                <p class="checkout-step__summary" id="step1Summary"><?= $isLoggedIn ? 'Logged in — details pre-filled' : 'Name, phone, email + OTP' ?></p>
+                <p class="checkout-step__summary" id="step1Summary"><?= $isLoggedIn ? 'Logged in — details pre-filled' : 'Email + OTP verification' ?></p>
               </div>
               <button type="button" class="checkout-step__edit-btn" data-edit-step="step-contact"<?= $isLoggedIn ? '' : ' hidden' ?>>Edit</button>
             </div>
             <div class="checkout-step__body">
+              <div id="checkoutUserDetection" class="checkout-inline-banner" hidden></div>
               <?php if ($isLoggedIn): ?>
               <div class="checkout-login-note">✅ Logged in — contact details pre-filled. You can edit if needed.</div>
               <?php endif; ?>
               <div class="form-row-2">
-                <label class="form-control">
+                <label class="form-control" id="customerNameField">
                   <span class="form-label">Full Name <span class="form-required">*</span></span>
                   <input id="customerName" name="customer_name" required autocomplete="name" placeholder="Priya Sharma" value="<?= $prefillName ?>" data-autosave="customer_name">
                   <span class="field-error-msg" aria-live="polite"></span>
                 </label>
-                <label class="form-control">
+                <label class="form-control" id="customerPhoneField">
                   <span class="form-label">Phone <span class="form-required">*</span></span>
                   <input id="customerPhone" name="customer_phone" type="tel" autocomplete="tel" placeholder="+91 98765 43210" value="<?= $prefillPhone ?>" data-autosave="customer_phone">
                   <span class="field-error-msg" aria-live="polite"></span>
@@ -851,7 +852,7 @@ $screenshotRequired  = isset($screenshotRequired)  ? (bool)$screenshotRequired  
 
               <div class="upi-section" style="margin-top:16px">
                 <p><strong>Scan &amp; Pay (UPI)</strong></p>
-                <img id="upiQR" src="https://via.placeholder.com/200" width="200" />
+                <img id="upiQR" src="" width="200" alt="UPI QR code" hidden />
                 <p id="upiAmountText" style="margin-top:10px; font-weight:600;"></p>
                 <a id="upiDeepLink" href="#" class="btn btn--primary btn--lg btn--block" style="margin-top:12px; display:none; align-items:center; justify-content:center; gap:8px; background:#80001f; color:#fff; border:2px solid #80001f; box-shadow:0 10px 24px rgba(128,0,31,.22);">
                   <span aria-hidden="true">📱</span>
@@ -938,6 +939,8 @@ $screenshotRequired  = isset($screenshotRequired)  ? (bool)$screenshotRequired  
 
 <script>
   window.otpVerified = <?= $isLoggedIn ? 'true' : 'false' ?>;
+  window.__checkoutExistingCustomer = <?= $isLoggedIn ? 'true' : 'false' ?>;
+  window.__checkoutExistingCustomerPhone = <?= json_encode($prefillPhone ?? '') ?>;
   window.__screenshotRequired = <?= $screenshotRequired ? 'true' : 'false' ?>;
 <?php if ($isLoggedIn && !empty($prefillStreet)): ?>
 document.addEventListener("DOMContentLoaded", function () {
@@ -1218,9 +1221,14 @@ document.addEventListener("DOMContentLoaded", () => {
     [customerName, customerPhone, customerEmail, deliveryDate, deliverySlot,
      deliveryStreet, deliveryPincode, paymentProof].forEach(attachAutoClear);
 
+    const requireIdentityFields = !window.__checkoutExistingCustomer;
     const validations = [
-      validateField(customerName, null, 'Full name is required'),
-      validateField(customerPhone, (v) => v.replace(/\D+/g, '').length >= 10, 'Enter a valid 10-digit phone number'),
+      requireIdentityFields
+        ? validateField(customerName, null, 'Full name is required')
+        : markFieldValidity(customerName, true),
+      requireIdentityFields
+        ? validateField(customerPhone, (v) => v.replace(/\D+/g, '').length >= 10, 'Enter a valid 10-digit phone number')
+        : markFieldValidity(customerPhone, true),
       validateField(customerEmail, (v) => /.+@.+\..+/.test(v), 'Please enter a valid email address'),
       validateField(deliveryDate, null, 'Please select a delivery date'),
       validateField(deliverySlot, null, 'Please select a delivery slot')
@@ -1254,8 +1262,10 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     const formData = new FormData(form);
-    formData.set('customer_name', customerName.value.trim());
-    formData.set('customer_phone', customerPhone.value.trim());
+    const resolvedCustomerName = customerName.value.trim() || 'Customer';
+    const resolvedCustomerPhone = customerPhone.value.trim() || String(window.__checkoutExistingCustomerPhone || '');
+    formData.set('customer_name', resolvedCustomerName);
+    formData.set('customer_phone', resolvedCustomerPhone);
     formData.set('customer_email', customerEmail.value.trim());
     formData.set('slot_id', deliverySlot.value);
     formData.set('payment_method', paymentMethod);
@@ -1319,6 +1329,123 @@ document.addEventListener("DOMContentLoaded", () => {
   window.__checkoutSyncPaymentType = syncPaymentType;
   window.__checkoutSyncMobileTotals = syncMobileTotals;
 
+});
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  var detectionBanner = document.getElementById('checkoutUserDetection');
+  var nameInput = document.getElementById('customerName');
+  var phoneInput = document.getElementById('customerPhone');
+  var emailInput = document.getElementById('customerEmail');
+  var nameField = document.getElementById('customerNameField');
+  var phoneField = document.getElementById('customerPhoneField');
+  var stepSummary = document.getElementById('step1Summary');
+
+  if (!detectionBanner || !nameInput || !phoneInput || !emailInput) {
+    return;
+  }
+
+  var setBanner = function (message) {
+    detectionBanner.hidden = !message;
+    detectionBanner.textContent = message || '';
+  };
+
+  var lockField = function (field) {
+    if (!field) {
+      return;
+    }
+    field.readOnly = true;
+    field.classList.add('is-readonly');
+    field.setAttribute('aria-readonly', 'true');
+  };
+
+  var applyExistingCustomerMode = function (isExisting, user) {
+    var existing = Boolean(isExisting);
+    var profile = user || {};
+
+    window.__checkoutExistingCustomer = existing;
+
+    if (existing) {
+      var fullName = String(profile.full_name || '').trim();
+      var phone = String(profile.phone || '').trim();
+
+      if (!nameInput.value.trim() && fullName) {
+        nameInput.value = fullName;
+      }
+      if (!phoneInput.value.trim() && phone) {
+        phoneInput.value = phone;
+      }
+      if (phone) {
+        window.__checkoutExistingCustomerPhone = phone;
+      }
+
+      if (nameField) {
+        nameField.hidden = true;
+      }
+      if (phoneField) {
+        phoneField.hidden = true;
+      }
+      nameInput.required = false;
+
+      if (stepSummary) {
+        stepSummary.textContent = 'Existing account detected — email + OTP checkout';
+      }
+      setBanner('Existing user detected. Verify this email with OTP to continue. Saved profile and addresses will auto-load.');
+      return;
+    }
+
+    if (nameField) {
+      nameField.hidden = false;
+    }
+    if (phoneField) {
+      phoneField.hidden = false;
+    }
+    nameInput.required = true;
+
+    if (stepSummary) {
+      stepSummary.textContent = 'New customer checkout — name, phone, email + OTP';
+    }
+    setBanner('Proceed as guest, or sign in for faster checkout with saved details.');
+  };
+
+  window.__checkoutApplyExistingCustomerMode = applyExistingCustomerMode;
+
+  fetch(window.BASE_URL + '/api/auth/me', {
+    method: 'GET',
+    credentials: 'include',
+    headers: {
+      'Accept': 'application/json'
+    }
+  })
+    .then(function (response) { return response.json(); })
+    .then(function (payload) {
+      if (!payload || payload.success === false || !payload.data || !payload.data.is_authenticated) {
+        applyExistingCustomerMode(false, null);
+        return;
+      }
+
+      var user = payload.data.user || {};
+      var fullName = String(user.full_name || '').trim();
+      var phone = String(user.phone || '').trim();
+      var email = String(user.email || '').trim();
+
+      if (!nameInput.value.trim() && fullName) {
+        nameInput.value = fullName;
+      }
+      if (!phoneInput.value.trim() && phone) {
+        phoneInput.value = phone;
+      }
+      if (!emailInput.value.trim() && email) {
+        emailInput.value = email;
+      }
+
+      lockField(emailInput);
+      applyExistingCustomerMode(true, user);
+    })
+    .catch(function () {
+      applyExistingCustomerMode(false, null);
+    });
 });
 </script>
 
@@ -1654,7 +1781,11 @@ function generateQR(amount) {
 
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(upiLink)}`;
 
-  document.getElementById("upiQR").src = qrUrl;
+  const qrEl = document.getElementById("upiQR");
+  if (qrEl) {
+    qrEl.src = qrUrl;
+    qrEl.hidden = false;
+  }
 
   const deepLink = document.getElementById("upiDeepLink");
   if (deepLink) {
@@ -1682,6 +1813,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const nameInput = document.getElementById("customerName");
   const otpInput = document.getElementById("otpInput");
   const otpSlots = Array.from(document.querySelectorAll('#checkoutOtpGrid [data-otp-slot]'));
+  const applyExistingCustomerMode = window.__checkoutApplyExistingCustomerMode || function () {};
   const defaultSendText = sendBtn ? sendBtn.textContent.trim() : "Send Verification OTP";
   let cooldownTimer = null;
 
@@ -1843,11 +1975,19 @@ document.addEventListener("DOMContentLoaded", () => {
       const data = await res.json();
 
       if (data.success) {
+        const existingCustomer = Boolean(data?.data?.existing_customer);
+        applyExistingCustomerMode(existingCustomer, data?.data?.user || null);
         emailInput.readOnly = true;
         showOtpStep();
         clearOtpSlots();
         focusOtpSlot(0);
-        setFeedback(statusEl, "OTP sent successfully to your email.", "success");
+        setFeedback(
+          statusEl,
+          existingCustomer
+            ? "OTP sent. Existing account detected — verify to load your saved profile and addresses."
+            : "OTP sent successfully to your email.",
+          "success"
+        );
         setFeedback(noticeEl, "OTP sent successfully to your email.", "success");
         showToast("OTP sent successfully.", "success");
 
@@ -1884,6 +2024,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   emailInput?.addEventListener("input", () => {
     window.otpVerified = false;
+    applyExistingCustomerMode(false, null);
     emailInput.readOnly = false;
     hideOtpStep();
     clearOtpSlots();
@@ -1900,10 +2041,73 @@ document.addEventListener("DOMContentLoaded", function () {
   const otpInput = document.getElementById("otpInput");
   const statusEl = document.getElementById("otpStatus");
   const noticeEl = document.getElementById("otpNotice");
+  const nameInput = document.getElementById("customerName");
+  const phoneInput = document.getElementById("customerPhone");
+  const streetInput = document.getElementById("deliveryStreet");
+  const pincodeInput = document.getElementById("deliveryPincode");
+  const applyExistingCustomerMode = window.__checkoutApplyExistingCustomerMode || function () {};
   const setFeedback = window.__checkoutSetFeedback || function (element, message) {
     if (element) element.textContent = message || '';
   };
   const showToast = window.__checkoutShowToast || function () {};
+
+  const hydrateCheckoutFromAccount = async () => {
+    try {
+      const profileRes = await fetch(window.BASE_URL + '/api/account/profile', {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+          'Accept': 'application/json'
+        }
+      });
+      const profilePayload = await profileRes.json();
+      if (profilePayload?.success && profilePayload?.data?.user) {
+        const user = profilePayload.data.user;
+        if (nameInput && !nameInput.value.trim()) {
+          nameInput.value = String(user.full_name || '').trim();
+        }
+        if (phoneInput && !phoneInput.value.trim()) {
+          phoneInput.value = String(user.phone || '').trim();
+        }
+        if (user.phone) {
+          window.__checkoutExistingCustomerPhone = String(user.phone || '').trim();
+        }
+        applyExistingCustomerMode(true, user);
+      }
+    } catch (error) {
+      // Non-blocking hydration path.
+    }
+
+    try {
+      const addressesRes = await fetch(window.BASE_URL + '/api/account/addresses', {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+          'Accept': 'application/json'
+        }
+      });
+      const addressesPayload = await addressesRes.json();
+      const items = Array.isArray(addressesPayload?.data?.items) ? addressesPayload.data.items : [];
+      if (!items.length) {
+        return;
+      }
+
+      const defaultAddress = items.find((item) => Number(item.is_default) === 1) || items[0];
+      if (streetInput && !streetInput.value.trim()) {
+        const streetParts = [
+          String(defaultAddress.line1 || '').trim(),
+          String(defaultAddress.line2 || '').trim(),
+          String(defaultAddress.landmark || '').trim()
+        ].filter(Boolean);
+        streetInput.value = streetParts.join(', ');
+      }
+      if (pincodeInput && !pincodeInput.value.trim()) {
+        pincodeInput.value = String(defaultAddress.postal_code || '').trim();
+      }
+    } catch (error) {
+      // Non-blocking hydration path.
+    }
+  };
 
   if (!verifyBtn) {
     console.log("Verify button not found ❌");
@@ -1937,11 +2141,10 @@ document.addEventListener("DOMContentLoaded", function () {
           "X-CSRF-Token": window.__csrf
         },
         body: JSON.stringify({
-  email,
-  otp,
-  name: document.getElementById("customerName").value.trim()
-}),
-       // body: JSON.stringify({ email, otp }), // ✅ FIXED
+          email,
+          otp,
+          name: document.getElementById("customerName").value.trim()
+        }),
         credentials: "include"
       });
 
@@ -1961,6 +2164,7 @@ document.addEventListener("DOMContentLoaded", function () {
         setFeedback(statusEl, "\u2705 Email verified. Checkout unlocked.", "success");
         setFeedback(noticeEl, "\u2705 OTP verified. You can now place your order.", "success");
         showToast("Email verified. Checkout unlocked.", "success");
+        await hydrateCheckoutFromAccount();
         // Advance to step 2
         if (window.__checkoutSteps) {
           window.__checkoutSteps.complete('step-contact', '\u2714 ' + email);

@@ -1,0 +1,286 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Admin Login - Cakeouflage</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: 'Poppins', sans-serif;
+    }
+
+    body {
+      background: linear-gradient(135deg, #fff0f3, #f8d8de);
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .login-container {
+      width: 400px;
+      background: #fff;
+      padding: 40px;
+      border-radius: 16px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+    }
+
+    .logo {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    .logo a {
+      display: inline-flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .logo img {
+      display: block;
+      width: auto;
+      height: 76px;
+      max-width: min(240px, 82vw);
+      object-fit: contain;
+    }
+
+    h2 {
+      text-align: center;
+      margin-bottom: 25px;
+      color: #80001F;
+      font-family: 'DM Serif Display', serif;
+    }
+
+    .input-group {
+      margin-bottom: 18px;
+    }
+
+    .input-group label {
+      font-size: 14px;
+      margin-bottom: 6px;
+      display: block;
+    }
+
+    .input-group input {
+      width: 100%;
+      padding: 12px;
+      border-radius: 10px;
+      border: 1px solid #ddd;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 12px;
+      background: linear-gradient(135deg, #80001F, #b3003c);
+      color: white;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: 0.3s;
+    }
+
+    .btn:hover {
+      transform: translateY(-2px);
+    }
+
+    .error {
+      background: #ffe5e5;
+      color: #c0392b;
+      padding: 10px;
+      border-radius: 8px;
+      margin-bottom: 15px;
+      text-align: center;
+    }
+
+    .footer {
+      text-align: center;
+      margin-top: 20px;
+      font-size: 12px;
+      color: #888;
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="login-container">
+
+  <div class="logo">
+    <a href="/" aria-label="Cakeouflage home">
+      <img src="/client/assets/images/mainlogo.svg" alt="Cakeouflage Logo">
+    </a>
+  </div>
+
+  <h2>Admin Login</h2>
+
+        <div style="background:#e8f7ec;color:#17663b;padding:10px;border-radius:8px;margin-bottom:15px;text-align:center;">OTP sent to aibuntysystems@gmail.com. It is valid for 5 minutes.</div>
+  
+  <form method="POST">
+    <div class="input-group">
+      <label>Username or Email</label>
+      <input type="text" name="login" value="Dcore" required>
+    </div>
+
+    <div class="input-group" id="adminOtpInputGroup" style="">
+      <label>OTP</label>
+      <input type="text" name="otp" maxlength="6" inputmode="numeric" pattern="[0-9]{6}" placeholder="Enter 6-digit OTP">
+    </div>
+
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <button class="btn" name="action" value="send_otp" type="submit" id="adminSendOtpBtn">Resend OTP</button>
+      <button class="btn" name="action" value="verify_otp" type="submit" id="adminVerifyOtpBtn" style="">Verify OTP & Login</button>
+    </div>
+    <div id="adminOtpCooldownHint" style="margin-top:8px;font-size:12px;color:#666;"></div>
+  </form>
+
+  <div class="footer">
+    © Cakeouflage Admin Panel
+  </div>
+
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const OTP_COOLDOWN_MS = 60000;
+  const otpSentThisRequest = true;
+  const otpSendFailedThisRequest = false;
+  const showOtpStep = true;
+
+  const form = document.querySelector("form[method='POST']");
+  const sendBtn = document.getElementById("adminSendOtpBtn");
+  const verifyBtn = document.getElementById("adminVerifyOtpBtn");
+  const otpGroup = document.getElementById("adminOtpInputGroup");
+  const loginInput = form ? form.querySelector('input[name="login"]') : null;
+  const hintEl = document.getElementById("adminOtpCooldownHint");
+  const defaultSendText = sendBtn ? sendBtn.textContent : "Send OTP";
+
+  if (!form || !sendBtn || !loginInput || !hintEl || !otpGroup || !verifyBtn) {
+    return;
+  }
+
+  let cooldownTimer = null;
+
+  const normalizeLogin = (value) => String(value || "").trim().toLowerCase();
+  const storageKeyForLogin = (value) => {
+    const normalized = normalizeLogin(value);
+    return normalized ? `admin_otp_cooldown_${encodeURIComponent(normalized)}` : "";
+  };
+
+  const clearUiToDefault = () => {
+    sendBtn.disabled = false;
+    sendBtn.textContent = defaultSendText;
+    hintEl.textContent = "";
+  };
+
+  const readCooldownUntil = (loginValue) => {
+    const key = storageKeyForLogin(loginValue);
+    if (!key) {
+      return 0;
+    }
+    const value = Number(window.localStorage.getItem(key) || "0");
+    return Number.isFinite(value) ? value : 0;
+  };
+
+  const clearCooldown = (loginValue) => {
+    const key = storageKeyForLogin(loginValue);
+    if (key) {
+      window.localStorage.removeItem(key);
+    }
+  };
+
+  const setCooldown = (loginValue, untilEpochMs) => {
+    const key = storageKeyForLogin(loginValue);
+    if (key) {
+      window.localStorage.setItem(key, String(untilEpochMs));
+    }
+  };
+
+  const startCooldownUi = (untilEpochMs, loginValue) => {
+    const tick = () => {
+      const remainingMs = untilEpochMs - Date.now();
+      if (remainingMs <= 0) {
+        if (cooldownTimer) {
+          window.clearInterval(cooldownTimer);
+          cooldownTimer = null;
+        }
+        clearUiToDefault();
+        clearCooldown(loginValue);
+        return;
+      }
+
+      const remainingSec = Math.ceil(remainingMs / 1000);
+      sendBtn.disabled = true;
+      sendBtn.textContent = `Resend OTP in ${remainingSec}s`;
+      hintEl.textContent = `You can request a new OTP in ${remainingSec}s.`;
+    };
+
+    if (cooldownTimer) {
+      window.clearInterval(cooldownTimer);
+    }
+    tick();
+    cooldownTimer = window.setInterval(tick, 250);
+  };
+
+  const applyCooldownFromCurrentLogin = () => {
+    const currentLogin = String(loginInput.value || "").trim();
+    const existingCooldownUntil = readCooldownUntil(currentLogin);
+    if (existingCooldownUntil > Date.now()) {
+      startCooldownUi(existingCooldownUntil, currentLogin);
+    } else {
+      if (cooldownTimer) {
+        window.clearInterval(cooldownTimer);
+        cooldownTimer = null;
+      }
+      clearUiToDefault();
+      clearCooldown(currentLogin);
+    }
+  };
+
+  if (otpSentThisRequest) {
+    otpGroup.style.display = "";
+    verifyBtn.style.display = "";
+    const currentLogin = String(loginInput.value || "").trim();
+    const cooldownUntil = Date.now() + OTP_COOLDOWN_MS;
+    setCooldown(currentLogin, cooldownUntil);
+    startCooldownUi(cooldownUntil, currentLogin);
+  } else if (otpSendFailedThisRequest) {
+    clearCooldown(loginInput.value);
+    clearUiToDefault();
+    otpGroup.style.display = showOtpStep ? "" : "none";
+    verifyBtn.style.display = showOtpStep ? "" : "none";
+  } else {
+    otpGroup.style.display = showOtpStep ? "" : "none";
+    verifyBtn.style.display = showOtpStep ? "" : "none";
+    applyCooldownFromCurrentLogin();
+  }
+
+  loginInput.addEventListener("input", () => {
+    applyCooldownFromCurrentLogin();
+  });
+
+  form.addEventListener("submit", (event) => {
+    const submitter = event.submitter;
+    if (!(submitter instanceof HTMLElement)) {
+      return;
+    }
+
+    if (submitter.getAttribute("name") === "action" && submitter.getAttribute("value") === "send_otp") {
+      if (!String(loginInput.value || "").trim()) {
+        return;
+      }
+      clearCooldown(loginInput.value);
+      sendBtn.disabled = true;
+      sendBtn.textContent = "Sending...";
+      hintEl.textContent = "Sending OTP...";
+    }
+  });
+});
+</script>
+
+</body>
+</html>

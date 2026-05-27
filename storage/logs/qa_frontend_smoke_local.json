@@ -1,0 +1,71 @@
+{
+  "started_at": "2026-05-26T13:29:13.0431694+05:30",
+  "base_url": "http://localhost:8080",
+  "pass": true,
+  "checks": [
+    {
+      "name": "homepage",
+      "path": "/",
+      "status": 200,
+      "pass": true,
+      "title": "Cakeouflage | Premium Bakery"
+    },
+    {
+      "name": "category",
+      "path": "/category",
+      "status": 200,
+      "pass": true,
+      "title": "All Products | Cakeouflage"
+    },
+    {
+      "name": "product_sample",
+      "path": "/product/belgian-velvet-hazelnut-gateau-01",
+      "status": 200,
+      "pass": true,
+      "title": "Belgian Velvet Hazelnut Gateau | Cakeouflage | Cakeouflage"
+    },
+    {
+      "name": "cart",
+      "path": "/cart",
+      "status": 200,
+      "pass": true,
+      "title": "Cart"
+    },
+    {
+      "name": "checkout",
+      "path": "/checkout",
+      "status": 200,
+      "pass": true,
+      "title": "Checkout"
+    },
+    {
+      "name": "login",
+      "path": "/login",
+      "status": 200,
+      "pass": true,
+      "title": "Login"
+    },
+    {
+      "name": "account",
+      "path": "/account",
+      "status": 200,
+      "pass": true,
+      "title": "My Account"
+    },
+    {
+      "name": "wishlist",
+      "path": "/wishlist",
+      "status": 200,
+      "pass": true,
+      "title": "Wishlist"
+    },
+    {
+      "name": "orders",
+      "path": "/orders",
+      "status": 200,
+      "pass": true,
+      "title": "Order History"
+    }
+  ],
+  "finished_at": "2026-05-26T13:29:14.2015000+05:30"
+}

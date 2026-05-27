@@ -1,0 +1,6 @@
+{
+  "email": "qa.auth.20260526_125352@cakeouflage.com",
+  "csrf_prefix": "6d4e7dc1",
+  "proof_dir": "storage/logs/smoke_auth_csrf_20260526_125352",
+  "timestamp": "2026-05-26T12:53:58.4995765+05:30"
+}

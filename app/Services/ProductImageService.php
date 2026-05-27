@@ -27,6 +27,71 @@ final class ProductImageService
     private static bool $defaultLoaded = false;
     private static string $defaultPlaceholder = self::GLOBAL_PLACEHOLDER;
 
+    /**
+     * Build a clean PDP/API gallery list from product + image rows.
+     *
+     * Rules:
+     * - Prefer valid uploaded images from product_images.
+     * - Deduplicate by final resolved URL.
+     * - If none, use featured_image only when it is a valid uploaded image.
+     * - If still none, return exactly one business/default placeholder image.
+     *
+     * @param array<string,mixed> $product
+     * @param array<int,array<string,mixed>> $imageRows
+     * @return array<int,array<string,mixed>>
+     */
+    public static function getProductGalleryImages(array $product, array $imageRows = [], ?string $categorySlug = null, int $maxImages = 2): array
+    {
+        $category = trim((string)($categorySlug ?? ($product['category_slug'] ?? '')));
+        $max = min(max($maxImages, 1), 8);
+
+        $final = [];
+        $seen = [];
+
+        foreach ($imageRows as $row) {
+            $raw = trim((string)($row['image_url'] ?? ''));
+            $uploadedUrl = self::resolveUploadedOnly($raw);
+            if ($uploadedUrl === null) {
+                continue;
+            }
+
+            $dedupeKey = strtolower($uploadedUrl);
+            if (isset($seen[$dedupeKey])) {
+                continue;
+            }
+
+            $seen[$dedupeKey] = true;
+            $final[] = [
+                'image_url' => $uploadedUrl,
+                'alt_text' => trim((string)($row['alt_text'] ?? '')),
+            ];
+
+            if (count($final) >= $max) {
+                break;
+            }
+        }
+
+        if (empty($final)) {
+            $featuredRaw = trim((string)($product['featured_image'] ?? ''));
+            $featuredUploaded = self::resolveUploadedOnly($featuredRaw);
+            if ($featuredUploaded !== null) {
+                $final[] = [
+                    'image_url' => $featuredUploaded,
+                    'alt_text' => trim((string)($product['name'] ?? '')),
+                ];
+            }
+        }
+
+        if (empty($final)) {
+            $final[] = [
+                'image_url' => self::placeholderForCategory($category),
+                'alt_text' => trim((string)($product['name'] ?? '')),
+            ];
+        }
+
+        return $final;
+    }
+
     /** @return array<string, string> */
     private static function categoryPlaceholderMap(): array
     {
@@ -56,12 +121,20 @@ final class ProductImageService
 
     public static function placeholderForCategory(?string $categorySlug): string
     {
+        // If the admin has configured a custom global product image, prefer it over category SVGs.
+        $global = self::globalPlaceholder();
+        if ($global !== self::GLOBAL_PLACEHOLDER) {
+            return $global;
+        }
+
+        // Fall back to category-specific SVG when no custom global image is configured.
         $slug = strtolower(trim((string)$categorySlug));
         $map = self::categoryPlaceholderMap();
         if ($slug !== '' && isset($map[$slug]) && self::isReadableWebPath($map[$slug])) {
             return $map[$slug];
         }
-        return self::globalPlaceholder();
+
+        return $global;
     }
 
 public static function resolve(?string $path, ?string $categorySlug = null): string
@@ -78,11 +151,53 @@ public static function resolve(?string $path, ?string $categorySlug = null): str
             return self::globalPlaceholder();
         }
 
-        return self::normalizePath($candidate);
+        $normalized = self::normalizePath($candidate);
+
+        // For local web paths, ensure we do not emit broken URLs that trigger 404s in the browser.
+        if (self::isLocalWebPath($normalized)) {
+            if (self::isReadableWebPath($normalized)) {
+                return $normalized;
+            }
+
+            $recovered = self::recoverMissingLocalPath($normalized);
+            if ($recovered !== null) {
+                return $recovered;
+            }
+
+            return self::placeholderForCategory($categorySlug);
+        }
+
+        return $normalized;
     }
 
     return self::placeholderForCategory($categorySlug);
 }
+
+    private static function isLocalWebPath(string $path): bool
+    {
+        return !self::isExternalUrl($path) && strpos($path, '/') === 0;
+    }
+
+    private static function recoverMissingLocalPath(string $missingPath): ?string
+    {
+        $filename = basename($missingPath);
+        if ($filename === '' || $filename === '.' || $filename === '..') {
+            return null;
+        }
+
+        $candidates = [
+            '/uploads/products/' . $filename,
+            '/public/uploads/' . $filename,
+        ];
+
+        foreach ($candidates as $candidate) {
+            if (self::isReadableWebPath($candidate)) {
+                return $candidate;
+            }
+        }
+
+        return null;
+    }
 
 /**
  * Normalizes legacy and current path formats to a canonical web-root-relative path.
@@ -133,6 +248,42 @@ private static function normalizePath(string $raw): string
         ];
 
         return in_array($normalized, $known, true);
+    }
+
+    private static function resolveUploadedOnly(string $raw): ?string
+    {
+        $candidate = trim($raw);
+        if ($candidate === '') {
+            return null;
+        }
+
+        if (self::isExternalUrl($candidate)) {
+            return $candidate;
+        }
+
+        if (self::isKnownDefaultPlaceholderPath($candidate)) {
+            return null;
+        }
+
+        $normalized = self::normalizePath($candidate);
+        if (self::isKnownDefaultPlaceholderPath($normalized)) {
+            return null;
+        }
+
+        if (!self::isLocalWebPath($normalized)) {
+            return null;
+        }
+
+        if (self::isReadableWebPath($normalized)) {
+            return $normalized;
+        }
+
+        $recovered = self::recoverMissingLocalPath($normalized);
+        if ($recovered !== null && !self::isKnownDefaultPlaceholderPath($recovered)) {
+            return $recovered;
+        }
+
+        return null;
     }
 
     private static function globalPlaceholder(): string

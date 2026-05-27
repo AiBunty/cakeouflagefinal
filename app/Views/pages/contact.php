@@ -1,4 +1,45 @@
-<?php /* Cakeouflage — Contact Page */ ?>
+<?php /* Cakeouflage — Contact Page */
+$contactPhone = trim((string)($siteConfig['contact']['phone'] ?? ''));
+$contactEmail = trim((string)($siteConfig['contact']['email'] ?? ''));
+$contactCity = trim((string)($siteConfig['contact']['city'] ?? 'Nashik'));
+$contactWhatsapp = trim((string)($siteConfig['contact']['whatsapp'] ?? $contactPhone));
+$contactWebsite = trim((string)($siteConfig['contact']['website'] ?? ''));
+$businessHours = trim((string)($siteConfig['contact']['business_hours'] ?? ''));
+$mapEmbedUrl = trim((string)($siteConfig['contact']['map_embed_url'] ?? ''));
+$contactFormEmbedUrl = trim((string)($siteConfig['contact']['form_embed_url'] ?? ''));
+
+$addressParts = array_filter([
+  trim((string)($siteConfig['business']['address_line1'] ?? '')),
+  trim((string)($siteConfig['business']['address_line2'] ?? '')),
+  trim((string)($siteConfig['business']['address'] ?? '')),
+  trim((string)($siteConfig['contact']['city'] ?? '')),
+  trim((string)($siteConfig['business']['state'] ?? '')),
+]);
+$businessAddress = !empty($addressParts) ? implode(', ', $addressParts) : ('Cakeouflage, ' . $contactCity . ', Maharashtra');
+
+if ($businessHours === '') {
+  $businessHours = 'Mon-Sun: 10 AM - 8 PM';
+}
+
+if ($mapEmbedUrl === '') {
+  $mapEmbedUrl = 'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3749.4992232394516!2d73.76781790000001!3d19.9875517!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3bdd955a6817e2e5%3A0xe45effc441329228!2sCakeouflage!5e0!3m2!1sen!2sin!4v1776274709500!5m2!1sen!2sin';
+}
+
+if ($contactFormEmbedUrl === '' || !preg_match('#^https?://#i', $contactFormEmbedUrl)) {
+  $contactFormEmbedUrl = 'https://admin.aibunty.com/widget/form/69f374e6605e3';
+}
+
+$phoneDigits = preg_replace('/\D+/', '', $contactPhone);
+$whatsappDigits = preg_replace('/\D+/', '', $contactWhatsapp);
+$phoneHref = $phoneDigits !== '' ? ('tel:+' . $phoneDigits) : '';
+$emailHref = $contactEmail !== '' ? ('mailto:' . $contactEmail) : '';
+$whatsappHref = $whatsappDigits !== '' ? ('https://wa.me/' . $whatsappDigits) : '';
+
+$websiteHref = $contactWebsite;
+if ($websiteHref !== '' && !preg_match('#^https?://#i', $websiteHref)) {
+  $websiteHref = 'https://' . ltrim($websiteHref, '/');
+}
+?>
 <style>
 .contact-form-embed-wrapper {
   position: relative;
@@ -93,7 +134,7 @@
               </div>
               <div>
                 <h3 class="contact-card__title">Visit Our Bakery</h3>
-                <p class="contact-card__text">Cakeouflage, Nashik, Maharashtra</p>
+                <p class="contact-card__text"><?= htmlspecialchars($businessAddress, ENT_QUOTES, 'UTF-8') ?></p>
               
               </div>
             </article>
@@ -106,7 +147,14 @@
               </div>
               <div>
                 <h3 class="contact-card__title">Call or WhatsApp</h3>
-                <a href="tel:+919673565935" class="contact-card__link">+91 9673565935</a>
+                <?php if ($phoneHref !== ''): ?>
+                  <a href="<?= htmlspecialchars($phoneHref, ENT_QUOTES, 'UTF-8') ?>" class="contact-card__link"><?= htmlspecialchars($contactPhone, ENT_QUOTES, 'UTF-8') ?></a>
+                <?php else: ?>
+                  <p class="contact-card__text"><?= htmlspecialchars($contactPhone !== '' ? $contactPhone : 'Contact number unavailable', ENT_QUOTES, 'UTF-8') ?></p>
+                <?php endif; ?>
+                <?php if ($whatsappHref !== ''): ?>
+                  <a href="<?= htmlspecialchars($whatsappHref, ENT_QUOTES, 'UTF-8') ?>" class="contact-card__link" target="_blank" rel="noopener">WhatsApp Chat</a>
+                <?php endif; ?>
               </div>
             </article>
 
@@ -119,7 +167,11 @@
               </div>
               <div>
                 <h3 class="contact-card__title">Email Us</h3>
-                <a href="mailto:cakeouflage@gmail.com" class="contact-card__link">cakeouflage@gmail.com</a>
+                <?php if ($emailHref !== ''): ?>
+                  <a href="<?= htmlspecialchars($emailHref, ENT_QUOTES, 'UTF-8') ?>" class="contact-card__link"><?= htmlspecialchars($contactEmail, ENT_QUOTES, 'UTF-8') ?></a>
+                <?php else: ?>
+                  <p class="contact-card__text">Email unavailable</p>
+                <?php endif; ?>
               </div>
             </article>
 
@@ -132,7 +184,10 @@
               </div>
               <div>
                 <h3 class="contact-card__title">Business Hours</h3>
-                <p class="contact-card__text">Mon–Sun: 10 AM – 8 PM</p>
+                <p class="contact-card__text"><?= htmlspecialchars($businessHours, ENT_QUOTES, 'UTF-8') ?></p>
+                <?php if ($websiteHref !== ''): ?>
+                  <a href="<?= htmlspecialchars($websiteHref, ENT_QUOTES, 'UTF-8') ?>" class="contact-card__link" target="_blank" rel="noopener">Visit Website</a>
+                <?php endif; ?>
               
               </div>
             </article>
@@ -154,7 +209,7 @@
               <div class="cfl-row"><div class="cfl-label"></div><div class="cfl-textarea"></div></div>
               <div class="cfl-btn"></div>
             </div>
-            <iframe class="contact-form-embed" src="https://admin.aibunty.com/widget/form/69f374e6605e3"
+            <iframe class="contact-form-embed" src="<?= htmlspecialchars($contactFormEmbedUrl, ENT_QUOTES, 'UTF-8') ?>"
           width="100%"
           height="600"
           frameborder="0"
@@ -175,7 +230,7 @@
         <h2 class="contact-map__title">Find us in Nashik</h2>
         <p class="contact-map__text">Visit our bakery for cake tastings, pickups and custom consultations.</p>
       </div>
-     <iframe class="contact-map__iframe" src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3749.4992232394516!2d73.76781790000001!3d19.9875517!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3bdd955a6817e2e5%3A0xe45effc441329228!2sCakeouflage!5e0!3m2!1sen!2sin!4v1776274709500!5m2!1sen!2sin" width="600" height="450" style="border:0;" allowfullscreen="" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+     <iframe class="contact-map__iframe" src="<?= htmlspecialchars($mapEmbedUrl, ENT_QUOTES, 'UTF-8') ?>" width="600" height="450" style="border:0;" allowfullscreen="" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
     </div>
   </div>
 </section>

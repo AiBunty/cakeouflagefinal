@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Core\Env;
 use PDO;
 use Throwable;
 
@@ -644,6 +645,17 @@ final class OrderAutomationService
 
         $endpoint = trim((string)($crm['endpoint'] ?? ''));
         $apiToken = trim((string)($crm['api_token'] ?? ''));
+
+        // Allow production-safe overrides via env without requiring DB edits.
+        $envEndpoint = $this->resolveCrmCredentialOverride($settingKey, 'ENDPOINT');
+        $envApiToken = $this->resolveCrmCredentialOverride($settingKey, 'API_TOKEN');
+        if ($envEndpoint !== '') {
+            $endpoint = $envEndpoint;
+        }
+        if ($envApiToken !== '') {
+            $apiToken = $envApiToken;
+        }
+
         if ($endpoint === '' || $apiToken === '') {
             throw new \RuntimeException('CRM setting is incomplete for key: ' . $settingKey);
         }
@@ -814,8 +826,6 @@ final class OrderAutomationService
             'event_information' => trim((string)($input['event_information'] ?? '')),
             'event_date' => trim((string)($input['event_date'] ?? '')),
             'number_of_servings_guests' => trim((string)($input['number_of_servings_guests'] ?? '')),
-            'budget_range' => trim((string)($input['budget_range'] ?? '')),
-            'diet_preference' => trim((string)($input['diet_preference'] ?? '')),
             'design_breif_notes' => trim((string)($input['design_breif_notes'] ?? '')),
             'reference_file' => trim((string)($input['reference_file'] ?? '')),
 
@@ -823,11 +833,9 @@ final class OrderAutomationService
             'contact.first_name' => $firstName,
             'contact.email' => trim((string)($input['email'] ?? '')),
             'contact.phone' => $fullPhone,
-            'contact.diet_preference' => trim((string)($input['diet_preference'] ?? '')),
             'contact.event_information' => trim((string)($input['event_information'] ?? '')),
             'contact.referen_prsjad' => trim((string)($input['reference_file'] ?? '')),
             'contact.design_breif_notes' => trim((string)($input['design_breif_notes'] ?? '')),
-            'contact.budget_range' => trim((string)($input['budget_range'] ?? '')),
             'contact.number__gculaj' => trim((string)($input['number_of_servings_guests'] ?? '')),
             'contact.event_date' => trim((string)($input['event_date'] ?? '')),
         ];
@@ -922,6 +930,31 @@ final class OrderAutomationService
         $phone = trim((string)($order['customer_phone'] ?? ''));
         $itemNames = trim((string)($order['item_names'] ?? 'Cake order'));
         $amount = number_format((float)($order['grand_total'] ?? 0), 2, '.', '');
+        $subtotal = number_format((float)($order['subtotal'] ?? 0), 2, '.', '');
+        $taxTotal = number_format((float)($order['tax_total'] ?? 0), 2, '.', '');
+        $discountTotal = number_format((float)($order['discount_total'] ?? 0), 2, '.', '');
+        $itemList = array_values(array_filter(array_map('trim', explode(',', $itemNames)), static function (string $name): bool {
+            return $name !== '';
+        }));
+        $deliveryAddress = trim(implode(', ', array_filter([
+            trim((string)($order['delivery_address_line1'] ?? '')),
+            trim((string)($order['delivery_address_line2'] ?? '')),
+        ], static function (string $part): bool {
+            return $part !== '';
+        })));
+        $upiLink = trim((string)($order['upi_link'] ?? $order['payment_link'] ?? ''));
+        $transactionReference = (string)($order['transaction_reference'] ?? $order['payment_reference'] ?? $order['utr_number'] ?? $order['settlement_reference'] ?? '');
+        $deliverySlot = (string)($order['delivery_slot'] ?? $order['scheduled_slot_label'] ?? $order['scheduled_slot'] ?? '');
+        $deliveryMethod = (string)($order['fulfilment_mode'] ?? $order['fulfillment_mode'] ?? '');
+        $invoiceNumber = (string)($order['invoice_number'] ?? '');
+        if ($invoiceNumber === '') {
+            $invoiceNumber = 'INV-' . (string)($order['order_number'] ?? '');
+        }
+        $invoiceDate = (string)($order['invoice_date'] ?? $order['created_at'] ?? $order['delivery_date'] ?? '');
+        $invoiceDownloadLink = '';
+        if ((int)($order['id'] ?? 0) > 0) {
+            $invoiceDownloadLink = '/admin/order_invoice.php?id=' . (int)$order['id'];
+        }
 
         return [
             'order_id' => (int)($order['id'] ?? 0),
@@ -932,8 +965,34 @@ final class OrderAutomationService
             'customer_email' => $email,
             'customer_phone' => $phone,
             'item_names' => $itemNames,
+            'product_summary' => $itemNames,
+            'item_count' => (string)count($itemList),
             'grand_total' => $amount,
-            'upi_link' => 'upi://pay?pa=test@upi&pn=Cakeouflage&am=' . $amount,
+            'payment_received_amount' => $amount,
+            'actual_received_amount' => $amount,
+            'subtotal' => $subtotal,
+            'tax_total' => $taxTotal,
+            'coupon_discount' => $discountTotal,
+            'discount_amount' => $discountTotal,
+            'coupon_code' => (string)($order['coupon_code'] ?? ''),
+            'order_status' => (string)($order['order_status'] ?? ''),
+            'fulfillment_status' => (string)($order['order_status'] ?? ''),
+            'fulfilment_status' => (string)($order['order_status'] ?? ''),
+            'payment_status' => (string)($order['payment_status'] ?? ''),
+            'payment_method' => (string)($order['payment_method'] ?? ''),
+            'transaction_reference' => $transactionReference,
+            'refund_status' => (string)($order['refund_status'] ?? $order['order_status'] ?? ''),
+            'delivery_date' => (string)($order['delivery_date'] ?? ''),
+            'delivery_slot' => $deliverySlot,
+            'delivery_method' => $deliveryMethod,
+            'fulfilment_mode' => $deliveryMethod,
+            'fulfillment_mode' => $deliveryMethod,
+            'delivery_address' => $deliveryAddress,
+            'admin_note' => (string)($order['admin_note'] ?? ''),
+            'upi_link' => $upiLink,
+            'invoice_number' => $invoiceNumber,
+            'invoice_date' => $invoiceDate,
+            'invoice_download_link' => $invoiceDownloadLink,
             'contact.name' => $customerName,
             'contact.first_name' => $firstName,
             'contact.mobile' => $phone,
@@ -942,7 +1001,7 @@ final class OrderAutomationService
             'contact.orderid' => (string)($order['order_number'] ?? ''),
             'contact.item' => $itemNames,
             'contact.amount' => $amount,
-            'contact.upi_link' => 'upi://pay?pa=test@upi&pn=Cakeouflage&am=' . $amount,
+            'contact.upi_link' => $upiLink,
         ];
     }
 
@@ -1052,29 +1111,34 @@ final class OrderAutomationService
     /** @param array<string,mixed> $context */
     private function maybeQueueCrmTriggerJob(PDO $pdo, string $settingKey, array $context, int $followUpId = 0): int
     {
-        $this->ensureCrmSettingExists($pdo, $settingKey);
+        try {
+            $this->ensureCrmSettingExists($pdo, $settingKey);
 
-        $resolvedSettingKey = $this->resolveCrmSettingKey($pdo, $settingKey);
+            $resolvedSettingKey = $this->resolveCrmSettingKey($pdo, $settingKey);
 
-        $check = $pdo->prepare('SELECT id FROM crm_settings WHERE setting_key = :setting_key AND is_enabled = 1 AND COALESCE(endpoint, "") <> "" AND COALESCE(api_token, "") <> "" LIMIT 1');
-        $check->execute(['setting_key' => $resolvedSettingKey]);
-        if (!$check->fetch(PDO::FETCH_ASSOC)) {
+            $check = $pdo->prepare('SELECT id FROM crm_settings WHERE setting_key = :setting_key AND is_enabled = 1 AND COALESCE(endpoint, "") <> "" AND COALESCE(api_token, "") <> "" LIMIT 1');
+            $check->execute(['setting_key' => $resolvedSettingKey]);
+            if (!$check->fetch(PDO::FETCH_ASSOC)) {
+                return 0;
+            }
+
+            $payload = [
+                'setting_key' => $resolvedSettingKey,
+                'setting_key_requested' => $settingKey,
+                'setting_key_resolved' => $resolvedSettingKey,
+                'follow_up_id' => $followUpId,
+                'context' => $context,
+            ];
+            $stmt = $pdo->prepare('INSERT INTO queue_jobs (job_type, payload_json, status, available_at, attempts) VALUES ("crm_trigger_push", :payload_json, "queued", NOW(), 0)');
+            $stmt->execute([
+                'payload_json' => json_encode($payload, JSON_UNESCAPED_SLASHES),
+            ]);
+
+            return 1;
+        } catch (Throwable $e) {
+            error_log('[OrderAutomationService] CRM queue skipped: ' . $e->getMessage());
             return 0;
         }
-
-        $payload = [
-            'setting_key' => $resolvedSettingKey,
-            'setting_key_requested' => $settingKey,
-            'setting_key_resolved' => $resolvedSettingKey,
-            'follow_up_id' => $followUpId,
-            'context' => $context,
-        ];
-        $stmt = $pdo->prepare('INSERT INTO queue_jobs (job_type, payload_json, status, available_at, attempts) VALUES ("crm_trigger_push", :payload_json, "queued", NOW(), 0)');
-        $stmt->execute([
-            'payload_json' => json_encode($payload, JSON_UNESCAPED_SLASHES),
-        ]);
-
-        return 1;
     }
 
     private function ensureCrmSettingExists(PDO $pdo, string $settingKey): void
@@ -1084,13 +1148,17 @@ final class OrderAutomationService
             return;
         }
 
-        $stmt = $pdo->prepare(
-            'INSERT INTO crm_settings (setting_key, endpoint, api_token, is_enabled)
-             VALUES (:setting_key, "", "", 0)
-               AS new
-               ON DUPLICATE KEY UPDATE setting_key = new.setting_key'
-        );
-        $stmt->execute(['setting_key' => $settingKey]);
+        try {
+                        $stmt = $pdo->prepare(
+                                'INSERT INTO crm_settings (setting_key, endpoint, api_token, is_enabled)
+                                 VALUES (:setting_key, "", "", 0)
+                                 ON DUPLICATE KEY UPDATE setting_key = VALUES(setting_key)'
+                        );
+            $stmt->execute(['setting_key' => $settingKey]);
+        } catch (Throwable $e) {
+            // CRM settings table is optional in some deployments.
+            error_log('[OrderAutomationService] ensureCrmSettingExists skipped: ' . $e->getMessage());
+        }
     }
 
     /** @param array<string,mixed> $context */
@@ -1731,5 +1799,32 @@ final class OrderAutomationService
         }
 
         return '+' . $digits;
+    }
+
+    private function resolveCrmCredentialOverride(string $settingKey, string $suffix): string
+    {
+        $normalizedKey = strtoupper(preg_replace('/[^A-Za-z0-9]+/', '_', $settingKey) ?: '');
+        $candidates = [];
+
+        if ($normalizedKey !== '') {
+            $candidates[] = 'CRM_TRIGGER_' . $normalizedKey . '_' . $suffix;
+        }
+
+        if ($suffix === 'ENDPOINT') {
+            $candidates[] = 'CRM_TRIGGER_ENDPOINT';
+            $candidates[] = 'CRM_TRIGGER_DEFAULT_ENDPOINT';
+        } else {
+            $candidates[] = 'CRM_TRIGGER_API_TOKEN';
+            $candidates[] = 'CRM_TRIGGER_DEFAULT_API_TOKEN';
+        }
+
+        foreach ($candidates as $name) {
+            $value = trim((string)(Env::get($name, '') ?? ''));
+            if ($value !== '') {
+                return $value;
+            }
+        }
+
+        return '';
     }
 }

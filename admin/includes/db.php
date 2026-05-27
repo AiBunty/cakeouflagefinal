@@ -72,6 +72,18 @@ if (!($conn instanceof mysqli)) {
 
 $conn->set_charset('utf8mb4');
 
+$strictSqlMode = implode(',', [
+    'ONLY_FULL_GROUP_BY',
+    'STRICT_TRANS_TABLES',
+    'NO_ZERO_IN_DATE',
+    'NO_ZERO_DATE',
+    'ERROR_FOR_DIVISION_BY_ZERO',
+    'NO_ENGINE_SUBSTITUTION',
+]);
+
+$escapedSqlMode = $conn->real_escape_string($strictSqlMode);
+$conn->query("SET SESSION sql_mode='" . $escapedSqlMode . "'");
+
 /**
  * Write structured admin DB errors to the PHP log.
  */
@@ -132,7 +144,7 @@ function safePrepare(mysqli $conn, string $sql): mysqli_stmt
  * @throws RuntimeException when $conn->query() returns false.
  */
 if (!function_exists('safeQuery')) {
-function safeQuery(mysqli $conn, string $sql): mysqli_result|bool
+function safeQuery(mysqli $conn, string $sql)
 {
     $startedAt = microtime(true);
     $result = $conn->query($sql);

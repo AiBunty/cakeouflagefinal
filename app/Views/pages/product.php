@@ -26,27 +26,17 @@ $origPrice      = $defaultVariant && !empty($defaultVariant['discount_price']) &
                   ? (float)$defaultVariant['price'] : null;
 $displayPrice   = $defaultVariant && !empty($defaultVariant['discount_price'])
                   ? (float)$defaultVariant['discount_price'] : $defaultPrice;
-$rawMainImage = '';
 $categorySlug = (string)($product['category_slug'] ?? '');
-// Filter out blank image slots (e.g. admin saved a blank 2nd image field)
-$images = array_values(array_filter($images ?? [], function ($img) {
-  return trim((string)($img['image_url'] ?? '')) !== '';
-}));
-$images = array_slice($images, 0, 2);
-
-if (!empty($images)) {
-  // first image only (sorted already)
-  $rawMainImage = (string)($images[0]['image_url'] ?? '');
-} elseif (!empty($product['featured_image'])) {
-  $rawMainImage = (string)$product['featured_image'];
-}
-
+$images = is_array($images ?? null) ? array_values($images) : [];
+$rawMainImage = (string)($images[0]['image_url'] ?? '');
 $mainImage = product_image_url($rawMainImage, $categorySlug);
 
 
 //$mainImage = '' . $mainImage;
 $dietary        = $product['dietary_tag'] ?? 'regular';
 $is_veg         = (int)($product['is_veg'] ?? 1);
+$foodMode       = (string)($siteConfig['business']['store_food_mode'] ?? getDietaryMode());
+$showNonVeg     = $foodMode === 'veg_nonveg';
 $leadHours      = (int)($product['lead_time_hours'] ?? 24);
 $protocol       = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
 $productUrl     = $protocol . '://' . $_SERVER['HTTP_HOST'] . '/product/' . $product['slug'];
@@ -59,6 +49,9 @@ $waMsg          = rawurlencode(
     "Thank you! \xf0\x9f\x98\x8a"
 );
 $waLink         = "https://wa.me/" . ($businessPhone ?? '919673565935') . "?text={$waMsg}";
+$currencySymbolRaw = (string)($siteConfig['currency_symbol'] ?? 'Rs');
+$currencySymbolEsc = htmlspecialchars($currencySymbolRaw, ENT_QUOTES, 'UTF-8');
+$productDescription = (string)($product['description'] ?? ($product['long_description'] ?? ($product['short_description'] ?? '')));
 ?>
 <!-- JSON-LD Product Schema -->
 <script type="application/ld+json">
@@ -66,7 +59,7 @@ $waLink         = "https://wa.me/" . ($businessPhone ?? '919673565935') . "?text
   "@context": "https://schema.org",
   "@type": "Product",
   "name": <?= json_encode($product['name']) ?>,
-  "description": <?= json_encode($product['short_description'] ?? '') ?>,
+  "description": <?= json_encode($productDescription) ?>,
   "image": <?= json_encode($mainImage) ?>,
   "sku": <?= json_encode($product['sku'] ?? '') ?>,
   "brand": { "@type": "Brand", "name": "Cakeouflage" },
@@ -79,7 +72,7 @@ $waLink         = "https://wa.me/" . ($businessPhone ?? '919673565935') . "?text
 }
 </script>
 
-<main data-page="product">
+<main data-page="product" data-product-slug="<?= htmlspecialchars((string)($product['slug'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
 
   <!-- Product Detail Section -->
   <section class="pdp section">
@@ -157,7 +150,9 @@ $imgPath = $img['image_url'] ?? '';
 
           <div class="pdp__header">
             <h1 class="pdp__title">
-              <span class="veg-dot veg-dot--<?= $is_veg ? 'veg' : 'nonveg' ?>" title="<?= $is_veg ? 'Vegetarian' : 'Non-Vegetarian' ?>"></span>
+              <?php if ($showNonVeg): ?>
+                <span class="veg-dot veg-dot--<?= $is_veg ? 'veg' : 'nonveg' ?>" title="<?= $is_veg ? 'Vegetarian' : 'Non-Vegetarian' ?>"></span>
+              <?php endif; ?>
               <?= htmlspecialchars($product['name'], ENT_QUOTES, 'UTF-8') ?>
             </h1>
             <button class="pdp__wishlist-btn" id="pdpWishlistBtn"
@@ -178,7 +173,7 @@ $imgPath = $img['image_url'] ?? '';
   
   <!-- Current Price -->
   <span class="pdp__price" id="currentPrice">
-    ₹<?= number_format($displayPrice) ?>
+    <?= $currencySymbolEsc ?><?= number_format($displayPrice) ?>
   </span>
 
   <!-- Original Price (hidden by default) -->
@@ -190,7 +185,7 @@ $imgPath = $img['image_url'] ?? '';
 </div>
 
 <p class="pdp__short-desc">
-  <?= htmlspecialchars($product['short_description'] ?? '', ENT_QUOTES, 'UTF-8') ?>
+  <?= htmlspecialchars($productDescription !== '' ? $productDescription : (string)($product['short_description'] ?? ''), ENT_QUOTES, 'UTF-8') ?>
 </p>
 
           <!-- Availability -->
@@ -325,7 +320,7 @@ $imgPath = $img['image_url'] ?? '';
 
         <div class="pdp__tab-panel is-active" id="pdpTab-desc" role="tabpanel">
           <div class="prose">
-            <?= !empty($product['long_description']) ? nl2br(htmlspecialchars($product['long_description'], ENT_QUOTES, 'UTF-8')) : '<p>Crafted in small batches with premium ingredients.</p>' ?>
+            <?= $productDescription !== '' ? nl2br(htmlspecialchars($productDescription, ENT_QUOTES, 'UTF-8')) : '<p>Crafted in small batches with premium ingredients.</p>' ?>
           </div>
         </div>
 
@@ -397,7 +392,7 @@ $imgPath = $img['image_url'] ?? '';
               <a href="/product/<?= htmlspecialchars($rp['slug'], ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($rp['name'], ENT_QUOTES, 'UTF-8') ?></a>
             </h3>
             <div class="product-card__footer">
-              <span class="product-card__price">From ₹<?= $rPrice ?></span>
+              <span class="product-card__price">From <?= $currencySymbolEsc ?><?= $rPrice ?></span>
               <a class="btn btn--primary btn--sm" href="/product/<?= htmlspecialchars($rp['slug'], ENT_QUOTES, 'UTF-8') ?>">View</a>
             </div>
           </div>
@@ -439,7 +434,7 @@ $imgPath = $img['image_url'] ?? '';
 
 <!-- Mobile sticky CTA -->
 <div class="pdp-mobile-cta" id="pdpMobileCta">
-  <div class="pdp-mobile-cta__price" id="pdpMobilePrice">₹<?= number_format($displayPrice) ?></div>
+  <div class="pdp-mobile-cta__price" id="pdpMobilePrice"><?= $currencySymbolEsc ?><?= number_format($displayPrice) ?></div>
   <button class="btn btn--primary" id="pdpMobileAddBtn" type="button">Add to Cart</button>
 </div>
 
@@ -467,8 +462,9 @@ $imgPath = $img['image_url'] ?? '';
 
   function _pdpUpdateTotalPrice() {
     const base = _currentVariantPrice + _currentTopper.price;
-    document.getElementById('currentPrice').textContent = '₹' + Math.round(base).toLocaleString('en-IN');
-    document.getElementById('pdpMobilePrice').textContent = '₹' + Math.round(base).toLocaleString('en-IN');
+    const currencySymbol = <?= json_encode($currencySymbolRaw, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
+    document.getElementById('currentPrice').textContent = currencySymbol + Math.round(base).toLocaleString('en-IN');
+    document.getElementById('pdpMobilePrice').textContent = currencySymbol + Math.round(base).toLocaleString('en-IN');
   }
 
   window.pdpSelectVariant = function (btn) {
@@ -485,8 +481,9 @@ $imgPath = $img['image_url'] ?? '';
 
     const price = v.price;
     _currentVariantPrice = price;
-    document.getElementById('currentPrice').textContent = '₹' + Math.round(_currentVariantPrice + _currentTopper.price).toLocaleString('en-IN');
-    document.getElementById('pdpMobilePrice').textContent = '₹' + Math.round(_currentVariantPrice + _currentTopper.price).toLocaleString('en-IN');
+    const currencySymbol = <?= json_encode($currencySymbolRaw, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
+    document.getElementById('currentPrice').textContent = currencySymbol + Math.round(_currentVariantPrice + _currentTopper.price).toLocaleString('en-IN');
+    document.getElementById('pdpMobilePrice').textContent = currencySymbol + Math.round(_currentVariantPrice + _currentTopper.price).toLocaleString('en-IN');
 
     const origEl = document.getElementById('origPrice');
     const saveEl = document.getElementById('savingsBadge');

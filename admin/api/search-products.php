@@ -58,15 +58,26 @@ while ($result && ($row = $result->fetch_assoc())) {
     $productId = (int)$row['id'];
     
     $variants = array();
-    $variantStmt = $conn->prepare('SELECT id, variant_label, weight_or_size, price, discount_price, stock_quantity FROM product_variants WHERE product_id = ? AND is_active = 1 ORDER BY id ASC');
+    $variantStmt = $conn->prepare('SELECT id, variant_label, variant_name, weight_or_size, unit_type, price, discount_price, stock_quantity, is_default FROM product_variants WHERE product_id = ? AND is_active = 1 ORDER BY is_default DESC, id ASC');
     $variantStmt->bind_param('i', $productId);
     $variantStmt->execute();
     $variantResult = $variantStmt->get_result();
     while ($variantResult && ($vRow = $variantResult->fetch_assoc())) {
+        $resolvedName = (string)($vRow['variant_name'] ?? '');
+        if ($resolvedName === '') {
+            $resolvedName = (string)($vRow['variant_label'] ?? ($vRow['weight_or_size'] ?? ''));
+        }
+        $resolvedUnitType = (string)($vRow['unit_type'] ?? '');
+        if ($resolvedUnitType === '') {
+            $resolvedUnitType = 'custom';
+        }
         $variants[] = array(
             'id' => (int)$vRow['id'],
-            'label' => (string)$vRow['variant_label'],
-            'size' => (string)$vRow['weight_or_size'],
+            'variant_name' => $resolvedName,
+            'unit_type' => $resolvedUnitType,
+            'is_default' => (int)($vRow['is_default'] ?? 0) === 1,
+            'label' => (string)($vRow['variant_label'] ?? $resolvedName),
+            'size' => (string)($vRow['weight_or_size'] ?? $resolvedName),
             'price' => (float)$vRow['price'],
             'discount_price' => (float)($vRow['discount_price'] ?? 0),
             'stock' => (int)$vRow['stock_quantity']

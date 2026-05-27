@@ -1,0 +1,17 @@
+BEFORE
+send_communication:queued:46
+send_communication:processing:1
+send_communication:completed:23
+WORKER
+{"processed":10,"completed":6,"failed":0,"requeued":4,"errors":[{"job_id":72,"error":"No WebP encoder available (imagewebp/cwebp missing)"},{"job_id":1,"error":"No WebP encoder available (imagewebp/cwebp missing)"},{"job_id":4,"error":"No WebP encoder available (imagewebp/cwebp missing)"},{"job_id":7,"error":"No WebP encoder available (imagewebp/cwebp missing)"}]}
+AFTER
+send_communication:queued:34
+send_communication:processing:1
+send_communication:completed:35
+COMM_LOGS
+102	order_delivered_admin	queued	cakeouflage@gmail.com	2026-05-25 16:17:32
+101	order_delivered_customer	queued	byoc.qa.20260525161727@example.com	2026-05-25 16:17:32
+100	ready_order_admin	queued	cakeouflage@gmail.com	2026-05-25 16:17:32
+99	ready_order_customer	queued	byoc.qa.20260525161727@example.com	2026-05-25 16:17:32
+98	payment_confirmed_admin	queued	cakeouflage@gmail.com	2026-05-25 16:17:32
+CRM_PUSH_LOGS

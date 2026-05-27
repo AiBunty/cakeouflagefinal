@@ -14,214 +14,178 @@ use App\Core\Database;
 use App\Core\FileCache;
 use App\Services\ProductImportService;
 
-// ── Weight keys (order must match export/download exactly) ────────────────
-const WEIGHT_KEYS = ['per_piece', '0.5lb', '1lb', '1.5lb', '2lb', '2.5lb', '3lb', '3.5lb', '4lb', '4.5lb', '5lb'];
-
-// ── Dietary label map: human-readable (from Excel) → DB enum ─────────────
-const DIETARY_IMPORT_MAP = [
-    'Regular'    => 'regular',
-    'Eggless'    => 'eggless',
-    'Vegan'      => 'vegan',
-    'Sugar Free' => 'sugar_free',
-    'Healthy'    => 'healthy',
-    'regular'    => 'regular',
-    'eggless'    => 'eggless',
-    'vegan'      => 'vegan',
-    'sugar_free' => 'sugar_free',
-    'sugar free' => 'sugar_free',
-    'healthy'    => 'healthy',
-];
-
-const ALLOWED_DIETARY = ['regular', 'eggless', 'vegan', 'sugar_free', 'healthy'];
+const VARIANT_UNIT_TYPES = ['size', 'weight', 'piece', 'custom'];
 
 // ============================================================
 //  Helpers
 // ============================================================
 
-/**
- * Normalise a weight/size label coming from the spreadsheet.
- * Passes through 'per_piece' unchanged; lowercases and strips spaces otherwise.
- */
-function normalizeWeight(string $weight): string
+function importSlugify(string $value): string
 {
-    $w = strtolower(trim($weight));
-    if ($w === 'per_piece' || $w === 'per piece') {
-        return 'per_piece';
-    }
-    $w = str_replace(' ', '', $w);
-    $w = str_replace('gm', 'g', $w);
-    return $w;
+    $slug = strtolower(trim(preg_replace('/[^a-zA-Z0-9]+/', '-', $value), '-'));
+    return $slug !== '' ? $slug : 'item';
 }
 
-/**
- * Upsert one product row using PDO prepared statements (no SQL injection risk).
- *
- * @param  array<string,float>  $variantPrices  weight_key => price (only non-empty, > 0 entries)
- * @param  string               &$action        set to 'insert' or 'update' by reference
- * @return int|false  product_id on success, false on skip or hard error
- */
 function processRow(
-    \PDO   $pdo,
+    \PDO $pdo,
     string $categoryName,
-    string $subcategoryName,
     string $productName,
-    array  $variantPrices,
-    int    $isChefSpecial,
-    string $dietaryTag,
-    int    $isVeg,
-    int    $topperEnabled = 1,
-    int    $noteEnabled   = 1,
+    string $description,
+    array $variants,
     string &$action = ''
 ): int|false {
-
-    if ($categoryName === '' || $subcategoryName === '' || $productName === '') {
+    if ($categoryName === '' || $productName === '' || $variants === []) {
         return false;
     }
 
-    // ── 1. Upsert parent category ────────────────────────────────────────
-    $catStmt = $pdo->prepare("
-        SELECT id FROM categories
-        WHERE LOWER(TRIM(name)) = LOWER(TRIM(?))
-          AND parent_id IS NULL
-          AND deleted_at IS NULL
-        LIMIT 1
-    ");
-    $catStmt->execute([$categoryName]);
-    $categoryId = $catStmt->fetchColumn();
-
-    if (!$categoryId) {
-        $catSlug = trim(preg_replace('/[^a-zA-Z0-9]+/', '-', strtolower($categoryName)), '-') ?: 'category';
-        $pdo->prepare("INSERT INTO categories (name, slug, parent_id) VALUES (?, ?, NULL)")
-            ->execute([$categoryName, $catSlug]);
-        $categoryId = (int)$pdo->lastInsertId();
-    } else {
-        $categoryId = (int)$categoryId;
-    }
-
-    // ── 2. Upsert subcategory ────────────────────────────────────────────
-    $subStmt = $pdo->prepare("
-        SELECT id FROM categories
-        WHERE LOWER(TRIM(name)) = LOWER(TRIM(?))
-          AND parent_id = ?
-          AND deleted_at IS NULL
-        LIMIT 1
-    ");
-    $subStmt->execute([$subcategoryName, $categoryId]);
-    $subcategoryId = $subStmt->fetchColumn();
-
-    if (!$subcategoryId) {
-        $subSlug = trim(preg_replace('/[^a-zA-Z0-9]+/', '-', strtolower($subcategoryName)), '-') ?: 'subcategory';
-        $pdo->prepare("INSERT INTO categories (name, slug, parent_id) VALUES (?, ?, ?)")
-            ->execute([$subcategoryName, $subSlug, $categoryId]);
-        $subcategoryId = (int)$pdo->lastInsertId();
-    } else {
-        $subcategoryId = (int)$subcategoryId;
-    }
-
-    // ── 3. Upsert product ────────────────────────────────────────────────
-    $prodStmt = $pdo->prepare("
-        SELECT id FROM products
-        WHERE LOWER(name) = LOWER(?)
-          AND subcategory_id = ?
-          AND deleted_at IS NULL
-        LIMIT 1
-    ");
-    $prodStmt->execute([$productName, $subcategoryId]);
-    $productId = $prodStmt->fetchColumn();
-
-    if ($productId) {
-        $action    = 'update';
-        $productId = (int)$productId;
-        $basePrice = !empty($variantPrices) ? (float)array_values($variantPrices)[0] : 0.0;
-
-        $pdo->prepare("
-            UPDATE products SET
-                collection_category_id = ?,
-                is_chef_special        = ?,
-                dietary_tag            = ?,
-                is_veg                 = ?,
-                topper_enabled         = ?,
-                note_enabled           = ?,
-                base_price             = ?,
-                starting_price         = ?,
-                updated_at             = NOW()
-            WHERE id = ?
-        ")->execute([$categoryId, $isChefSpecial, $dietaryTag, $isVeg, $topperEnabled, $noteEnabled, $basePrice, $basePrice, $productId]);
-
-    } else {
-        $action    = 'insert';
-        $basePrice = !empty($variantPrices) ? (float)array_values($variantPrices)[0] : 0.0;
-
-        // Unique slug
-        $baseSlug  = trim(preg_replace('/[^a-zA-Z0-9]+/', '-', strtolower($productName)), '-') ?: 'product';
-        $slug      = $baseSlug;
-        $slugCheck = $pdo->prepare("SELECT id FROM products WHERE slug = ? LIMIT 1");
-        $slugCheck->execute([$slug]);
-        $n = 1;
-        while ($slugCheck->fetchColumn()) {
-            $slug = $baseSlug . '-' . $n++;
-            $slugCheck->execute([$slug]);
+    $categoryStmt = $pdo->prepare(
+        'SELECT id FROM categories WHERE LOWER(TRIM(name)) = LOWER(TRIM(?)) AND parent_id IS NULL AND deleted_at IS NULL LIMIT 1'
+    );
+    $categoryStmt->execute([$categoryName]);
+    $categoryId = (int)($categoryStmt->fetchColumn() ?: 0);
+    if ($categoryId <= 0) {
+        $baseSlug = importSlugify($categoryName);
+        $slug = $baseSlug;
+        $suffix = 1;
+        $slugStmt = $pdo->prepare('SELECT id FROM categories WHERE slug = ? LIMIT 1');
+        $slugStmt->execute([$slug]);
+        while ($slugStmt->fetchColumn()) {
+            $slug = $baseSlug . '-' . $suffix;
+            $suffix++;
+            $slugStmt->execute([$slug]);
         }
 
-        $sku = 'SKU-' . strtoupper(substr(uniqid(), -8));
+        $insertCategory = $pdo->prepare('INSERT INTO categories (name, slug, parent_id, is_active) VALUES (?, ?, NULL, 1)');
+        $insertCategory->execute([$categoryName, $slug]);
+        $categoryId = (int)$pdo->lastInsertId();
+    }
 
-        $pdo->prepare("
-            INSERT INTO products
-                (name, slug, sku, subcategory_id, collection_category_id,
-                 base_price, starting_price, availability_status,
-                 is_chef_special, dietary_tag, is_veg, topper_enabled, note_enabled, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 'in_stock', ?, ?, ?, ?, ?, NOW())
-        ")->execute([
-            $productName, $slug, $sku, $subcategoryId, $categoryId,
-            $basePrice, $basePrice,
-            $isChefSpecial, $dietaryTag, $isVeg, $topperEnabled, $noteEnabled,
+    $productStmt = $pdo->prepare('SELECT id, sku FROM products WHERE LOWER(TRIM(name)) = LOWER(TRIM(?)) AND collection_category_id = ? LIMIT 1');
+    $productStmt->execute([$productName, $categoryId]);
+    $existing = $productStmt->fetch(PDO::FETCH_ASSOC) ?: null;
+
+    usort($variants, static function (array $a, array $b): int {
+        return ((int)($b['is_default'] ?? 0)) <=> ((int)($a['is_default'] ?? 0));
+    });
+    $hasDefault = false;
+    foreach ($variants as $variant) {
+        if ((int)($variant['is_default'] ?? 0) === 1) {
+            $hasDefault = true;
+            break;
+        }
+    }
+    if (!$hasDefault && isset($variants[0])) {
+        $variants[0]['is_default'] = 1;
+    }
+    $basePrice = round((float)($variants[0]['price'] ?? 0), 2);
+    if ($basePrice <= 0) {
+        return false;
+    }
+
+    $shortDescription = mb_substr($description, 0, 250);
+    if ($existing) {
+        $action = 'update';
+        $updateStmt = $pdo->prepare(
+            'UPDATE products SET
+                short_description = :short_description,
+                description = :description,
+                long_description = :long_description,
+                base_price = :base_price,
+                starting_price = :starting_price,
+                availability_status = :availability_status,
+                deleted_at = NULL,
+                updated_at = NOW()
+             WHERE id = :id'
+        );
+        $updateStmt->execute([
+            'short_description' => $shortDescription,
+            'description' => $description,
+            'long_description' => $description,
+            'base_price' => $basePrice,
+            'starting_price' => $basePrice,
+            'availability_status' => 'in_stock',
+            'id' => (int)$existing['id'],
         ]);
+        $productId = (int)$existing['id'];
+    } else {
+        $action = 'insert';
+        $baseSlug = importSlugify($productName);
+        $slug = $baseSlug;
+        $suffix = 1;
+        $slugStmt = $pdo->prepare('SELECT id FROM products WHERE slug = ? LIMIT 1');
+        $slugStmt->execute([$slug]);
+        while ($slugStmt->fetchColumn()) {
+            $slug = $baseSlug . '-' . $suffix;
+            $suffix++;
+            $slugStmt->execute([$slug]);
+        }
 
+        $sku = 'SKU-' . strtoupper(substr(uniqid('', true), -8));
+        $insertStmt = $pdo->prepare(
+            'INSERT INTO products (
+                name, slug, sku, collection_category_id,
+                short_description, description, long_description,
+                base_price, starting_price, availability_status,
+                is_veg, dietary_tag, topper_enabled, note_enabled
+            ) VALUES (
+                :name, :slug, :sku, :collection_category_id,
+                :short_description, :description, :long_description,
+                :base_price, :starting_price, :availability_status,
+                1, "regular", 1, 1
+            )'
+        );
+        $insertStmt->execute([
+            'name' => $productName,
+            'slug' => $slug,
+            'sku' => $sku,
+            'collection_category_id' => $categoryId,
+            'short_description' => $shortDescription,
+            'description' => $description,
+            'long_description' => $description,
+            'base_price' => $basePrice,
+            'starting_price' => $basePrice,
+            'availability_status' => 'in_stock',
+        ]);
         $productId = (int)$pdo->lastInsertId();
     }
 
-    // ── 4. Upsert variants (only populated weight columns) ───────────────
-    $varCheck = $pdo->prepare("
-        SELECT id FROM product_variants
-        WHERE product_id = ? AND weight_or_size = ?
-        LIMIT 1
-    ");
-    $defCheck = $pdo->prepare(
-        "SELECT id FROM product_variants WHERE product_id = ? AND is_default = 1 LIMIT 1"
+    $pdo->prepare('DELETE FROM product_variants WHERE product_id = ?')->execute([$productId]);
+
+    $variantInsert = $pdo->prepare(
+        'INSERT INTO product_variants (
+            product_id, variant_label, variant_name, weight_or_size, unit_type,
+            price, stock_quantity, sku, sku_suffix, is_default, is_active
+         ) VALUES (
+            :product_id, :variant_label, :variant_name, :weight_or_size, :unit_type,
+            :price, 100, :sku, :sku_suffix, :is_default, 1
+         )'
     );
 
-    foreach ($variantPrices as $weightKey => $price) {
-        $normalised = normalizeWeight((string)$weightKey);
-        $price      = round((float)$price, 2);
-
-        $varCheck->execute([$productId, $normalised]);
-        $existingVarId = $varCheck->fetchColumn();
-
-        if ($existingVarId) {
-            $pdo->prepare("
-                UPDATE product_variants SET price = ?, is_active = 1, stock_quantity = 10
-                WHERE id = ?
-            ")->execute([$price, (int)$existingVarId]);
-        } else {
-            $defCheck->execute([$productId]);
-            $isDefault = $defCheck->fetchColumn() ? 0 : 1;
-
-            $pdo->prepare("
-                INSERT INTO product_variants
-                    (product_id, variant_label, weight_or_size, price, is_default, is_active, stock_quantity, created_at)
-                VALUES (?, ?, ?, ?, ?, 1, 10, NOW())
-            ")->execute([$productId, $normalised, $normalised, $price, $isDefault]);
+    foreach ($variants as $index => $variant) {
+        $variantName = trim((string)($variant['variant_name'] ?? ''));
+        $price = round((float)($variant['price'] ?? 0), 2);
+        if ($variantName === '' || $price <= 0) {
+            continue;
         }
-    }
 
-    // Deactivate variants for weight keys absent from the new file
-    $notInList = implode(',', array_fill(0, count(WEIGHT_KEYS), '?'));
-    $pdo->prepare("
-        UPDATE product_variants
-        SET is_active = 0
-        WHERE product_id = ?
-          AND weight_or_size NOT IN ($notInList)
-    ")->execute(array_merge([$productId], WEIGHT_KEYS));
+        $unitType = strtolower(trim((string)($variant['unit_type'] ?? 'custom')));
+        if (!in_array($unitType, VARIANT_UNIT_TYPES, true)) {
+            $unitType = 'custom';
+        }
+        $sku = trim((string)($variant['sku'] ?? ''));
+
+        $variantInsert->execute([
+            'product_id' => $productId,
+            'variant_label' => $variantName,
+            'variant_name' => $variantName,
+            'weight_or_size' => $variantName,
+            'unit_type' => $unitType,
+            'price' => $price,
+            'sku' => $sku !== '' ? $sku : null,
+            'sku_suffix' => $sku !== '' ? $sku : null,
+            'is_default' => (int)($variant['is_default'] ?? ($index === 0 ? 1 : 0)) === 1 ? 1 : 0,
+        ]);
+    }
 
     return $productId;
 }
@@ -334,46 +298,62 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['upload'])) {
                 $updated     = 0;
                 $failed      = 0;
 
+                $groupedProducts = [];
                 foreach ($dataRows as $rowIdx => $row) {
                     if (empty(array_filter(array_map('strval', $row)))) {
                         continue;
                     }
 
-                    $categoryName    = trim((string)($row[0] ?? ''));
-                    $subcategoryName = trim((string)($row[1] ?? ''));
-                    $productName     = trim((string)($row[2] ?? ''));
+                    $productName = trim((string)($row[0] ?? ''));
+                    $description = trim((string)($row[1] ?? ''));
+                    $categoryName = trim((string)($row[2] ?? ''));
+                    $variantName = trim((string)($row[3] ?? ''));
+                    $price = (float)trim((string)($row[4] ?? ''));
+                    $unitType = strtolower(trim((string)($row[5] ?? 'custom')));
+                    $sku = trim((string)($row[6] ?? ''));
+                    $isDefault = (trim((string)($row[7] ?? '')) === '1') ? 1 : 0;
 
-                    // Columns 3–13: one per weight key
-                    $variantPrices = [];
-                    foreach (WEIGHT_KEYS as $i => $wKey) {
-                        $raw = trim((string)($row[3 + $i] ?? ''));
-                        if ($raw !== '' && (float)$raw > 0) {
-                            $variantPrices[$wKey] = (float)$raw;
-                        }
+                    if ($productName === '' || $categoryName === '' || $variantName === '' || $price <= 0) {
+                        $failed++;
+                        $importSkipLog[] = 'Row ' . ($rowIdx + 2) . ': skipped (required columns: Product Name, Category, Variant Name, Price)';
+                        continue;
                     }
 
-                    $isChefSpecial = (trim((string)($row[14] ?? '')) === '1') ? 1 : 0;
-
-                    $rawDietary = trim((string)($row[15] ?? ''));
-                    $dietaryTag = DIETARY_IMPORT_MAP[$rawDietary] ?? 'regular';
-                    if (!in_array($dietaryTag, ALLOWED_DIETARY, true)) {
-                        $dietaryTag = 'regular';
+                    if (!in_array($unitType, VARIANT_UNIT_TYPES, true)) {
+                        $unitType = 'custom';
                     }
 
-                    $isVeg = (trim((string)($row[16] ?? '')) === '0') ? 0 : 1;
+                    $groupKey = strtolower($categoryName . '|' . $productName);
+                    if (!isset($groupedProducts[$groupKey])) {
+                        $groupedProducts[$groupKey] = [
+                            'category_name' => $categoryName,
+                            'product_name' => $productName,
+                            'description' => $description,
+                            'variants' => [],
+                        ];
+                    }
 
-                    $rawTopper = trim((string)($row[17] ?? ''));
-                    $topperEnabled = ($rawTopper === '0') ? 0 : 1;
+                    if ($description !== '' && $groupedProducts[$groupKey]['description'] === '') {
+                        $groupedProducts[$groupKey]['description'] = $description;
+                    }
 
-                    $rawNote = trim((string)($row[18] ?? ''));
-                    $noteEnabled = ($rawNote === '0') ? 0 : 1;
+                    $groupedProducts[$groupKey]['variants'][] = [
+                        'variant_name' => $variantName,
+                        'price' => round($price, 2),
+                        'unit_type' => $unitType,
+                        'sku' => $sku,
+                        'is_default' => $isDefault,
+                    ];
+                }
 
-                    $action    = '';
+                foreach ($groupedProducts as $group) {
+                    $action = '';
                     $productId = processRow(
                         $pdo,
-                        $categoryName, $subcategoryName, $productName,
-                        $variantPrices,
-                        $isChefSpecial, $dietaryTag, $isVeg, $topperEnabled, $noteEnabled,
+                        (string)$group['category_name'],
+                        (string)$group['product_name'],
+                        (string)$group['description'],
+                        (array)$group['variants'],
                         $action
                     );
 
@@ -386,16 +366,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['upload'])) {
                         }
                     } else {
                         $failed++;
-                        $importSkipLog[] = 'Row ' . ($rowIdx + 2) . ': '
-                            . htmlspecialchars("$categoryName / $subcategoryName / $productName")
-                            . ' — skipped (missing required fields)';
+                        $importSkipLog[] = htmlspecialchars((string)$group['product_name']) . ' — skipped (invalid grouped product payload)';
                     }
                 }
 
                 // Master-of-truth: archive products NOT in this upload
                 $deleted = $importService->softDeleteMissingProducts(array_unique($upsertedIds));
 
-                $importService->completeImportRun($runId, $inserted, $updated, $deleted, count($dataRows), $failed);
+                $importService->completeImportRun($runId, $inserted, $updated, $deleted, count($groupedProducts), $failed);
                 $importService->cleanupOldVersions(5);
                 FileCache::clearAll();
 
@@ -406,7 +384,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['upload'])) {
                     'updated'  => $updated,
                     'deleted'  => $deleted,
                     'failed'   => $failed,
-                    'total'    => count($dataRows),
+                    'total'    => count($groupedProducts),
                 ];
 
             } catch (\Throwable $e) {
@@ -731,33 +709,23 @@ require_once __DIR__ . '/layout.php';
                 ⚠️ Before uploading, verify your Excel contains <em>all</em> products you want live.
                 A missing row = that product gets archived from the storefront.
             </div>
-            <p><strong>Column layout (17 columns):</strong></p>
+            <p><strong>Column layout (8 columns):</strong></p>
             <table class="imp-col-table">
                 <thead><tr><th>Col</th><th>Name</th><th>Example</th></tr></thead>
                 <tbody>
-                    <tr><td>A</td><td>Category</td><td>Cakes</td></tr>
-                    <tr><td>B</td><td>Subcategory</td><td>Chocolate Cakes</td></tr>
-                    <tr><td>C</td><td>Product Name</td><td>Dark Truffle Cake</td></tr>
-                    <tr><td>D</td><td>Per Piece</td><td>450</td></tr>
-                    <tr><td>E</td><td>0.5lb</td><td>350</td></tr>
-                    <tr><td>F</td><td>1lb</td><td>650</td></tr>
-                    <tr><td>G</td><td>1.5lb</td><td>900</td></tr>
-                    <tr><td>H</td><td>2lb</td><td>1200</td></tr>
-                    <tr><td>I</td><td>2.5lb</td><td></td></tr>
-                    <tr><td>J</td><td>3lb</td><td>1800</td></tr>
-                    <tr><td>K</td><td>3.5lb</td><td></td></tr>
-                    <tr><td>L</td><td>4lb</td><td>2400</td></tr>
-                    <tr><td>M</td><td>4.5lb</td><td></td></tr>
-                    <tr><td>N</td><td>5lb</td><td>3000</td></tr>
-                    <tr><td>O</td><td>Chef's Special (0/1)</td><td>1</td></tr>
-                    <tr><td>P</td><td>Dietary Type</td><td>Eggless</td></tr>
-                    <tr><td>Q</td><td>Veg (1=Yes / 0=No)</td><td>1</td></tr>
+                    <tr><td>A</td><td>Product Name</td><td>Dark Truffle Cake</td></tr>
+                    <tr><td>B</td><td>Description</td><td>Rich chocolate ganache cake</td></tr>
+                    <tr><td>C</td><td>Category</td><td>Cakes</td></tr>
+                    <tr><td>D</td><td>Variant Name</td><td>1 lb</td></tr>
+                    <tr><td>E</td><td>Price</td><td>650</td></tr>
+                    <tr><td>F</td><td>Unit Type (optional)</td><td>size</td></tr>
+                    <tr><td>G</td><td>Variant SKU (optional)</td><td>CK-TRUFFLE-1LB</td></tr>
+                    <tr><td>H</td><td>Default Variant (optional)</td><td>1</td></tr>
                 </tbody>
             </table>
             <p>
-                Leave any weight price cell <strong>blank</strong> for sizes you don't offer —
-                only filled cells create a variant. Dietary values: Regular, Eggless, Vegan, Sugar Free, Healthy.
-                The last 5 imports are versioned — restore any version from the history panel.
+                Add one row per variant. If a product has three variants, repeat Product Name/Description/Category
+                for three rows and change Variant Name/Price. The last 5 imports are versioned — restore any version from the history panel.
             </p>
         </div>
     </details>

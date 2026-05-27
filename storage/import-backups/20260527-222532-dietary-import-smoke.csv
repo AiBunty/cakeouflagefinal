@@ -1,0 +1,3 @@
+product_name,category_slug,description,price,discount_price,sku,stock,tags,variant_info,image_url,dietary_type,is_veg
+Smoke Veg Cake,cakes,Smoke test veg item,550,500,SMKVG-0527222530,8,featured|eggless,500g:550,,veg,1
+Smoke NonVeg Cake,cakes,Smoke test nonveg item,650,600,SMKNV-0527222530,6,bestseller,500g:650,,nonveg,0

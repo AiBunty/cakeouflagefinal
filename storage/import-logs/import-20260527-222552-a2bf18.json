@@ -1,0 +1,16 @@
+{
+    "mode": "commit",
+    "strict_variants": false,
+    "abort_on_error": true,
+    "created_count": 0,
+    "updated_count": 0,
+    "duplicate_skus": [],
+    "failed_rows": [
+        {
+            "line": 2,
+            "reason": "dietary_type must be veg or nonveg",
+            "sku": "SMKVG-0527222550"
+        }
+    ],
+    "generated_at": "2026-05-27T22:25:52+05:30"
+}

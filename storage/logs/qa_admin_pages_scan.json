@@ -1,0 +1,286 @@
+[
+  {
+    "page": "about-video.php",
+    "status": 200
+  },
+  {
+    "page": "add-category.php",
+    "status": 200
+  },
+  {
+    "page": "add-product.php",
+    "status": 200
+  },
+  {
+    "page": "admin_users.php",
+    "status": 200
+  },
+  {
+    "page": "bank_report.php",
+    "status": 200
+  },
+  {
+    "page": "bank-alerts.php",
+    "status": 200
+  },
+  {
+    "page": "banners.php",
+    "status": 200
+  },
+  {
+    "page": "build-your-own-cake.php",
+    "status": 200
+  },
+  {
+    "page": "business-settings.php",
+    "status": 200
+  },
+  {
+    "page": "cash_report.php",
+    "status": 200
+  },
+  {
+    "page": "categories.php",
+    "status": 200
+  },
+  {
+    "page": "celebration_report.php",
+    "status": 200
+  },
+  {
+    "page": "change-password.php",
+    "status": 200
+  },
+  {
+    "page": "collect_credit.php",
+    "status": 200
+  },
+  {
+    "page": "collection_report.php",
+    "status": 200
+  },
+  {
+    "page": "collections_export.php",
+    "status": 200
+  },
+  {
+    "page": "collections_queue.php",
+    "status": 200
+  },
+  {
+    "page": "communications.php",
+    "status": 200
+  },
+  {
+    "page": "coupon_report.php",
+    "status": 200
+  },
+  {
+    "page": "coupons.php",
+    "status": 200
+  },
+  {
+    "page": "credit_report.php",
+    "status": 200
+  },
+  {
+    "page": "crm_diagnostics.php",
+    "status": 200
+  },
+  {
+    "page": "crm_push_logs.php",
+    "status": 200
+  },
+  {
+    "page": "crm_report.php",
+    "status": 200
+  },
+  {
+    "page": "crm_settings.php",
+    "status": 200
+  },
+  {
+    "page": "crm_user_history.php",
+    "status": 200
+  },
+  {
+    "page": "dashboard.php",
+    "status": 200
+  },
+  {
+    "page": "delete-category.php",
+    "status": 200
+  },
+  {
+    "page": "delete-product.php",
+    "status": 200
+  },
+  {
+    "page": "download_products.php",
+    "status": 200
+  },
+  {
+    "page": "edit-category.php",
+    "status": 200
+  },
+  {
+    "page": "edit-product.php",
+    "status": 200
+  },
+  {
+    "page": "follow_ups.php",
+    "status": 200
+  },
+  {
+    "page": "form-test-harness-report.php",
+    "status": 200
+  },
+  {
+    "page": "fulfillment_report.php",
+    "status": 200
+  },
+  {
+    "page": "generate_password.php",
+    "status": 200
+  },
+  {
+    "page": "import-products.php",
+    "status": 200
+  },
+  {
+    "page": "import-version-history.php",
+    "status": 200
+  },
+  {
+    "page": "index.php",
+    "status": 200
+  },
+  {
+    "page": "kitchen_queue.php",
+    "status": 200
+  },
+  {
+    "page": "layout.php",
+    "status": 200
+  },
+  {
+    "page": "login_process.php",
+    "status": 200
+  },
+  {
+    "page": "login.php",
+    "status": 200
+  },
+  {
+    "page": "logout.php",
+    "status": 200
+  },
+  {
+    "page": "maintenance.php",
+    "status": 200
+  },
+  {
+    "page": "manage-admins.php",
+    "status": 200
+  },
+  {
+    "page": "manual_order.php",
+    "status": 200
+  },
+  {
+    "page": "order_details.php",
+    "status": 200
+  },
+  {
+    "page": "order_invoice.php",
+    "status": 200
+  },
+  {
+    "page": "orders.php",
+    "status": 200
+  },
+  {
+    "page": "payment_receipt.php",
+    "status": 200
+  },
+  {
+    "page": "production_plan.php",
+    "status": 200
+  },
+  {
+    "page": "products.php",
+    "status": 200
+  },
+  {
+    "page": "refund_report.php",
+    "status": 200
+  },
+  {
+    "page": "refunds.php",
+    "status": 200
+  },
+  {
+    "page": "revenue_report.php",
+    "status": 200
+  },
+  {
+    "page": "sales_register.php",
+    "status": 200
+  },
+  {
+    "page": "sales_report.php",
+    "status": 200
+  },
+  {
+    "page": "save_admin_user.php",
+    "status": 200
+  },
+  {
+    "page": "save_manual_order.php",
+    "status": 200
+  },
+  {
+    "page": "save_order_edit.php",
+    "status": 200
+  },
+  {
+    "page": "save-admin-permissions.php",
+    "status": 200
+  },
+  {
+    "page": "save-business-settings.php",
+    "status": 200
+  },
+  {
+    "page": "slots.php",
+    "status": 200
+  },
+  {
+    "page": "test_crm_push.php",
+    "status": 200
+  },
+  {
+    "page": "toppers.php",
+    "status": 200
+  },
+  {
+    "page": "update_crm_settings.php",
+    "status": 200
+  },
+  {
+    "page": "update_order_payment.php",
+    "status": 200
+  },
+  {
+    "page": "update_order_status.php",
+    "status": 200
+  },
+  {
+    "page": "update_order.php",
+    "status": 200
+  },
+  {
+    "page": "update-category-status.php",
+    "status": 200
+  }
+]

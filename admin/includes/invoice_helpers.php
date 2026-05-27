@@ -195,7 +195,14 @@ function invoice_escape($value): string
 
 function invoice_money($value): string
 {
-    return 'Rs ' . number_format((float)$value, 2);
+    static $businessSettings = null;
+
+    if (!is_array($businessSettings)) {
+        global $conn;
+        $businessSettings = ($conn instanceof mysqli) ? get_business_settings($conn) : ['currency_symbol' => 'Rs'];
+    }
+
+    return format_money_with_business_currency((float)$value, $businessSettings);
 }
 
 function invoice_format_datetime(?string $value): string

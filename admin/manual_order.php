@@ -950,6 +950,13 @@ $createdPaymentStatus = trim((string)($_GET['payment_status'] ?? ''));
     const phone = normalizePhoneInput(rawValue);
     customerPhoneInput.value = phone;
 
+    if (phone.length === 0) {
+      unlockCustomerIdentity();
+      updateCustomerStatus('Enter mobile first. Existing customer data auto-fills.', '');
+      closeCustomerDropdown();
+      return;
+    }
+
     if (phone.length < 7) {
       unlockCustomerIdentity();
       updateCustomerStatus('Enter at least 7 digits to search existing customers.', 'new');
@@ -992,6 +999,7 @@ $createdPaymentStatus = trim((string)($_GET['payment_status'] ?? ''));
   }
 
   customerPhoneInput.addEventListener('input', function () {
+    customerPhoneInput.setCustomValidity('');
     clearTimeout(customerLookupTimer);
     customerLookupTimer = setTimeout(() => lookupCustomerByPhone(customerPhoneInput.value), 260);
   });
@@ -1316,11 +1324,26 @@ $createdPaymentStatus = trim((string)($_GET['payment_status'] ?? ''));
   document.getElementById('manualOrderForm').addEventListener('submit', function(e) {
     const normalizedPhone = normalizePhoneInput(customerPhoneInput.value);
     customerPhoneInput.value = normalizedPhone;
-    if (normalizedPhone.length < 10) {
+
+    if (normalizedPhone.length === 0) {
       e.preventDefault();
-      alert('Customer mobile number is mandatory (minimum 10 digits).');
+      customerPhoneInput.setCustomValidity('Please enter customer mobile number.');
+      customerPhoneInput.reportValidity();
+      updateCustomerStatus('Customer mobile is required for manual order punch.', 'new');
+      customerPhoneInput.focus();
       return;
     }
+
+    if (normalizedPhone.length < 10) {
+      e.preventDefault();
+      customerPhoneInput.setCustomValidity('Customer mobile number must be at least 10 digits.');
+      customerPhoneInput.reportValidity();
+      updateCustomerStatus('Customer mobile number must be at least 10 digits.', 'new');
+      customerPhoneInput.focus();
+      return;
+    }
+
+    customerPhoneInput.setCustomValidity('');
 
     if (orderItems.length === 0) {
       e.preventDefault();

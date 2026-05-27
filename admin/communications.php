@@ -2,39 +2,30 @@
 $pageTitle = 'Communications';
 require_once __DIR__ . '/layout.php';
 require_admin_permission('crm_settings');
+require_once __DIR__ . '/includes/business-settings-helper.php';
+require_once __DIR__ . '/../app/Views/email/master-layout.php';
+require_once __DIR__ . '/../app/Services/TemplateVariableRegistry.php';
+require_once __DIR__ . '/../app/Services/VariableResolverService.php';
 
 if (empty($_SESSION['_csrf_token']) || !is_string($_SESSION['_csrf_token'])) {
   $_SESSION['_csrf_token'] = bin2hex(random_bytes(32));
 }
 $commCsrfToken = (string)$_SESSION['_csrf_token'];
 $commRoutingFlash = '';
+$commVariableGroups = \App\Services\TemplateVariableRegistry::forEditorGroups();
+$commMergeTags = \App\Services\TemplateVariableRegistry::forTinyMceMergeTags();
+$commPreviewContext = (new \App\Services\VariableResolverService())->sampleContext();
+$commPreviewContext = array_merge($commPreviewContext, get_business_settings($conn));
+if (trim((string)($commPreviewContext['business_logo'] ?? '')) === '') {
+  $commPreviewContext['business_logo'] = (string)($commPreviewContext['email_logo_url'] ?? '');
+}
+if (trim((string)($commPreviewContext['business_website'] ?? '')) === '') {
+  $commPreviewContext['business_website'] = 'https://www.cakeouflage.com';
+}
 
 function comm_build_email_template(array $cfg): string
 {
-  $accent = (string)($cfg['accent'] ?? '#80001F');
-  $bg = (string)($cfg['bg'] ?? '#f5eef2');
-  $panelBg = (string)($cfg['panel_bg'] ?? '#fff7f9');
-  $panelBorder = (string)($cfg['panel_border'] ?? '#f0d7df');
-  $footer = (string)($cfg['footer'] ?? '#140b0f');
-  $tagline = (string)($cfg['tagline'] ?? '{{business_name}} Notifications');
-  $heading = (string)($cfg['heading'] ?? 'Hi {{customer_name}}');
-  $lead = (string)($cfg['lead'] ?? 'Cakeouflage has an update for you.');
-  $notice = (string)($cfg['notice'] ?? '');
-  $detailsHtml = trim((string)($cfg['details_html'] ?? ''));
-  $ctaHtml = '';
-  if (!empty($cfg['cta_text'])) {
-    $ctaBg = !empty($cfg['cta_bg']) ? $cfg['cta_bg'] : $accent;
-    $ctaHtml = '<div style="margin-top:30px;"><a href="' . htmlspecialchars((string)$cfg['cta_link'], ENT_QUOTES, 'UTF-8') . '" style="background:' . $ctaBg . ';color:#fff;padding:14px 22px;border-radius:10px;text-decoration:none;font-weight:bold;display:inline-block;">' . htmlspecialchars((string)$cfg['cta_text'], ENT_QUOTES, 'UTF-8') . '</a></div>';
-  }
-
-  $detailsSection = $detailsHtml !== ''
-    ? '<div style="margin-top:28px;background:' . $panelBg . ';border:1px solid ' . $panelBorder . ';border-radius:16px;padding:24px;color:#3b252d;line-height:1.75;">' . $detailsHtml . '</div>'
-    : '';
-  $noticeSection = $notice !== ''
-    ? '<div style="margin-top:22px;background:#fff5da;padding:18px;border-radius:12px;color:#7a5300;">' . $notice . '</div>'
-    : '';
-
-  return '<div style="background:' . $bg . ';padding:40px;font-family:Arial,sans-serif;"><div style="max-width:650px;margin:auto;background:#fff;border-radius:20px;overflow:hidden;box-shadow:0 10px 35px rgba(0,0,0,0.08);"><div style="background:' . $accent . ';padding:28px;color:#fff;"><div style="margin-bottom:12px;"><img src="{{email_logo_url}}" alt="{{business_name}} Logo" style="height:100px;display:block;"></div><p style="margin-top:10px;font-size:14px;opacity:0.9;">' . $tagline . '</p></div><div style="padding:40px;"><h2 style="margin-top:0;color:#1d1115;font-size:30px;">' . $heading . '</h2><p style="color:#5f4c55;font-size:16px;line-height:1.8;">' . $lead . '</p>' . $detailsSection . $noticeSection . $ctaHtml . '</div><div style="background:' . $footer . ';padding:30px;color:#fff;"><h3 style="margin-top:0;font-family:Georgia,serif;">Team {{business_name}}</h3><p style="color:#d7c6cc;font-size:14px;">Premium Designer Cakes crafted with elegance and creativity.</p><p style="color:#d7c6cc;font-size:14px;">&#127760; www.cakeouflage.com</p><p style="color:#d7c6cc;font-size:14px;">&#9993; {{support_email}} &nbsp;|&nbsp; &#128222; {{support_phone}}</p></div></div></div>';
+  return render_master_email_layout($cfg);
 }
 
 // ── Auto-seed and auto-repair email templates so none remain blank/minimal ──
@@ -167,6 +158,78 @@ function comm_build_email_template(array $cfg): string
       'details_html' => '<p><strong>Order ID:</strong> {{order_number}}</p><p><strong>Customer:</strong> {{customer_name}}</p><p><strong>Email:</strong> {{customer_email}}</p>',
       'notice' => 'Please review the rejection details in the admin workflow.',
     ],
+    'partial_refund_processed_customer' => [
+      'subject' => 'Partial Refund Processed - {{order_number}}',
+      'tagline' => 'Partial Refund Completed',
+      'accent' => '#9a3412',
+      'bg' => '#fff7ed',
+      'panel_bg' => '#ffedd5',
+      'panel_border' => '#fdba74',
+      'footer' => '#7c2d12',
+      'lead' => 'A partial refund has been processed for your order.',
+      'details_html' => '<p><strong>Order ID:</strong> {{order_number}}</p><p><strong>Refund Amount:</strong> &#8377;{{refund_amount}}</p><p><strong>Total Refunded:</strong> &#8377;{{total_refunded}}</p><p><strong>Remaining Amount:</strong> &#8377;{{remaining_sales_amount}}</p>',
+      'notice' => 'If you need help with this refund, please contact support.',
+    ],
+    'partial_refund_processed_admin' => [
+      'subject' => 'Partial Refund Processed - {{order_number}}',
+      'tagline' => 'Partial Refund Admin Alert',
+      'accent' => '#9a3412',
+      'bg' => '#fff7ed',
+      'panel_bg' => '#ffedd5',
+      'panel_border' => '#fdba74',
+      'footer' => '#7c2d12',
+      'lead' => 'A partial refund has been processed and recorded by the system.',
+      'details_html' => '<p><strong>Order ID:</strong> {{order_number}}</p><p><strong>Customer:</strong> {{customer_name}}</p><p><strong>Refund Amount:</strong> &#8377;{{refund_amount}}</p><p><strong>Reference:</strong> {{refund_reference}}</p>',
+      'notice' => 'Please verify ledger and CRM notes are synchronized.',
+    ],
+    'full_refund_processed_customer' => [
+      'subject' => 'Full Refund Completed - {{order_number}}',
+      'tagline' => 'Full Refund Completed',
+      'accent' => '#14532d',
+      'bg' => '#f0fdf4',
+      'panel_bg' => '#dcfce7',
+      'panel_border' => '#86efac',
+      'footer' => '#14532d',
+      'lead' => 'Your full refund has been completed successfully.',
+      'details_html' => '<p><strong>Order ID:</strong> {{order_number}}</p><p><strong>Refund Amount:</strong> &#8377;{{refund_amount}}</p><p><strong>Reference:</strong> {{refund_reference}}</p>',
+      'notice' => 'Refund timelines depend on your payment provider.',
+    ],
+    'full_refund_processed_admin' => [
+      'subject' => 'Full Refund Completed - {{order_number}}',
+      'tagline' => 'Full Refund Admin Alert',
+      'accent' => '#14532d',
+      'bg' => '#f0fdf4',
+      'panel_bg' => '#dcfce7',
+      'panel_border' => '#86efac',
+      'footer' => '#14532d',
+      'lead' => 'A full refund was completed and requires final financial reconciliation.',
+      'details_html' => '<p><strong>Order ID:</strong> {{order_number}}</p><p><strong>Customer:</strong> {{customer_name}}</p><p><strong>Refund Amount:</strong> &#8377;{{refund_amount}}</p><p><strong>Reference:</strong> {{refund_reference}}</p>',
+      'notice' => 'Confirm accounting and CRM status are updated.',
+    ],
+    'refund_processed_customer' => [
+      'subject' => 'Refund Processed - {{order_number}}',
+      'tagline' => 'Refund Processed',
+      'accent' => '#166534',
+      'bg' => '#eef8f1',
+      'panel_bg' => '#f0fdf4',
+      'panel_border' => '#bbf7d0',
+      'footer' => '#052e16',
+      'lead' => 'Your refund request has been processed successfully.',
+      'details_html' => '<p><strong>Order ID:</strong> {{order_number}}</p><p><strong>Refund Amount:</strong> &#8377;{{refund_amount}}</p><p><strong>Refund Type:</strong> {{refund_type}}</p>',
+      'notice' => 'Contact support if you do not see funds reflected within expected banking timelines.',
+    ],
+    'refund_processed_admin' => [
+      'subject' => 'Refund Processed - {{order_number}}',
+      'tagline' => 'Refund Processed (Admin)',
+      'accent' => '#166534',
+      'bg' => '#eef8f1',
+      'panel_bg' => '#f0fdf4',
+      'panel_border' => '#bbf7d0',
+      'footer' => '#052e16',
+      'lead' => 'A refund was processed and logged for this order.',
+      'details_html' => '<p><strong>Order ID:</strong> {{order_number}}</p><p><strong>Customer:</strong> {{customer_name}}</p><p><strong>Refund Amount:</strong> &#8377;{{refund_amount}}</p><p><strong>Type:</strong> {{refund_type}}</p>',
+      'notice' => 'Validate reconciliations and communicate closure if needed.',
+    ],
     'follow_up_review_email' => [
       'subject' => 'Share Your Cakeouflage Experience',
       'tagline' => 'Quarterly Follow-up Reminder',
@@ -264,14 +327,14 @@ function comm_build_email_template(array $cfg): string
       'subject' => 'We Received Your Custom Cake Inquiry #{{inquiry_id}}',
       'tagline' => 'Build Your Cake Inquiry',
       'lead' => 'Thank you for sharing your custom cake brief with Cakeouflage. Our design team will review your requirements and get back with a quote soon.',
-      'details_html' => '<p><strong>Inquiry ID:</strong> {{inquiry_id}}</p><p><strong>Event:</strong> {{event_information}}</p><p><strong>Event Date:</strong> {{event_date}}</p><p><strong>Servings:</strong> {{number_of_servings_guests}}</p><p><strong>Budget Range:</strong> {{budget_range}}</p><p><strong>Diet Preference:</strong> {{diet_preference}}</p><p><strong>Design Notes:</strong> {{design_brief_notes}}</p>',
+      'details_html' => '<p><strong>Inquiry ID:</strong> {{inquiry_id}}</p><p><strong>Event:</strong> {{event_information}}</p><p><strong>Event Date:</strong> {{event_date}}</p><p><strong>Servings:</strong> {{number_of_servings_guests}}</p><p><strong>Design Notes:</strong> {{design_brief_notes}}</p>',
       'notice' => 'Need to add more details? Reply to this email and our team will assist you.',
     ],
     'build_your_cake_inquiry_admin_email' => [
       'subject' => 'New BYOC Inquiry #{{inquiry_id}} - {{customer_name}}',
       'tagline' => 'New Build Your Cake Lead',
       'lead' => 'A new Build Your Cake inquiry has been submitted and is ready for quote action.',
-      'details_html' => '<p><strong>Inquiry ID:</strong> {{inquiry_id}}</p><p><strong>Name:</strong> {{customer_name}}</p><p><strong>Email:</strong> {{customer_email}}</p><p><strong>Mobile:</strong> {{phone_country_code}} {{customer_phone}}</p><p><strong>Event:</strong> {{event_information}}</p><p><strong>Event Date:</strong> {{event_date}}</p><p><strong>Servings:</strong> {{number_of_servings_guests}}</p><p><strong>Budget:</strong> {{budget_range}}</p><p><strong>Diet:</strong> {{diet_preference}}</p><p><strong>Quote Description:</strong> {{quote_description}}</p>',
+      'details_html' => '<p><strong>Inquiry ID:</strong> {{inquiry_id}}</p><p><strong>Name:</strong> {{customer_name}}</p><p><strong>Email:</strong> {{customer_email}}</p><p><strong>Mobile:</strong> {{phone_country_code}} {{customer_phone}}</p><p><strong>Event:</strong> {{event_information}}</p><p><strong>Event Date:</strong> {{event_date}}</p><p><strong>Servings:</strong> {{number_of_servings_guests}}</p><p><strong>Quote Description:</strong> {{quote_description}}</p>',
       'notice' => 'Review the lead quickly and send quote from tele-calling panel for best conversion.',
     ],
     'build_your_cake_quote_email' => [
@@ -334,6 +397,115 @@ function comm_build_email_template(array $cfg): string
       'details_html' => '<p><strong>Order Number:</strong> {{order_number}}</p><p><strong>Customer:</strong> {{customer_name}}</p><p><strong>Email:</strong> {{customer_email}}</p><p><strong>Phone:</strong> {{customer_phone}}</p><p><strong>Order Total:</strong> {{currency}} {{grand_total}}</p><p><strong>Advance Paid:</strong> {{currency}} {{advance_amount}}</p><p><strong>Payment Status:</strong> {{payment_status}}</p><p><strong>Delivery Address:</strong> {{delivery_address}}</p>',
       'notice' => 'Please review and confirm this order in the admin panel.',
     ],
+
+    // Canonical enterprise template keys required by recovery gate.
+    'order_received' => [
+      'subject' => 'Order Received - {{order_number}}',
+      'tagline' => 'Order Received',
+      'lead' => 'Your Cakeouflage order has been received and is now in our workflow.',
+      'details_html' => '<p><strong>Order ID:</strong> {{order_number}}</p><p><strong>Items:</strong> {{item_names}}</p><p><strong>Total:</strong> &#8377;{{grand_total}}</p>',
+      'notice' => 'We will notify you as the order progresses.',
+    ],
+    'payment_confirmed' => [
+      'subject' => 'Payment Confirmed - {{order_number}}',
+      'tagline' => 'Payment Confirmed',
+      'accent' => '#166534',
+      'bg' => '#eef8f1',
+      'panel_bg' => '#f0fdf4',
+      'panel_border' => '#bbf7d0',
+      'footer' => '#052e16',
+      'lead' => 'Payment has been confirmed and your order is locked for production.',
+      'details_html' => '<p><strong>Order ID:</strong> {{order_number}}</p><p><strong>Amount Paid:</strong> &#8377;{{grand_total}}</p>',
+      'notice' => 'Thank you for your payment.',
+    ],
+    'preparing' => [
+      'subject' => 'Order In Preparation - {{order_number}}',
+      'tagline' => 'Preparing Your Order',
+      'accent' => '#1d4ed8',
+      'bg' => '#eff6ff',
+      'panel_bg' => '#eff6ff',
+      'panel_border' => '#bfdbfe',
+      'footer' => '#172554',
+      'lead' => 'Our kitchen has started preparing your order.',
+      'details_html' => '<p><strong>Order ID:</strong> {{order_number}}</p><p><strong>Items:</strong> {{item_names}}</p>',
+      'notice' => 'We are crafting your order with care and precision.',
+    ],
+    'ready_for_pickup' => [
+      'subject' => 'Ready For Pickup - {{order_number}}',
+      'tagline' => 'Ready for Pickup',
+      'accent' => '#1d4ed8',
+      'bg' => '#eff6ff',
+      'panel_bg' => '#eff6ff',
+      'panel_border' => '#bfdbfe',
+      'footer' => '#172554',
+      'lead' => 'Your order is ready for pickup/delivery handoff.',
+      'details_html' => '<p><strong>Order ID:</strong> {{order_number}}</p><p><strong>Items:</strong> {{item_names}}</p>',
+      'notice' => 'Please coordinate pickup window as applicable.',
+    ],
+    'delivered' => [
+      'subject' => 'Order Delivered - {{order_number}}',
+      'tagline' => 'Order Delivered',
+      'accent' => '#0f766e',
+      'bg' => '#ecfdf5',
+      'panel_bg' => '#f0fdfa',
+      'panel_border' => '#99f6e4',
+      'footer' => '#134e4a',
+      'lead' => 'Your order has been delivered. Thank you for choosing Cakeouflage.',
+      'details_html' => '<p><strong>Order ID:</strong> {{order_number}}</p><p><strong>Items:</strong> {{item_names}}</p>',
+      'notice' => 'We hope your celebration was memorable.',
+    ],
+    'refund_in_process' => [
+      'subject' => 'Refund In Process - {{order_number}}',
+      'tagline' => 'Refund In Process',
+      'accent' => '#9a3412',
+      'bg' => '#fff7ed',
+      'panel_bg' => '#ffedd5',
+      'panel_border' => '#fdba74',
+      'footer' => '#7c2d12',
+      'lead' => 'Your refund request has been approved and is being processed.',
+      'details_html' => '<p><strong>Order ID:</strong> {{order_number}}</p><p><strong>Refund Amount:</strong> &#8377;{{refund_amount}}</p>',
+      'notice' => 'Funds may take time to reflect based on your payment provider.',
+    ],
+    'refund_closed' => [
+      'subject' => 'Refund Completed - {{order_number}}',
+      'tagline' => 'Refund Completed',
+      'accent' => '#14532d',
+      'bg' => '#f0fdf4',
+      'panel_bg' => '#dcfce7',
+      'panel_border' => '#86efac',
+      'footer' => '#14532d',
+      'lead' => 'Your refund has been completed successfully.',
+      'details_html' => '<p><strong>Order ID:</strong> {{order_number}}</p><p><strong>Refund Amount:</strong> &#8377;{{refund_amount}}</p>',
+      'notice' => 'If you need support, contact Team Cakeouflage.',
+    ],
+    'otp_login' => [
+      'subject' => 'Your Login OTP',
+      'tagline' => 'OTP Login',
+      'lead' => 'Use the OTP below to complete your secure login.',
+      'details_html' => '<p><strong>OTP:</strong> {{otp_code}}</p><p><strong>Valid Until:</strong> {{otp_expiry}}</p>',
+      'notice' => 'Do not share this OTP with anyone.',
+    ],
+    'admin_notification' => [
+      'subject' => 'Admin Notification - {{order_number}}',
+      'tagline' => 'Admin Notification',
+      'lead' => 'An operational event requires admin attention.',
+      'details_html' => '<p><strong>Order ID:</strong> {{order_number}}</p><p><strong>Customer:</strong> {{customer_name}}</p><p><strong>Email:</strong> {{customer_email}}</p>',
+      'notice' => 'Please review this event in admin panel immediately.',
+    ],
+    'telecalling_order_created' => [
+      'subject' => 'Telecalling Order Created - {{order_number}}',
+      'tagline' => 'Telecalling Order',
+      'lead' => 'A telecalling/manual order has been created and recorded.',
+      'details_html' => '<p><strong>Order ID:</strong> {{order_number}}</p><p><strong>Customer:</strong> {{customer_name}}</p><p><strong>Total:</strong> &#8377;{{grand_total}}</p>',
+      'notice' => 'Please continue payment and fulfilment workflow.',
+    ],
+    'byoc_order_created' => [
+      'subject' => 'BYOC Order Created - {{order_number}}',
+      'tagline' => 'BYOC Order Created',
+      'lead' => 'A Build Your Own Cake order has been created successfully.',
+      'details_html' => '<p><strong>Order ID:</strong> {{order_number}}</p><p><strong>Customer:</strong> {{customer_name}}</p><p><strong>Total:</strong> &#8377;{{grand_total}}</p>',
+      'notice' => 'Track this order through BYOC fulfilment milestones.',
+    ],
   ];
 
   $tpls = [];
@@ -346,19 +518,19 @@ function comm_build_email_template(array $cfg): string
     ];
   }
 
-  $sql = 'INSERT INTO communication_templates (channel, event_key, subject, body_template, is_active) VALUES (?,?,?,?,1) AS new
+  $sql = 'INSERT INTO communication_templates (channel, event_key, subject, body_template, is_active) VALUES (?,?,?,?,1)
       ON DUPLICATE KEY UPDATE
       subject = CASE
-        WHEN new.event_key IN ("follow_up_review_email", "annual_reorder_email", "birthday_greeting_email", "birthday_preorder_email", "anniversary_greeting_email", "anniversary_preorder_email", "celebration_combined_email") THEN new.subject
-        WHEN TRIM(COALESCE(communication_templates.subject, "")) = "" THEN new.subject
+        WHEN VALUES(event_key) IN ("follow_up_review_email", "annual_reorder_email", "birthday_greeting_email", "birthday_preorder_email", "anniversary_greeting_email", "anniversary_preorder_email", "celebration_combined_email") THEN VALUES(subject)
+        WHEN TRIM(COALESCE(communication_templates.subject, "")) = "" THEN VALUES(subject)
         ELSE communication_templates.subject
       END,
       body_template = CASE
-        WHEN new.event_key IN ("follow_up_review_email", "annual_reorder_email", "birthday_greeting_email", "birthday_preorder_email", "anniversary_greeting_email", "anniversary_preorder_email", "celebration_combined_email") THEN new.body_template
-        WHEN TRIM(COALESCE(communication_templates.body_template, "")) = "" THEN new.body_template
-        WHEN LOWER(REPLACE(TRIM(communication_templates.body_template), " ", "")) IN ("<p><br></p>", "<p></p>") THEN new.body_template
-        WHEN LENGTH(COALESCE(communication_templates.body_template, "")) < 180 THEN new.body_template
-        WHEN communication_templates.body_template NOT LIKE "%<div%" THEN new.body_template
+        WHEN VALUES(event_key) IN ("follow_up_review_email", "annual_reorder_email", "birthday_greeting_email", "birthday_preorder_email", "anniversary_greeting_email", "anniversary_preorder_email", "celebration_combined_email") THEN VALUES(body_template)
+        WHEN TRIM(COALESCE(communication_templates.body_template, "")) = "" THEN VALUES(body_template)
+        WHEN LOWER(REPLACE(TRIM(communication_templates.body_template), " ", "")) IN ("<p><br></p>", "<p></p>") THEN VALUES(body_template)
+        WHEN LENGTH(COALESCE(communication_templates.body_template, "")) < 180 THEN VALUES(body_template)
+        WHEN communication_templates.body_template NOT LIKE "%<div%" THEN VALUES(body_template)
         ELSE communication_templates.body_template
       END,
       is_active = COALESCE(communication_templates.is_active, 1)';
@@ -370,12 +542,17 @@ function comm_build_email_template(array $cfg): string
   }
   $stmt->close();
 
-  // ── One-time migration: replace any legacy hardcoded imgbb logo with the
-  //    {{email_logo_url}} placeholder so branding is now dynamic. ──────────
+  // ── One-time migration: normalize legacy email branding tokens so editor,
+  //    test-send, and queue runtime all point at the governed settings. ─────
   $conn->query(
     "UPDATE communication_templates
-     SET body_template = REPLACE(body_template, 'https://i.ibb.co/hRytXC3F/whitelogo.png', '{{email_logo_url}}')
+     SET body_template = REPLACE(body_template, 'https://i.ibb.co/hRytXC3F/whitelogo.png', '{{business_logo}}')
      WHERE body_template LIKE '%i.ibb.co%'"
+  );
+  $conn->query(
+    "UPDATE communication_templates
+     SET body_template = REPLACE(body_template, '{{email_logo_url}}', '{{business_logo}}')
+     WHERE body_template LIKE '%{{email_logo_url}}%'"
   );
   // Also replace old hardcoded alt text and footer brand name.
   $conn->query(
@@ -387,6 +564,21 @@ function comm_build_email_template(array $cfg): string
     "UPDATE communication_templates
      SET body_template = REPLACE(body_template, 'Team Cakeouflage', 'Team {{business_name}}')
      WHERE body_template LIKE '%Team Cakeouflage%'"
+  );
+  $conn->query(
+    "UPDATE communication_templates
+     SET body_template = REPLACE(body_template, 'https://www.cakeouflage.com', '{{business_website}}')
+     WHERE body_template LIKE '%https://www.cakeouflage.com%'"
+  );
+  $conn->query(
+    "UPDATE communication_templates
+     SET body_template = REPLACE(body_template, 'www.cakeouflage.com', '{{business_website}}')
+     WHERE body_template LIKE '%www.cakeouflage.com%'"
+  );
+  $conn->query(
+    "UPDATE communication_templates
+     SET body_template = REPLACE(body_template, 'style=\"height:100px;display:block;\"', 'style=\"height:72px;display:block;width:auto;max-width:260px;background:rgba(255,255,255,0.96);padding:10px 16px;border-radius:16px;box-sizing:border-box;\"')
+     WHERE body_template LIKE '%style=\"height:100px;display:block;\"%'"
   );
 
   // Communication template table is master-of-truth for all queue-driven email events.
@@ -403,8 +595,8 @@ function comm_build_email_template(array $cfg): string
     }
   }
 
-  // OTP is intentionally excluded from communication templates.
-  $conn->query("DELETE FROM communication_templates WHERE channel = 'email' AND (event_key = 'otp' OR event_key LIKE 'otp_%')");
+  // Keep canonical otp_login while pruning deprecated OTP keys.
+  $conn->query("DELETE FROM communication_templates WHERE channel = 'email' AND event_key IN ('otp', 'otp_email', 'otp_whatsapp')");
 })();
 
 $triggerDiagnostics = [];
@@ -437,7 +629,7 @@ if (isset($conn) && $conn instanceof mysqli) {
         })));
 
         $adminId = (int)($_SESSION['admin_id'] ?? 0);
-        $saveStmt = $conn->prepare('INSERT INTO settings (setting_key, setting_value, updated_by_admin_id) VALUES (?, ?, ?) AS new ON DUPLICATE KEY UPDATE setting_value = new.setting_value, updated_by_admin_id = new.updated_by_admin_id');
+        $saveStmt = $conn->prepare('INSERT INTO settings (setting_key, setting_value, updated_by_admin_id) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_by_admin_id = VALUES(updated_by_admin_id), updated_at = NOW()');
         if ($saveStmt) {
           $keyTo = 'communication_admin_to_email';
           $saveStmt->bind_param('ssi', $keyTo, $adminEmail, $adminId);
@@ -1500,6 +1692,7 @@ if (isset($conn) && $conn instanceof mysqli) {
 <script>
 (function () {
   const commCsrfToken = <?= json_encode($commCsrfToken, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
+  const previewContext = <?= json_encode($commPreviewContext, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
 
   function getCsrfToken() {
     const metaToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
@@ -1513,28 +1706,15 @@ if (isset($conn) && $conn instanceof mysqli) {
   let previewOpen   = false;
   const BYOC_WA_EVENT_KEY = 'build_your_cake_quote_whatsapp';
 
+  function renderPreviewHtml(html) {
+    return String(html || '').replace(/{{\s*([^{}\s]+)\s*}}/g, (match, key) => {
+      const value = previewContext[key];
+      return value === undefined || value === null || value === '' ? match : String(value);
+    });
+  }
+
   // ── Custom variable groups ──────────────────────────────────────────
-  const CV_GROUPS = [
-    {
-      label: 'Customer',
-      vars: [
-        { name: 'Customer Name',  token: '{{customer_name}}' },
-        { name: 'First Name',     token: '{{first_name}}' },
-        { name: 'Email',          token: '{{customer_email}}' },
-        { name: 'Phone',          token: '{{customer_phone}}' },
-      ],
-    },
-    {
-      label: 'Order',
-      vars: [
-        { name: 'Order Number', token: '{{order_number}}' },
-        { name: 'Item Names',   token: '{{item_names}}' },
-        { name: 'Grand Total',  token: '{{grand_total}}' },
-        { name: 'UPI Link',     token: '{{upi_link}}' },
-        { name: 'Order ID',     token: '{{order_id}}' },
-      ],
-    },
-  ];
+  const CV_GROUPS = <?= json_encode($commVariableGroups, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
 
   // ── pretty labels ───────────────────────────────────────────────────
   const EVENT_LABELS = {
@@ -1550,6 +1730,12 @@ if (isset($conn) && $conn instanceof mysqli) {
     order_delivered_admin:          'Order Delivered (Admin)',
     reject_order_customer:          'Order Rejected',
     reject_order_admin:             'Order Rejected (Admin)',
+    partial_refund_processed_customer: 'Partial Refund Processed (Customer)',
+    partial_refund_processed_admin:    'Partial Refund Processed (Admin)',
+    full_refund_processed_customer:    'Full Refund Processed (Customer)',
+    full_refund_processed_admin:       'Full Refund Processed (Admin)',
+    refund_processed_customer:         'Refund Processed (Customer)',
+    refund_processed_admin:            'Refund Processed (Admin)',
     follow_up_review_email:         'Follow-up Review',
     annual_reorder_email:           'Annual Reorder',
     birthday_greeting_email:        'Birthday Greeting',
@@ -1793,7 +1979,7 @@ if (isset($conn) && $conn instanceof mysqli) {
     const wrap = document.getElementById('previewWrap');
     const btn  = document.getElementById('btnPreview');
     if (previewOpen) {
-      const html = getEditorHTML();
+      const html = renderPreviewHtml(getEditorHTML());
       document.getElementById('previewFrame').srcdoc = '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head><body style="margin:0;background:#f2eef0;">' + html + '</body></html>';
       wrap.classList.add('visible');
       btn.textContent = '✕ Close Preview';
@@ -2032,78 +2218,19 @@ if (isset($conn) && $conn instanceof mysqli) {
         plugins: [
           'anchor', 'autolink', 'charmap', 'codesample', 'emoticons', 'image', 'link',
           'lists', 'media', 'searchreplace', 'table', 'visualblocks', 'wordcount',
-          'checklist', 'mediaembed', 'casechange', 'formatpainter', 'pageembed',
-          'a11ychecker', 'tinymcespellchecker', 'permanentpen', 'powerpaste',
-          'advtable', 'advcode', 'advtemplate', 'tinymceai',
-          'tableofcontents', 'footnotes', 'mergetags', 'autocorrect',
-          'typography', 'inlinecss', 'markdown'
+          'advcode', 'mergetags', 'autoresize', 'quickbars', 'help'
         ],
         toolbar: 'undo redo | blocks fontfamily fontsize | bold italic underline strikethrough | ' +
                  'forecolor backcolor | align lineheight | link image media table mergetags | ' +
-                 'checklist numlist bullist indent outdent | emoticons charmap | ' +
-                 'a11ycheck typography | searchreplace code | removeformat',
+                 'numlist bullist indent outdent | emoticons charmap | ' +
+                 'searchreplace code | removeformat | help',
         height: 520,
         entity_encoding: 'raw',
         entities: '160,nbsp',
         verify_html: false,
         mergetags_prefix: '{{',
         mergetags_suffix: '}}',
-        mergetags_list: [
-          {
-            title: 'Branding',
-            menu: [
-              { value: 'email_logo_url',        title: 'Email Logo URL' },
-              { value: 'business_name',          title: 'Business Name' },
-              { value: 'brand_primary_color',    title: 'Brand Primary Color' },
-              { value: 'brand_secondary_color',  title: 'Brand Secondary Color' },
-              { value: 'support_email',          title: 'Support Email' },
-              { value: 'support_phone',          title: 'Support Phone' },
-            ],
-          },
-          {
-            title: 'Customer',
-            menu: [
-              { value: 'customer_name', title: 'Customer Name' },
-              { value: 'first_name',    title: 'First Name' },
-              { value: 'company_name',  title: 'Company Name' },
-            ],
-          },
-          {
-            title: 'Order',
-            menu: [
-              { value: 'order_number',         title: 'Order Number' },
-              { value: 'item_details',          title: 'Item Details' },
-              { value: 'cake_message',          title: 'Cake Message' },
-              { value: 'topper_choice',         title: 'Topper Choice' },
-              { value: 'topper_price',          title: 'Topper Price' },
-              { value: 'special_instructions',  title: 'Special Instructions' },
-              { value: 'delivery_date',         title: 'Delivery Date' },
-              { value: 'pickup_time',           title: 'Pickup Time' },
-            ],
-          },
-          {
-            title: 'Invoice / Quote',
-            menu: [
-              { value: 'invoice_number', title: 'Invoice Number' },
-              { value: 'invoice_amount', title: 'Invoice Amount' },
-              { value: 'due_date',       title: 'Due Date' },
-              { value: 'quote_number',   title: 'Quote Number' },
-            ],
-          },
-          {
-            title: 'Course / Workshop',
-            menu: [
-              { value: 'course_name', title: 'Course Name' },
-              { value: 'batch_date',  title: 'Batch Date' },
-            ],
-          },
-        ],
-        tinymceai_token_provider: async function () {
-          var apiKey = '91n6hff31u1xzckbtb4b2qmq31gv9orsmjd5cxwxwvtpe0qe';
-          await fetch('https://demo.api.tiny.cloud/1/' + apiKey + '/auth/random', { method: 'POST', credentials: 'include' });
-          var token = await fetch('https://demo.api.tiny.cloud/1/' + apiKey + '/jwt/tinymceai', { credentials: 'include' }).then(function (r) { return r.text(); });
-          return { token: token };
-        },
+        mergetags_list: <?= json_encode($commMergeTags, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
         images_upload_url: '/api/admin/media/upload',
         images_upload_handler: function (blobInfo) {
           return new Promise(function (resolve, reject) {

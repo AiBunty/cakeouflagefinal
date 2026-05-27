@@ -42,11 +42,15 @@ final class App
             ['method' => 'GET', 'path' => '/terms', 'handler' => [$web, 'terms']],
             ['method' => 'GET', 'path' => '/shipping-info', 'handler' => [$web, 'shipping']],
             ['method' => 'GET', 'path' => '/category', 'handler' => [$web, 'categories']],
+            ['method' => 'GET', 'path' => '/search', 'handler' => [$web, 'categories']],
             ['method' => 'GET', 'path' => '/category/:slug', 'handler' => [$web, 'category']],
             ['method' => 'GET', 'path' => '/product/:slug', 'handler' => [$web, 'product']],
             ['method' => 'GET', 'path' => '/cart', 'handler' => [$web, 'cart']],
             ['method' => 'GET', 'path' => '/checkout', 'handler' => [$web, 'checkout']],
             ['method' => 'GET', 'path' => '/account', 'handler' => [$web, 'account']],
+            ['method' => 'GET', 'path' => '/account/login.php', 'handler' => [$web, 'accountLogin']],
+            ['method' => 'GET', 'path' => '/account/dashboard.php', 'handler' => [$web, 'accountDashboard']],
+            ['method' => 'GET', 'path' => '/account/logout.php', 'handler' => [$web, 'accountLogout']],
             ['method' => 'GET', 'path' => '/orders', 'handler' => [$web, 'orders']],
             ['method' => 'GET', 'path' => '/wishlist', 'handler' => [$web, 'wishlist']],
             ['method' => 'GET', 'path' => '/about', 'handler' => [$web, 'about']],
@@ -97,6 +101,7 @@ final class App
             
             ['method' => 'GET', 'path' => '/api/catalog/categories', 'handler' => [$api, 'categories']],
             ['method' => 'GET', 'path' => '/api/catalog/products', 'handler' => [$api, 'products']],
+            ['method' => 'GET', 'path' => '/api/search', 'handler' => [$api, 'search']],
             ['method' => 'GET', 'path' => '/api/catalog/products/:slug', 'handler' => [$api, 'product']],
             ['method' => 'GET', 'path' => '/api/catalog/courses', 'handler' => [$api, 'courses']],
             ['method' => 'GET', 'path' => '/api/catalog/courses/:slug', 'handler' => [$api, 'courseDetail']],
@@ -151,6 +156,8 @@ final class App
             ['method' => 'POST', 'path' => '/api/b2b/dashboard/quote-request', 'handler' => [$api, 'b2bDashboardQuoteRequest']],
             ['method' => 'GET', 'path' => '/api/admin/dashboard/summary', 'handler' => [$api, 'adminDashboardSummary']],
             ['method' => 'POST', 'path' => '/api/admin/auth/login', 'handler' => [$adminApi, 'authLogin']],
+            ['method' => 'POST', 'path' => '/api/admin/auth/send-otp', 'handler' => [$adminApi, 'authSendOtp']],
+            ['method' => 'POST', 'path' => '/api/admin/auth/verify-otp', 'handler' => [$adminApi, 'authVerifyOtp']],
             ['method' => 'POST', 'path' => '/api/admin/auth/logout', 'handler' => [$adminApi, 'authLogout']],
             ['method' => 'GET', 'path' => '/api/admin/auth/me', 'handler' => [$adminApi, 'authMe']],
             ['method' => 'GET', 'path' => '/api/admin/products', 'handler' => [$adminApi, 'productsList']],
@@ -275,6 +282,9 @@ final class App
             ['method' => 'GET',    'path' => '/api/admin/slots/:id/exceptions',     'handler' => [$adminApi, 'slotExceptionsList']],
             ['method' => 'POST',   'path' => '/api/admin/slots/:id/exceptions',     'handler' => [$adminApi, 'slotExceptionCreate']],
             ['method' => 'DELETE', 'path' => '/api/admin/slot-exceptions',          'handler' => [$adminApi, 'slotExceptionDelete']],
+            ['method' => 'GET',    'path' => '/api/admin/holidays',                 'handler' => [$adminApi, 'holidaysList']],
+            ['method' => 'POST',   'path' => '/api/admin/holidays',                 'handler' => [$adminApi, 'holidayCreate']],
+            ['method' => 'DELETE', 'path' => '/api/admin/holidays',                 'handler' => [$adminApi, 'holidayDelete']],
         ];
     }
 

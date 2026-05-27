@@ -1,0 +1,16 @@
+{
+    "mode": "commit",
+    "strict_variants": true,
+    "abort_on_error": true,
+    "created_count": 0,
+    "updated_count": 0,
+    "duplicate_skus": [],
+    "failed_rows": [
+        {
+            "line": 2,
+            "reason": "variant_info missing required labels: 0.5 kg, 1 lb, 1.5 lb, 2 lb, 2.5 lb, 3 lb",
+            "sku": "SMKVG-0527222530"
+        }
+    ],
+    "generated_at": "2026-05-27T22:25:32+05:30"
+}

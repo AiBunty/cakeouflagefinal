@@ -1,0 +1,27 @@
+{
+  "flow": "manual",
+  "order_id": 31,
+  "order_number": "MAN-20260526001954",
+  "save_redirect": "sql-seeded://orders/31",
+  "confirm_payment_status": 200,
+  "preparing_status": 200,
+  "delivered_status": 200,
+  "confirm_payment_response": {
+    "success": true,
+    "message": "Payment confirmed. Slot reserved. Customer will be notified.",
+    "slot": {
+      "success": true,
+      "message": "No slot reservation to confirm."
+    },
+    "data": {
+      "received_amount": 799,
+      "discount_amount": 0,
+      "discount_reason": "",
+      "payment_method": "upi_manual"
+    }
+  },
+  "delivered_response": {
+    "success": true,
+    "message": "Order updated"
+  }
+}

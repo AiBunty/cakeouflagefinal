@@ -166,7 +166,8 @@ $flash = isset($_GET['status']) ? (string) $_GET['status'] : '';
 
                 <div>
                     <label for="google_review_link">Google review link</label>
-                    <input type="url" id="google_review_link" name="google_review_link" value="<?= htmlspecialchars($followUpSettings['google_review_link']) ?>" placeholder="https://www.google.com/search?...#lrd=...,3,,,"></n+                    <p class="follow-ups-inline-note">Use direct review deep-link so customers land directly in the Google review flow.</p>
+                    <input type="url" id="google_review_link" name="google_review_link" value="<?= htmlspecialchars($followUpSettings['google_review_link']) ?>" placeholder="https://www.google.com/search?...#lrd=...,3,,,">
+                    <p class="follow-ups-inline-note">Use direct review deep-link so customers land directly in the Google review flow.</p>
                 </div>
 
                 <div>

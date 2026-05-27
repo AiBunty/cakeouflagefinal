@@ -32,6 +32,59 @@ $offset  = ($page - 1) * $perPage;
 $dateFromEsc = $conn->real_escape_string($dateFrom);
 $dateToEsc   = $conn->real_escape_string($dateTo);
 
+$hasSettlementReference = false;
+$hasSettlementProofUrl = false;
+$hasAdminFullName = false;
+$hasAdminFirstName = false;
+$hasAdminLastName = false;
+
+$schemaCols = $conn->query(
+  "SELECT TABLE_NAME, COLUMN_NAME
+   FROM information_schema.COLUMNS
+   WHERE TABLE_SCHEMA = DATABASE()
+     AND (
+         (TABLE_NAME = 'refund_transactions' AND COLUMN_NAME IN ('settlement_reference', 'settlement_proof_url'))
+     OR (TABLE_NAME = 'admins' AND COLUMN_NAME IN ('full_name', 'first_name', 'last_name'))
+     )"
+);
+while ($schemaCols && ($col = $schemaCols->fetch_assoc())) {
+  $table = (string)($col['TABLE_NAME'] ?? '');
+  $name = (string)($col['COLUMN_NAME'] ?? '');
+  if ($table === 'refund_transactions' && $name === 'settlement_reference') {
+    $hasSettlementReference = true;
+  }
+  if ($table === 'refund_transactions' && $name === 'settlement_proof_url') {
+    $hasSettlementProofUrl = true;
+  }
+  if ($table === 'admins' && $name === 'full_name') {
+    $hasAdminFullName = true;
+  }
+  if ($table === 'admins' && $name === 'first_name') {
+    $hasAdminFirstName = true;
+  }
+  if ($table === 'admins' && $name === 'last_name') {
+    $hasAdminLastName = true;
+  }
+}
+
+$settlementRefExpr = $hasSettlementReference
+  ? 'rt.settlement_reference AS settlement_reference'
+  : "'' AS settlement_reference";
+
+$settlementProofExpr = $hasSettlementProofUrl
+  ? 'rt.settlement_proof_url AS settlement_proof_url'
+  : "'' AS settlement_proof_url";
+
+if ($hasAdminFullName) {
+  $processedByExpr = 'COALESCE(a.full_name, "") AS processed_by_name';
+} elseif ($hasAdminFirstName || $hasAdminLastName) {
+  $firstExpr = $hasAdminFirstName ? 'COALESCE(a.first_name, "")' : '""';
+  $lastExpr = $hasAdminLastName ? 'COALESCE(a.last_name, "")' : '""';
+  $processedByExpr = "TRIM(CONCAT($firstExpr, ' ', $lastExpr)) AS processed_by_name";
+} else {
+  $processedByExpr = '"" AS processed_by_name';
+}
+
 $baseSql =
     "FROM refund_transactions rt
      JOIN orders o ON o.id = rt.order_id
@@ -39,39 +92,55 @@ $baseSql =
      WHERE rt.status = 'processed'
        AND DATE(rt.processed_at) BETWEEN '$dateFromEsc' AND '$dateToEsc'";
 
-$countResult = $conn->query("SELECT COUNT(*) AS n $baseSql");
-$total       = (int)(($countResult ? $countResult->fetch_assoc() : null)['n'] ?? 0);
+$countResult = false;
+try {
+  $countResult = safeQuery($conn, "SELECT COUNT(*) AS n $baseSql");
+} catch (\Throwable $e) {
+  error_log('[admin-refund-report] count query failed: ' . $e->getMessage());
+}
+$countRow    = $countResult ? $countResult->fetch_assoc() : null;
+$total       = (int)($countRow['n'] ?? 0);
 $totalPages  = max(1, (int)ceil($total / $perPage));
 if ($page > $totalPages) {
     $page   = $totalPages;
     $offset = ($page - 1) * $perPage;
 }
 
-$listResult = $conn->query(
-    "SELECT rt.id, rt.refund_number, rt.order_id, rt.refund_type, rt.reason_code,
-            rt.reason_notes, rt.approved_amount, rt.settlement_reference,
-            rt.settlement_proof_url, rt.processed_at,
+$listResult = false;
+try {
+  $listResult = safeQuery($conn,
+  "SELECT rt.id, rt.refund_number, rt.order_id, rt.refund_type, rt.reason_code,
+      rt.reason_notes, rt.approved_amount, $settlementRefExpr,
+        $settlementProofExpr, rt.processed_at,
             o.order_number, o.customer_name, o.customer_email, o.customer_phone,
             o.grand_total,
-            CONCAT(COALESCE(a.first_name,''), ' ', COALESCE(a.last_name,'')) AS processed_by_name
+      $processedByExpr
      $baseSql
      ORDER BY rt.processed_at DESC
      LIMIT $perPage OFFSET $offset"
-);
+  );
+} catch (\Throwable $e) {
+  error_log('[admin-refund-report] list query failed: ' . $e->getMessage());
+}
 $rows = [];
 while ($listResult && ($r = $listResult->fetch_assoc())) {
     $rows[] = $r;
 }
 
 // Totals for summary bar
-$summaryResult = $conn->query(
+$summaryResult = false;
+try {
+  $summaryResult = safeQuery($conn,
     "SELECT
          COUNT(*) AS total_count,
          SUM(rt.approved_amount) AS total_amount,
          SUM(rt.refund_type = 'partial') AS partial_count,
          SUM(rt.refund_type = 'full') AS full_count
      $baseSql"
-);
+  );
+} catch (\Throwable $e) {
+  error_log('[admin-refund-report] summary query failed: ' . $e->getMessage());
+}
 $summary = $summaryResult ? $summaryResult->fetch_assoc() : [];
 $summaryTotal   = (float)($summary['total_amount']  ?? 0);
 $summaryCount   = (int)  ($summary['total_count']   ?? 0);

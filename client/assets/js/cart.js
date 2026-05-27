@@ -5,6 +5,9 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   const countEl = document.getElementById("cartCount");
+  const showToast = (message, type = "info") => {
+    utils.showToast?.(message, { type });
+  };
 
   const setCartCount = (count) => {
     const safeCount = Number.isFinite(count) ? count : 0;
@@ -12,6 +15,7 @@ document.addEventListener("DOMContentLoaded", () => {
       countEl.textContent = String(safeCount);
     }
     localStorage.setItem("cakeouflage_cart_count", String(safeCount));
+    window.dispatchEvent(new CustomEvent("cart:updated", { detail: { count: safeCount } }));
   };
 
   const hydrateCount = async () => {
@@ -109,7 +113,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const payload = await utils.apiPatch(`/api/cart/items/${itemId}`, { quantity });
         render(payload.data);
       } catch (error) {
-        alert(error.message);
+        showToast(error.message || "Could not update quantity", "error");
       }
     });
 
@@ -140,21 +144,28 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const itemId = itemEl.getAttribute("data-item-id");
       try {
+        button.disabled = true;
         const payload = await utils.apiDelete(`/api/cart/items/${itemId}`);
         render(payload.data);
+        showToast("Item removed from cart", "success");
       } catch (error) {
-        alert(error.message);
+        button.disabled = false;
+        showToast(error.message || "Could not remove item", "error");
       }
     });
 
     couponButton?.addEventListener("click", async () => {
       try {
+        couponButton.disabled = true;
         const payload = await utils.apiPost("/api/cart/coupon", {
           code: (couponInput?.value || "").trim()
         });
         render(payload.data);
+        showToast("Coupon updated", "success");
       } catch (error) {
-        alert(error.message);
+        showToast(error.message || "Could not apply coupon", "error");
+      } finally {
+        couponButton.disabled = false;
       }
     });
 

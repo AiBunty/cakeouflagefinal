@@ -221,21 +221,6 @@
                 <input type="number" id="cciServings" name="number_of_servings_guests" min="1" max="5000" required />
               </div>
 
-              <div class="cci-field">
-                <label for="cciBudget">Budget Range <span>*</span></label>
-                <input type="text" id="cciBudget" name="budget_range" required maxlength="80" placeholder="Ex: 3000-5000" />
-              </div>
-
-              <div class="cci-field">
-                <label for="cciDiet">Diet Preference <span>*</span></label>
-                <select id="cciDiet" name="diet_preference" required>
-                  <option value="">Select diet preference</option>
-                  <option value="Veg">Veg</option>
-                  <option value="Non Veg">Non Veg</option>
-                  <option value="Jain">Jain</option>
-                </select>
-              </div>
-
               <div class="cci-field cci-field--full">
                 <label for="cciDesignBrief">Design Breief Note <span>*</span></label>
                 <textarea id="cciDesignBrief" name="design_breif_notes" rows="5" maxlength="2000" required placeholder="Mention cake theme, flavors, colors, name text, and special requirements."></textarea>

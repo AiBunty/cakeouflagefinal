@@ -99,124 +99,37 @@ try {
     $status = (string)($transition['new_status'] ?? $status);
 
     if ($status === 'confirmed') {
-        if ($paymentMethod === 'credit') {
-            $stmt = $conn->prepare('UPDATE orders SET payment_status = "credit", payment_method = "credit", payment_confirmed_at = NOW(), payment_confirmed_by_admin_id = ?, updated_at = NOW() WHERE id = ? LIMIT 1');
-            $stmt->bind_param('ii', $adminId, $orderId);
-            $stmt->execute();
+        $paymentResult = (new \App\Services\OrderPaymentConfirmationService())->confirmOrderPayment($pdo, $orderId, [
+            'payment_method' => $paymentMethod,
+            'admin_id' => $adminId,
+            'admin_name' => $adminName,
+            'source_reference' => 'admin/api/update-order-status-async.php',
+            'source_event' => 'async_order_status_confirmation',
+            'skip_order_status_transition' => true,
+            'sync_snapshot' => false,
+        ]);
 
-            $creditReadStmt = $conn->prepare('SELECT order_number, payment_status, payment_method, payment_confirmed_at, grand_total, COALESCE(refund_amount, 0) AS refund_amount FROM orders WHERE id = ? LIMIT 1');
-            $creditReadStmt->bind_param('i', $orderId);
-            $creditReadStmt->execute();
-            $creditRow = $creditReadStmt->get_result()->fetch_assoc();
-
-            if ($creditRow && (string)$creditRow['payment_status'] === 'credit') {
-                $engine = new \App\Services\FinancialTransactionEngine();
-                $recognizedAmount = max(0.0, round((float)($creditRow['grand_total'] ?? 0) - (float)($creditRow['refund_amount'] ?? 0), 2));
-                $confirmedAt = (string)($creditRow['payment_confirmed_at'] ?? '');
-                $idempotencyKey = 'status-confirmed-credit:' . $orderId . ':' . $confirmedAt;
-
-                $postResult = $engine->recordCreditSaleRecognized([
-                    'order_id' => $orderId,
-                    'order_number' => (string)($creditRow['order_number'] ?? ''),
-                    'amount' => $recognizedAmount,
-                    'payment_status' => (string)$creditRow['payment_status'],
-                    'source_reference' => 'admin/api/update-order-status-async.php',
-                    'idempotency_key' => $idempotencyKey,
-                    'admin_id' => $adminId,
-                    'admin_name' => $adminName,
-                    'narration' => 'Credit sale recognized on status confirmation',
-                ]);
-
-                if (!$postResult['success']) {
-                    error_log('[update-order-status-async][fte-credit] ' . $postResult['message']);
-                }
-            }
-        } else {
-            $confirmedAt = date('Y-m-d H:i:s');
-            $stmt = $conn->prepare('UPDATE orders SET payment_status = "paid", payment_method = ?, payment_confirmed_at = ?, payment_confirmed_by_admin_id = ?, updated_at = NOW() WHERE id = ? LIMIT 1');
-            $stmt->bind_param('ssii', $paymentMethod, $confirmedAt, $adminId, $orderId);
-            $stmt->execute();
+        if (!$paymentResult['success']) {
+            http_response_code((int)($paymentResult['http_status'] ?? 422));
+            echo json_encode(['success' => false, 'error' => (string)($paymentResult['message'] ?? 'Payment confirmation failed')], JSON_UNESCAPED_SLASHES);
+            exit;
         }
+
+        $paymentData = is_array($paymentResult['data'] ?? null) ? $paymentResult['data'] : [];
+        $effectivePaymentStatus = (string)($paymentData['payment_status'] ?? ($paymentMethod === 'credit' ? 'credit' : 'paid'));
+        $effectivePaymentMethod = (string)($paymentData['payment_method'] ?? $paymentMethod);
 
         $stateManager->writeOrderAudit($pdo, [
             'order_id' => $orderId,
             'action_type' => 'payment_status_update',
             'new_status' => $status,
-            'payment_status' => $paymentMethod === 'credit' ? 'credit' : 'paid',
+            'payment_status' => $effectivePaymentStatus,
             'admin_id' => $adminId,
             'admin_role' => isset($_SESSION['admin_role']) ? (string)$_SESSION['admin_role'] : '',
             'ip_address' => $_SERVER['REMOTE_ADDR'] ?? '',
             'message' => 'Async payment confirmation from sales register/orders UI',
-            'metadata' => ['payment_method' => $paymentMethod],
+            'metadata' => ['payment_method' => $effectivePaymentMethod],
         ]);
-
-        if ($paymentMethod !== 'credit') {
-            $paymentReadStmt = $conn->prepare('SELECT order_number, payment_status, payment_method, payment_confirmed_at, grand_total, COALESCE(refund_amount, 0) AS refund_amount FROM orders WHERE id = ? LIMIT 1');
-            $paymentReadStmt->bind_param('i', $orderId);
-            $paymentReadStmt->execute();
-            $paymentRow = $paymentReadStmt->get_result()->fetch_assoc();
-
-            if ($paymentRow && (string)$paymentRow['payment_status'] === 'paid') {
-                $engine = new \App\Services\FinancialTransactionEngine();
-                $recognizedAmount = max(0.0, round((float)($paymentRow['grand_total'] ?? 0) - (float)($paymentRow['refund_amount'] ?? 0), 2));
-                $confirmedAt = (string)($paymentRow['payment_confirmed_at'] ?? '');
-                if ((string)$paymentRow['payment_status'] === 'paid' && (string)$paymentMethod !== 'credit') {
-                    if ((string)$paymentRow['payment_method'] !== 'credit' && (string)$paymentMethod !== 'credit') {
-                        $idempotencyKey = 'status-confirmed-payment:' . $orderId . ':' . (string)$paymentRow['payment_method'] . ':' . $confirmedAt;
-                        $postResult = $engine->recordPaymentReceived([
-                            'order_id' => $orderId,
-                            'order_number' => (string)($paymentRow['order_number'] ?? ''),
-                            'amount' => $recognizedAmount,
-                            'payment_method' => (string)$paymentRow['payment_method'],
-                            'payment_status' => (string)$paymentRow['payment_status'],
-                            'source_reference' => 'admin/api/update-order-status-async.php',
-                            'idempotency_key' => $idempotencyKey,
-                            'admin_id' => $adminId,
-                            'admin_name' => $adminName,
-                            'narration' => 'Payment received on status confirmation',
-                        ]);
-                    } else {
-                        $idempotencyKey = 'status-confirmed-balance-settled:' . $orderId . ':' . (string)$paymentRow['payment_method'] . ':' . $confirmedAt;
-                        $postResult = $engine->recordBalanceSettled([
-                            'order_id' => $orderId,
-                            'order_number' => (string)($paymentRow['order_number'] ?? ''),
-                            'amount' => $recognizedAmount,
-                            'payment_method' => (string)$paymentRow['payment_method'],
-                            'source_reference' => 'admin/api/update-order-status-async.php',
-                            'idempotency_key' => $idempotencyKey,
-                            'admin_id' => $adminId,
-                            'admin_name' => $adminName,
-                            'narration' => 'Credit balance settled on status confirmation',
-                        ]);
-                    }
-                }
-
-                if (!$postResult['success']) {
-                    error_log('[update-order-status-async][fte] ' . $postResult['message']);
-                }
-
-                try {
-                    $receiptService = new \App\Services\PaymentReceiptService();
-                    $receiptResult = $receiptService->issueAdvanceReceipt($orderId, [
-                        'source_event' => 'async_order_status_confirmation',
-                        'source_reference' => 'async-order-status:' . $orderId . ':' . (string)($paymentRow['payment_method'] ?? $paymentMethod) . ':' . $confirmedAt,
-                        'payment_method' => (string)($paymentRow['payment_method'] ?? $paymentMethod),
-                        'payment_status' => (string)($paymentRow['payment_status'] ?? 'paid'),
-                        'issued_by_admin_id' => $adminId,
-                        'financial_transaction_id' => isset($postResult['transaction_id']) ? (int)$postResult['transaction_id'] : null,
-                        'metadata' => [
-                            'channel' => 'admin_async_status',
-                            'trigger' => 'async_status_confirmed',
-                        ],
-                    ]);
-                    if (!$receiptResult['success'] && !in_array($receiptResult['message'], ['Receipt not allowed after full payment', 'No advance amount available for receipt', 'Payment receipt schema is not ready', 'Receipt not required when partial payment is disabled'], true)) {
-                        error_log('[update-order-status-async][receipt] ' . $receiptResult['message']);
-                    }
-                } catch (\Throwable $receiptErr) {
-                    error_log('[update-order-status-async][receipt] ' . $receiptErr->getMessage());
-                }
-            }
-        }
     }
 
     $service = new \App\Services\OrderAutomationService();

@@ -1,0 +1,53 @@
+{
+  "base_url": "http://localhost:8080",
+  "pass": true,
+  "started_at": "2026-05-26T13:28:15.6599814+05:30",
+  "email": "qa.auth.20260526_132815@example.com",
+  "finished_at": "2026-05-26T13:28:22.0012964+05:30",
+  "error": null,
+  "steps": [
+    {
+      "step": "load_account",
+      "status": 200,
+      "csrf_present": true
+    },
+    {
+      "step": "send_otp",
+      "status": 200,
+      "success": true,
+      "message": "OTP sent to email"
+    },
+    {
+      "step": "fetch_otp_from_db",
+      "found": true,
+      "otp_length": 6
+    },
+    {
+      "step": "verify_otp",
+      "status": 200,
+      "success": true,
+      "redirect_to": "/account"
+    },
+    {
+      "step": "auth_me_after_verify",
+      "status": 200,
+      "success": true,
+      "user_id": 2
+    },
+    {
+      "step": "auth_me_refresh_probe",
+      "status": 200,
+      "success": true
+    },
+    {
+      "step": "logout",
+      "status": 200,
+      "success": true
+    },
+    {
+      "step": "auth_me_after_logout",
+      "status": 401,
+      "expected_unauthorized": true
+    }
+  ]
+}

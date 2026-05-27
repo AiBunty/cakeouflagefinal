@@ -1,7 +1,9 @@
 <?php
 $totalPages = (isset($totalProducts, $perPage) && (int)$perPage > 0) ? (int)ceil(((int)$totalProducts) / ((int)$perPage)) : 1;
 $slug = (string)($category['slug'] ?? '');
-$baseUrl = $slug !== '' ? '/category/' . rawurlencode($slug) : '/category';
+$requestPath = parse_url((string)($_SERVER['REQUEST_URI'] ?? '/category'), PHP_URL_PATH) ?: '/category';
+$isSearchRoute = $requestPath === '/search';
+$baseUrl = $isSearchRoute ? '/search' : ($slug !== '' ? '/category/' . rawurlencode($slug) : '/category');
 $activeSort = (string)($_GET['sort'] ?? 'latest');
 if ($activeSort === 'newest') {
     $activeSort = 'latest';
@@ -21,6 +23,10 @@ $activePriceBucketMap = [
 ];
 $activePriceBucket = $activePriceBucketMap[$activePriceBucketRaw] ?? '';
 $activeIsVeg = (string)($_GET['is_veg'] ?? '');
+$currencySymbol = (string)($siteConfig['currency_symbol'] ?? 'Rs');
+$isCustomerAuthenticated = \App\Services\AuthManager::isCustomerAuthenticated();
+$foodMode = (string)($siteConfig['business']['store_food_mode'] ?? getDietaryMode());
+$showNonVeg = $foodMode === 'veg_nonveg';
 
 $rawDietary = $_GET['dietary'] ?? [];
 $activeDiets = is_array($rawDietary) ? $rawDietary : explode(',', (string)$rawDietary);
@@ -58,22 +64,22 @@ $activeFilterChips = [];
 foreach ($activeDiets as $diet) {
     $activeFilterChips[] = ucfirst(str_replace('_', ' ', $diet));
 }
-if ($activeIsVeg === '1') {
+if ($showNonVeg && $activeIsVeg === '1') {
     $activeFilterChips[] = 'Veg';
-} elseif ($activeIsVeg === '0') {
+} elseif ($showNonVeg && $activeIsVeg === '0') {
     $activeFilterChips[] = 'Non-Veg';
 }
 if ($activePriceBucket !== '') {
     $priceBucketLabels = [
-        'under_500' => 'Under Rs 500',
-        '500_1000' => 'Rs 500-Rs 1000',
-        '1000_2000' => 'Rs 1000-Rs 2000',
-        'above_2000' => 'Above Rs 2000',
+      'under_500' => 'Under ' . $currencySymbol . ' 500',
+      '500_1000' => $currencySymbol . ' 500-' . $currencySymbol . ' 1000',
+      '1000_2000' => $currencySymbol . ' 1000-' . $currencySymbol . ' 2000',
+      'above_2000' => 'Above ' . $currencySymbol . ' 2000',
     ];
     $activeFilterChips[] = $priceBucketLabels[$activePriceBucket] ?? 'Price';
 }
 if ($activeMaxPrice !== '') {
-    $activeFilterChips[] = 'Under Rs ' . $activeMaxPrice;
+  $activeFilterChips[] = 'Under ' . $currencySymbol . ' ' . $activeMaxPrice;
 }
 foreach ($activeFlags as $flag => $enabled) {
     if ($enabled) {
@@ -86,6 +92,12 @@ if ($heroDescription === '') {
     $heroDescription = 'Handcrafted with premium ingredients for every celebration.';
 }
 $heroEyebrow = $activeQuery !== '' ? ('Search results for "' . $activeQuery . '"') : 'Luxury handcrafted collection';
+$mobileHeaderLogo = (string)($siteConfig['branding']['navbar_logo_url'] ?? '/client/assets/images/mainlogo.svg');
+$mobileHeaderLogoFallback = (string)($siteConfig['branding']['navbar_logo_fallback'] ?? '/client/assets/images/mainlogo.svg');
+$productFallbackImage = trim((string)($siteConfig['branding']['default_product_image_url'] ?? '/public/assets/defaults/default-product-image.webp'));
+if ($productFallbackImage === '' || !preg_match('#^(https?://|/)#i', $productFallbackImage)) {
+  $productFallbackImage = '/public/assets/defaults/default-product-image.webp';
+}
 ?>
 
 <main data-page="category" class="lux-category-page" data-browse-page="category">
@@ -94,7 +106,7 @@ $heroEyebrow = $activeQuery !== '' ? ('Search results for "' . $activeQuery . '"
       <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="7" x2="20" y2="7"></line><line x1="4" y1="12" x2="16" y2="12"></line><line x1="4" y1="17" x2="12" y2="17"></line></svg>
     </button>
     <a class="lux-mobile-header__logo" href="/" aria-label="Cakeouflage home">
-      <img src="/client/assets/images/mainlogo.svg" alt="Cakeouflage" />
+      <img src="<?= htmlspecialchars($mobileHeaderLogo, ENT_QUOTES, 'UTF-8') ?>" alt="Cakeouflage" onerror="this.onerror=null;this.src='<?= htmlspecialchars($mobileHeaderLogoFallback, ENT_QUOTES, 'UTF-8') ?>';" />
     </a>
     <a class="lux-mobile-header__icon" href="/wishlist" aria-label="Wishlist">
       <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 21s-6.7-4.35-9.33-8.03C1.43 11.26 2 8.3 4.2 6.88c2.09-1.35 4.47-.72 5.8.88 1.33-1.6 3.71-2.23 5.8-.88 2.2 1.42 2.77 4.38 1.53 6.09C18.7 16.65 12 21 12 21z"></path></svg>
@@ -106,7 +118,7 @@ $heroEyebrow = $activeQuery !== '' ? ('Search results for "' . $activeQuery . '"
   </header>
 
   <section class="lux-mobile-search container">
-    <form method="get" class="lux-mobile-search__form" role="search">
+    <form method="get" action="/search" class="lux-mobile-search__form" role="search">
       <?php foreach ($_GET as $paramKey => $paramValue): ?>
         <?php if ($paramKey === 'q' || $paramKey === 'page') { continue; } ?>
         <?php if (is_array($paramValue)): ?>
@@ -117,10 +129,14 @@ $heroEyebrow = $activeQuery !== '' ? ('Search results for "' . $activeQuery . '"
           <input type="hidden" name="<?= htmlspecialchars((string)$paramKey, ENT_QUOTES, 'UTF-8') ?>" value="<?= htmlspecialchars((string)$paramValue, ENT_QUOTES, 'UTF-8') ?>" />
         <?php endif; ?>
       <?php endforeach; ?>
-      <input id="shopSearch" type="search" name="q" value="<?= htmlspecialchars($activeQuery, ENT_QUOTES, 'UTF-8') ?>" placeholder="Search cakes..." />
+      <input id="shopSearch" data-search-input="mobile" data-live-search-input="category-mobile" type="search" name="q" value="<?= htmlspecialchars($activeQuery, ENT_QUOTES, 'UTF-8') ?>" placeholder="Search cakes..." autocomplete="off" />
+      <button type="button" id="shopSearchClearMobile" class="lux-search-clear" aria-label="Clear search" <?= $activeQuery === '' ? 'hidden' : '' ?>>
+        <span aria-hidden="true">×</span>
+      </button>
       <button type="submit" aria-label="Search">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"></circle><line x1="16.7" y1="16.7" x2="21" y2="21"></line></svg>
       </button>
+      <div id="shopSearchMobileDropdown" class="search-dropdown lux-search-dropdown" role="listbox" aria-label="Search suggestions" hidden></div>
     </form>
   </section>
 
@@ -227,10 +243,12 @@ $heroEyebrow = $activeQuery !== '' ? ('Search results for "' . $activeQuery . '"
             <label><input type="checkbox" name="dietary[]" value="eggless" <?= in_array('eggless', $activeDiets, true) ? 'checked' : '' ?> /> Eggless</label>
             <label><input type="checkbox" name="dietary[]" value="vegan" <?= in_array('vegan', $activeDiets, true) ? 'checked' : '' ?> /> Vegan</label>
             <label><input type="checkbox" name="dietary[]" value="sugar_free" <?= in_array('sugar_free', $activeDiets, true) ? 'checked' : '' ?> /> Sugar Free</label>
-            <hr />
-            <label><input type="radio" name="is_veg" value="" <?= $activeIsVeg === '' ? 'checked' : '' ?> /> All</label>
-            <label><input type="radio" name="is_veg" value="1" <?= $activeIsVeg === '1' ? 'checked' : '' ?> /> Veg</label>
-            <label><input type="radio" name="is_veg" value="0" <?= $activeIsVeg === '0' ? 'checked' : '' ?> /> Non-Veg</label>
+            <?php if ($showNonVeg): ?>
+              <hr />
+              <label><input type="radio" name="is_veg" value="" <?= $activeIsVeg === '' ? 'checked' : '' ?> /> All</label>
+              <label><input type="radio" name="is_veg" value="1" <?= $activeIsVeg === '1' ? 'checked' : '' ?> /> Veg</label>
+              <label><input type="radio" name="is_veg" value="0" <?= $activeIsVeg === '0' ? 'checked' : '' ?> /> Non-Veg</label>
+            <?php endif; ?>
           </div>
         </section>
 
@@ -239,10 +257,10 @@ $heroEyebrow = $activeQuery !== '' ? ('Search results for "' . $activeQuery . '"
           <div class="lux-filter-accordion__panel" data-accordion-panel="price">
             <select name="price_bucket" id="priceBucket" aria-label="Price range">
               <option value="">All ranges</option>
-              <option value="under_500" <?= $activePriceBucket === 'under_500' ? 'selected' : '' ?>>Under Rs 500</option>
-              <option value="500_1000" <?= $activePriceBucket === '500_1000' ? 'selected' : '' ?>>Rs 500 - Rs 1000</option>
-              <option value="1000_2000" <?= $activePriceBucket === '1000_2000' ? 'selected' : '' ?>>Rs 1000 - Rs 2000</option>
-              <option value="above_2000" <?= $activePriceBucket === 'above_2000' ? 'selected' : '' ?>>Above Rs 2000</option>
+              <option value="under_500" <?= $activePriceBucket === 'under_500' ? 'selected' : '' ?>>Under <?= htmlspecialchars($currencySymbol, ENT_QUOTES, 'UTF-8') ?> 500</option>
+              <option value="500_1000" <?= $activePriceBucket === '500_1000' ? 'selected' : '' ?>><?= htmlspecialchars($currencySymbol, ENT_QUOTES, 'UTF-8') ?> 500 - <?= htmlspecialchars($currencySymbol, ENT_QUOTES, 'UTF-8') ?> 1000</option>
+              <option value="1000_2000" <?= $activePriceBucket === '1000_2000' ? 'selected' : '' ?>><?= htmlspecialchars($currencySymbol, ENT_QUOTES, 'UTF-8') ?> 1000 - <?= htmlspecialchars($currencySymbol, ENT_QUOTES, 'UTF-8') ?> 2000</option>
+              <option value="above_2000" <?= $activePriceBucket === 'above_2000' ? 'selected' : '' ?>>Above <?= htmlspecialchars($currencySymbol, ENT_QUOTES, 'UTF-8') ?> 2000</option>
             </select>
             <input type="range" id="maxPriceRange" min="200" max="5000" step="100" value="<?= htmlspecialchars($activeMaxPrice !== '' ? $activeMaxPrice : '5000', ENT_QUOTES, 'UTF-8') ?>" />
             <input type="number" id="maxPriceInput" name="max_price" min="100" step="100" value="<?= htmlspecialchars($activeMaxPrice, ENT_QUOTES, 'UTF-8') ?>" placeholder="Custom max price" />
@@ -286,10 +304,11 @@ $heroEyebrow = $activeQuery !== '' ? ('Search results for "' . $activeQuery . '"
               No cakes found
             <?php endif; ?>
           </p>
+          <p class="lux-search-status" id="categorySearchStatus" aria-live="polite" hidden></p>
 
           <div class="lux-toolbar__controls">
             <button type="button" class="lux-filter-open" id="mobileFilterBtnTop">Filter</button>
-            <form method="get" class="lux-toolbar__search" role="search">
+            <form method="get" action="/search" class="lux-toolbar__search" role="search">
               <?php foreach ($_GET as $paramKey => $paramValue): ?>
                 <?php if ($paramKey === 'q' || $paramKey === 'page') { continue; } ?>
                 <?php if (is_array($paramValue)): ?>
@@ -301,10 +320,14 @@ $heroEyebrow = $activeQuery !== '' ? ('Search results for "' . $activeQuery . '"
                 <?php endif; ?>
               <?php endforeach; ?>
               <label class="lux-sr-only" for="shopSearchDesktop">Search cakes</label>
-              <input id="shopSearchDesktop" type="search" name="q" value="<?= htmlspecialchars($activeQuery, ENT_QUOTES, 'UTF-8') ?>" placeholder="Search cakes, flavors, occasions..." />
+              <input id="shopSearchDesktop" data-search-input="desktop" data-live-search-input="category-desktop" type="search" name="q" value="<?= htmlspecialchars($activeQuery, ENT_QUOTES, 'UTF-8') ?>" placeholder="Search cakes, flavors, occasions..." autocomplete="off" />
+              <button type="button" id="shopSearchClearDesktop" class="lux-search-clear" aria-label="Clear search" <?= $activeQuery === '' ? 'hidden' : '' ?>>
+                <span aria-hidden="true">×</span>
+              </button>
               <button type="submit" aria-label="Search cakes">
                 <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"></circle><line x1="16.7" y1="16.7" x2="21" y2="21"></line></svg>
               </button>
+              <div id="shopSearchDesktopDropdown" class="search-dropdown lux-search-dropdown" role="listbox" aria-label="Search suggestions" hidden></div>
             </form>
             <form method="get" id="sortForm">
               <?php foreach ($_GET as $paramKey => $paramValue): ?>
@@ -392,7 +415,7 @@ $heroEyebrow = $activeQuery !== '' ? ('Search results for "' . $activeQuery . '"
             ?>
             <article class="lux-product-card">
               <a class="lux-product-card__image-wrap" href="<?= htmlspecialchars($productUrl, ENT_QUOTES, 'UTF-8') ?>">
-                <img src="<?= htmlspecialchars($thumb, ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($name, ENT_QUOTES, 'UTF-8') ?>" loading="lazy" width="360" height="260" onerror="this.onerror=null;this.src='/public/assets/defaults/default-product-image.webp';" />
+                <img src="<?= htmlspecialchars($thumb, ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($name, ENT_QUOTES, 'UTF-8') ?>" loading="lazy" width="360" height="260" data-fallback-src="<?= htmlspecialchars($productFallbackImage, ENT_QUOTES, 'UTF-8') ?>" onerror="this.onerror=null;this.src='<?= htmlspecialchars($productFallbackImage, ENT_QUOTES, 'UTF-8') ?>';" />
                 <button class="lux-product-card__wish" type="button" data-wishlist-product="<?= $productId ?>" aria-label="Add to wishlist">♡</button>
                 <?php if (!empty($product['is_bestseller'])): ?>
                   <span class="lux-badge lux-badge--bestseller">Bestseller</span>
@@ -405,7 +428,9 @@ $heroEyebrow = $activeQuery !== '' ? ('Search results for "' . $activeQuery . '"
               <div class="lux-product-card__body">
                 <div class="lux-product-card__title-line">
                   <h3><a href="<?= htmlspecialchars($productUrl, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($name, ENT_QUOTES, 'UTF-8') ?></a></h3>
-                  <span class="lux-veg-dot <?= $isVeg ? 'is-veg' : 'is-nonveg' ?>" title="<?= $isVeg ? 'Vegetarian' : 'Non-Vegetarian' ?>"></span>
+                  <?php if ($showNonVeg): ?>
+                    <span class="lux-veg-dot <?= $isVeg ? 'is-veg' : 'is-nonveg' ?>" title="<?= $isVeg ? 'Vegetarian' : 'Non-Vegetarian' ?>"></span>
+                  <?php endif; ?>
                 </div>
 
                 <p><?= htmlspecialchars($shortDesc, ENT_QUOTES, 'UTF-8') ?></p>
@@ -419,8 +444,8 @@ $heroEyebrow = $activeQuery !== '' ? ('Search results for "' . $activeQuery . '"
                 </div>
 
                 <div class="lux-price-row">
-                  <strong>From Rs <?= htmlspecialchars($priceLabel, ENT_QUOTES, 'UTF-8') ?></strong>
-                  <?php if ($showDiscount): ?><del>Rs <?= htmlspecialchars($strikeValue, ENT_QUOTES, 'UTF-8') ?></del><?php endif; ?>
+                  <strong>From <?= htmlspecialchars($currencySymbol, ENT_QUOTES, 'UTF-8') ?> <?= htmlspecialchars($priceLabel, ENT_QUOTES, 'UTF-8') ?></strong>
+                  <?php if ($showDiscount): ?><del><?= htmlspecialchars($currencySymbol, ENT_QUOTES, 'UTF-8') ?> <?= htmlspecialchars($strikeValue, ENT_QUOTES, 'UTF-8') ?></del><?php endif; ?>
                 </div>
 
                 <div class="lux-product-card__actions">
@@ -466,7 +491,7 @@ $heroEyebrow = $activeQuery !== '' ? ('Search results for "' . $activeQuery . '"
     <a href="/category" class="is-active">Categories</a>
     <a href="/orders">Orders</a>
     <a href="/wishlist">Wishlist</a>
-    <a href="/account">Account</a>
+    <a href="<?= $isCustomerAuthenticated ? '/account/dashboard.php' : '/account/login.php' ?>"><?= $isCustomerAuthenticated ? 'Dashboard' : 'Sign In' ?></a>
   </nav>
 </main>
 

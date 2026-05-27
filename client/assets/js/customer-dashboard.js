@@ -6,6 +6,11 @@
 
   const OTP_STORAGE_KEY = "cakeouflage.otpCooldownUntil";
   const OTP_COOLDOWN_MS = 60000;
+  const AVATAR_STORAGE_KEY = "cakeouflage.customerAvatar";
+  const AVATAR_PATHS = {
+    female: "/client/assets/images/account/avatar-female.svg",
+    male: "/client/assets/images/account/avatar-male.svg"
+  };
 
   const STATUS_LABELS = {
     pending_payment: "Pending Payment",
@@ -125,12 +130,17 @@
     const status = toStatusKey(order.order_status);
     const preview = String(order.cake_names || "").slice(0, 120);
     const showInvoice = Boolean(order.can_download_invoice);
+    const thumbnail = utils.safeImage(order.preview_image || order.featured_image || "", utils.productPlaceholder);
+    const reorderHint = encodeURIComponent(String(order.cake_names || "").split(",")[0]?.replace(/ x \d+$/, "").trim() || "cake");
     return `
       <article class="order-card" data-order-id="${Number(order.id || 0)}">
         <div class="order-card__head">
-          <div>
-            <p class="order-card__id">${escapeHtml(order.order_number || `Order #${order.id}`)}</p>
-            <p class="order-card__items">${escapeHtml(preview || `${Number(order.item_count || 0)} items`)}</p>
+          <div class="order-card__summary">
+            <div>
+              <p class="order-card__id">${escapeHtml(order.order_number || `Order #${order.id}`)}</p>
+              <p class="order-card__items">${escapeHtml(preview || `${Number(order.item_count || 0)} items`)}</p>
+            </div>
+            <img class="order-card__thumb" src="${escapeHtml(thumbnail)}" alt="${escapeHtml(order.order_number || `Order #${order.id}`)}" onerror="this.onerror=null;this.src='${utils.productPlaceholder}';" loading="lazy" />
           </div>
           <div>
             <span class="status-chip ${status}">${escapeHtml(statusLabel(order.order_status))}</span>
@@ -144,6 +154,7 @@
         <div class="order-card__actions">
           <button class="customer-btn customer-btn--primary" type="button" data-order-view="${Number(order.id || 0)}">View Details</button>
           ${showInvoice ? `<a class="customer-btn customer-btn--ghost" href="${escapeHtml(order.invoice_download_url || "#")}" target="_blank" rel="noopener">Invoice</a>` : ""}
+          <a class="customer-btn customer-btn--ghost" href="/category?q=${reorderHint}">Reorder</a>
           ${opts.showTrack ? `<button class="customer-btn customer-btn--ghost" type="button" data-order-track="${Number(order.id || 0)}">Track</button>` : ""}
         </div>
       </article>
@@ -256,33 +267,58 @@
   const readCooldownUntil = () => Number(window.localStorage.getItem(OTP_STORAGE_KEY) || 0);
 
   const initCustomerLogin = () => {
-    const page = document.querySelector('[data-page="customer-login"]');
-    if (!page) {
+    const form = byId("customerLoginForm");
+    if (!form) {
       return;
     }
 
-    const form = byId("customerLoginForm");
+    const page = form.closest("[data-page]") || document;
     const emailInput = byId("customerLoginEmail");
     const sendBtn = byId("customerSendOtpBtn");
     const otpGroup = byId("customerOtpGroup");
-    const otpSlots = Array.from(page.querySelectorAll(".otp-slot"));
+    const otpSlots = Array.from(form.querySelectorAll(".otp-slot"));
     const otpHiddenInput = byId("customerOtp");
     const verifyBtn = byId("customerVerifyBtn");
+    const rememberDeviceInput = byId("customerRememberDevice");
     const statusEl = byId("customerLoginStatus");
     const cooldownEl = byId("customerOtpCooldown");
+    const sendBtnLabel = sendBtn.querySelector(".customer-btn__label");
+    const verifyBtnLabel = verifyBtn.querySelector(".customer-btn__label");
 
     if (!form || !emailInput || !sendBtn || !otpGroup || !otpHiddenInput || !verifyBtn || !statusEl || otpSlots.length !== 6) {
       return;
     }
 
     let cooldownTimer = null;
+    let sendingOtp = false;
+    let verifyingOtp = false;
 
     const syncOtpValue = () => {
       otpHiddenInput.value = otpSlots.map((slot) => slot.value.trim()).join("").slice(0, 6);
     };
 
-    const setStatus = (message) => {
+    const setStatus = (message, type = "info") => {
       statusEl.textContent = message;
+      statusEl.classList.remove("is-success", "is-error", "is-info");
+      if (message) {
+        statusEl.classList.add(`is-${type}`);
+      }
+    };
+
+    const setButtonLabel = (button, labelEl, text) => {
+      if (labelEl) {
+        labelEl.textContent = text;
+      } else {
+        button.textContent = text;
+      }
+    };
+
+    const setButtonLoading = (button, labelEl, isLoading, label) => {
+      button.classList.toggle("is-loading", isLoading);
+      button.setAttribute("aria-busy", isLoading ? "true" : "false");
+      if (label) {
+        setButtonLabel(button, labelEl, label);
+      }
     };
 
     const focusSlot = (index) => {
@@ -293,7 +329,8 @@
 
     const toggleOtp = (show) => {
       otpGroup.hidden = !show;
-      verifyBtn.hidden = !show;
+      // Verify button is hidden — OTP auto-verifies on 6th digit entry.
+      verifyBtn.hidden = true;
     };
 
     const clearOtp = () => {
@@ -311,7 +348,7 @@
         const remaining = Math.ceil((untilTs - Date.now()) / 1000);
         if (remaining <= 0) {
           sendBtn.disabled = false;
-          sendBtn.textContent = "Send OTP";
+          setButtonLoading(sendBtn, sendBtnLabel, false, "Send OTP");
           cooldownEl.textContent = "";
           window.localStorage.removeItem(OTP_STORAGE_KEY);
           if (cooldownTimer) {
@@ -320,7 +357,7 @@
           }
           return;
         }
-        sendBtn.textContent = `Resend in ${remaining}s`;
+        setButtonLoading(sendBtn, sendBtnLabel, false, `Resend in ${remaining}s`);
         cooldownEl.textContent = `You can resend OTP in ${remaining}s.`;
       };
 
@@ -338,6 +375,10 @@
           focusSlot(index + 1);
         }
         syncOtpValue();
+        // Auto-verify when all 6 digits are entered
+        if (index === otpSlots.length - 1 && otpHiddenInput.value.length === 6) {
+          form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+        }
       });
 
       slot.addEventListener("keydown", (event) => {
@@ -362,6 +403,10 @@
         });
         syncOtpValue();
         focusSlot(Math.min(digits.length, otpSlots.length - 1));
+        // Auto-verify when paste fills all 6 slots
+        if (otpHiddenInput.value.length === 6) {
+          form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+        }
       });
     });
 
@@ -371,16 +416,23 @@
       toggleOtp(true);
     }
 
-    sendBtn.addEventListener("click", async () => {
+    const sendOtp = async () => {
+      if (sendingOtp) {
+        return;
+      }
       const email = emailInput.value.trim();
-      if (!email) {
-        setStatus("Please enter your email address first.");
+      if (!email || !emailInput.checkValidity()) {
+        emailInput.classList.add("is-invalid");
+        setStatus("Enter a valid email address to receive your OTP.", "error");
+        emailInput.focus();
         return;
       }
 
+      emailInput.classList.remove("is-invalid");
+      sendingOtp = true;
       sendBtn.disabled = true;
-      sendBtn.textContent = "Sending...";
-      setStatus("Sending OTP...");
+      setButtonLoading(sendBtn, sendBtnLabel, true, "Sending OTP");
+      setStatus("Sending OTP...", "info");
 
       try {
         const response = await fetch("/api/send-otp", {
@@ -400,7 +452,7 @@
           toggleOtp(true);
           clearOtp();
           focusSlot(0);
-          setStatus("OTP sent. It is valid for 5 minutes.");
+          setStatus("OTP sent. It is valid for 5 minutes.", "success");
           return;
         }
 
@@ -410,29 +462,45 @@
           toggleOtp(true);
         } else {
           sendBtn.disabled = false;
-          sendBtn.textContent = "Send OTP";
+          setButtonLoading(sendBtn, sendBtnLabel, false, "Send OTP");
         }
-        setStatus(data.message || "Unable to send OTP.");
+        setStatus(data.message || "Unable to send OTP.", "error");
       } catch (error) {
         sendBtn.disabled = false;
-        sendBtn.textContent = "Send OTP";
-        setStatus(error.message || "Unable to send OTP right now.");
+        setButtonLoading(sendBtn, sendBtnLabel, false, "Send OTP");
+        setStatus(error.message || "Unable to send OTP right now.", "error");
+      } finally {
+        sendingOtp = false;
       }
+    };
+
+    emailInput.addEventListener("input", () => {
+      emailInput.classList.remove("is-invalid");
     });
+
+    sendBtn.addEventListener("click", sendOtp);
 
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
+      if (otpGroup.hidden) {
+        await sendOtp();
+        return;
+      }
+      if (verifyingOtp) {
+        return;
+      }
       syncOtpValue();
       const email = emailInput.value.trim();
       const otp = otpHiddenInput.value.trim();
-      if (!email || otp.length !== 6) {
-        setStatus("Please enter your email and 6 digit OTP.");
+      if (!email || !emailInput.checkValidity() || otp.length !== 6) {
+        setStatus("Please enter your email and 6 digit OTP.", "error");
         return;
       }
 
+      verifyingOtp = true;
       verifyBtn.disabled = true;
-      verifyBtn.textContent = "Verifying...";
-      setStatus("Verifying OTP...");
+      setButtonLoading(verifyBtn, verifyBtnLabel, true, "Verifying");
+      setStatus("Verifying OTP...", "info");
 
       try {
         const response = await fetch("/api/verify-otp", {
@@ -442,23 +510,47 @@
             "X-CSRF-Token": window.__csrf || utils.getCsrfToken() || ""
           },
           credentials: "include",
-          body: JSON.stringify({ email, otp })
+          body: JSON.stringify({
+            email,
+            otp,
+            remember_device: Boolean(rememberDeviceInput?.checked) ? "1" : "0"
+          })
         });
         const data = await response.json();
 
         if (!data.success) {
-          setStatus(data.message || "OTP verification failed.");
+          setStatus(data.message || "OTP verification failed.", "error");
           verifyBtn.disabled = false;
-          verifyBtn.textContent = "Verify & Continue";
+          setButtonLoading(verifyBtn, verifyBtnLabel, false, "Verify & Continue");
+          verifyingOtp = false;
           return;
         }
 
-        setStatus("Verified. Redirecting to your dashboard...");
-        window.location.href = "/account";
+        try {
+          await utils.apiGet("/api/auth/me");
+        } catch (authError) {
+          setStatus(authError.message || "Login succeeded but session validation failed. Please retry.", "error");
+          verifyBtn.disabled = false;
+          setButtonLoading(verifyBtn, verifyBtnLabel, false, "Verify & Continue");
+          verifyingOtp = false;
+          return;
+        }
+
+        if (document.querySelector('[data-page="customer-dashboard"]')) {
+          setStatus("Verified. Loading your dashboard...", "success");
+          window.dispatchEvent(new CustomEvent("cakeouflage:auth:verified", {
+            detail: data?.data || {}
+          }));
+          return;
+        }
+
+        setStatus("Verified. Redirecting to your dashboard...", "success");
+        window.location.href = data?.data?.redirect_to || "/account/dashboard.php";
       } catch (error) {
-        setStatus(error.message || "Unable to verify OTP right now.");
+        setStatus(error.message || "Unable to verify OTP right now.", "error");
         verifyBtn.disabled = false;
-        verifyBtn.textContent = "Verify & Continue";
+        setButtonLoading(verifyBtn, verifyBtnLabel, false, "Verify & Continue");
+        verifyingOtp = false;
       }
     });
   };
@@ -472,12 +564,15 @@
     const buttons = Array.from(page.querySelectorAll("[data-dashboard-tab]"));
     const panels = Array.from(page.querySelectorAll("[data-dashboard-panel]"));
 
+    let activeTab = "home";
+
     const activate = (tab) => {
+      activeTab = tab || "home";
       buttons.forEach((btn) => {
-        btn.classList.toggle("is-active", btn.dataset.dashboardTab === tab);
+        btn.classList.toggle("is-active", btn.dataset.dashboardTab === activeTab);
       });
       panels.forEach((panel) => {
-        panel.hidden = panel.dataset.dashboardPanel !== tab;
+        panel.hidden = panel.dataset.dashboardPanel !== activeTab;
       });
     };
 
@@ -487,8 +582,10 @@
       });
     });
 
-    activate("home");
-    return { activate };
+    return {
+      activate,
+      getActiveTab: () => activeTab
+    };
   };
 
   const initCustomerAccount = async () => {
@@ -515,14 +612,87 @@
     const statSpent = byId("customerStatSpent");
     const statWishlist = byId("customerStatWishlist");
     const statAddresses = byId("customerStatAddresses");
+    const statPending = byId("customerStatPending");
+    const statDelivered = byId("customerStatDelivered");
+    const statCancelled = byId("customerStatCancelled");
+    const statRefunds = byId("customerStatRefunds");
     const detailPanel = byId("customerOrderDetail");
     const logoutBtn = byId("customerLogoutBtn");
+    const logoutBtnSecondary = byId("customerLogoutBtnSecondary");
+    const avatarChoices = Array.from(page.querySelectorAll("[data-avatar-choice]"));
+    const authSections = Array.from(page.querySelectorAll("[data-auth-section]"));
 
     const state = {
       orders: [],
       wishlist: [],
       addresses: []
     };
+
+    const setAuthUi = (isAuthenticated) => {
+      if (authGate) {
+        authGate.hidden = isAuthenticated;
+      }
+
+      if (!isAuthenticated) {
+        authSections.forEach((section) => {
+          section.hidden = true;
+        });
+        Array.from(page.querySelectorAll("[data-dashboard-panel]")).forEach((panel) => {
+          panel.hidden = true;
+        });
+        closeDetailPanel(detailPanel);
+        return;
+      }
+
+      authSections.forEach((section) => {
+        if (section.hasAttribute("data-dashboard-panel")) {
+          return;
+        }
+        section.hidden = false;
+      });
+
+      tabs?.activate(tabs?.getActiveTab() || "home");
+    };
+
+    setAuthUi(Boolean(authGate?.hidden));
+
+    const readAvatarChoice = () => {
+      try {
+        const stored = window.localStorage.getItem(AVATAR_STORAGE_KEY);
+        return AVATAR_PATHS[stored] ? stored : "female";
+      } catch (_) {
+        return "female";
+      }
+    };
+
+    const applyAvatarChoice = (choice) => {
+      const safeChoice = AVATAR_PATHS[choice] ? choice : "female";
+      if (dashboardAvatar instanceof HTMLImageElement) {
+        dashboardAvatar.src = AVATAR_PATHS[safeChoice];
+        dashboardAvatar.alt = `${safeChoice === "male" ? "Male" : "Female"} customer avatar`;
+      } else if (dashboardAvatar) {
+        dashboardAvatar.textContent = safeChoice === "male" ? "M" : "F";
+      }
+      avatarChoices.forEach((button) => {
+        const selected = button.dataset.avatarChoice === safeChoice;
+        button.classList.toggle("is-selected", selected);
+        button.setAttribute("aria-pressed", selected ? "true" : "false");
+      });
+    };
+
+    avatarChoices.forEach((button) => {
+      button.addEventListener("click", () => {
+        const choice = button.dataset.avatarChoice || "female";
+        try {
+          window.localStorage.setItem(AVATAR_STORAGE_KEY, choice);
+        } catch (_) {
+          // Avatar selection remains visible for the current page even if storage is blocked.
+        }
+        applyAvatarChoice(choice);
+      });
+    });
+
+    applyAvatarChoice(readAvatarChoice());
 
     const renderOrders = () => {
       const list = state.orders;
@@ -534,9 +704,46 @@
         ? list.map((item) => renderOrderCard(item, { showTrack: true })).join("")
         : '<div class="customer-empty">No active or historical orders found.</div>';
 
-      statOrders.textContent = String(list.length);
+      if (statOrders) {
+        statOrders.textContent = String(list.length);
+      }
       const spend = list.reduce((sum, row) => sum + Number(row.grand_total || 0), 0);
-      statSpent.textContent = utils.formatInr(spend);
+      if (statSpent) {
+        statSpent.textContent = utils.formatInr(spend);
+      }
+
+      if (statPending) {
+        statPending.textContent = String(
+          list.filter((row) => {
+            const status = toStatusKey(row.order_status);
+            return status === "pending" || status === "pending_payment" || status === "payment_under_review" || status === "confirmed" || status === "preparing" || status === "out_for_delivery";
+          }).length
+        );
+      }
+      if (statDelivered) {
+        statDelivered.textContent = String(
+          list.filter((row) => {
+            const status = toStatusKey(row.order_status);
+            return status === "delivered" || status === "completed";
+          }).length
+        );
+      }
+      if (statCancelled) {
+        statCancelled.textContent = String(
+          list.filter((row) => {
+            const status = toStatusKey(row.order_status);
+            return status === "cancelled" || status === "rejected";
+          }).length
+        );
+      }
+      if (statRefunds) {
+        statRefunds.textContent = String(
+          list.filter((row) => {
+            const status = toStatusKey(row.order_status);
+            return status === "refund_requested" || status === "partially_refunded" || status === "fully_refunded" || status === "refunded";
+          }).length
+        );
+      }
     };
 
     const renderWishlist = () => {
@@ -544,7 +751,9 @@
       wishlistWrap.innerHTML = list.length
         ? list.map((item) => renderWishlistCard(item)).join("")
         : '<div class="customer-empty">Wishlist is empty. Add favorites to revisit quickly.</div>';
-      statWishlist.textContent = String(list.length);
+      if (statWishlist) {
+        statWishlist.textContent = String(list.length);
+      }
     };
 
     const renderAddresses = () => {
@@ -552,7 +761,9 @@
       addressesWrap.innerHTML = list.length
         ? list.map((item) => renderAddressCard(item)).join("")
         : '<div class="customer-empty">No saved addresses. Add one for smooth checkout.</div>';
-      statAddresses.textContent = String(list.length);
+      if (statAddresses) {
+        statAddresses.textContent = String(list.length);
+      }
     };
 
     const renderNotifications = () => {
@@ -606,20 +817,39 @@
       }
     });
 
-    try {
-      const [profilePayload, ordersPayload, wishlistPayload, addressesPayload] = await Promise.all([
+    const loadAuthenticatedDashboard = async () => {
+      let authPayload;
+      try {
+        authPayload = await utils.apiGet("/api/auth/me");
+      } catch (_) {
+        setAuthUi(false);
+        if (!authGate) {
+          window.location.replace("/account/login.php");
+        }
+        return false;
+      }
+
+      if (!authPayload?.data?.is_authenticated || !authPayload?.data?.user) {
+        setAuthUi(false);
+        if (!authGate) {
+          window.location.replace("/account/login.php");
+        }
+        return false;
+      }
+
+      setAuthUi(true);
+      const authUser = authPayload?.data?.user || {};
+
+      const [profileResult, ordersResult, wishlistResult, addressesResult] = await Promise.allSettled([
         utils.apiGet("/api/account/profile"),
         utils.apiGet("/api/orders"),
         utils.apiGet("/api/wishlist"),
         utils.apiGet("/api/account/addresses")
       ]);
 
-      const user = profilePayload.data?.user || {};
-      const profile = profilePayload.data?.profile || {};
-
-      if (authGate) {
-        authGate.hidden = true;
-      }
+      const profilePayload = profileResult.status === "fulfilled" ? profileResult.value : null;
+      const user = profilePayload?.data?.user || authUser;
+      const profile = profilePayload?.data?.profile || {};
 
       const initials = String(user.full_name || "C")
         .split(" ")
@@ -629,7 +859,10 @@
         .join("") || "C";
 
       dashboardName.textContent = user.full_name || "Cakeouflage Guest";
-      dashboardAvatar.textContent = initials;
+      if (!(dashboardAvatar instanceof HTMLImageElement) && dashboardAvatar) {
+        dashboardAvatar.textContent = initials;
+      }
+      applyAvatarChoice(readAvatarChoice());
 
       byId("customerProfileName").value = user.full_name || "";
       byId("customerProfileEmail").value = user.email || "";
@@ -637,20 +870,16 @@
       byId("customerProfileDob").value = profile.date_of_birth || "";
       byId("customerProfileDoa").value = profile.doa || "";
 
-      state.orders = ordersPayload.data?.items || [];
-      state.wishlist = wishlistPayload.data?.items || [];
-      state.addresses = addressesPayload.data?.items || [];
+      state.orders = ordersResult.status === "fulfilled" ? (ordersResult.value.data?.items || []) : [];
+      state.wishlist = wishlistResult.status === "fulfilled" ? (wishlistResult.value.data?.items || []) : [];
+      state.addresses = addressesResult.status === "fulfilled" ? (addressesResult.value.data?.items || []) : [];
 
       renderOrders();
       renderWishlist();
       renderAddresses();
       renderNotifications();
-    } catch (error) {
-      if (authGate) {
-        authGate.hidden = false;
-      }
-      return;
-    }
+      return true;
+    };
 
     profileForm?.addEventListener("submit", async (event) => {
       event.preventDefault();
@@ -808,14 +1037,24 @@
       }
     });
 
-    logoutBtn?.addEventListener("click", async (event) => {
+    const handleLogout = async (event) => {
       event.preventDefault();
       try {
         await utils.apiPost("/api/auth/logout", {});
       } catch (_) {
-        // proceed to login even if logout API fails silently
+        // Keep UI stable even when API call fails.
       }
-      window.location.href = "/login";
+      setAuthUi(false);
+      window.location.replace("/account/login.php");
+    };
+
+    logoutBtn?.addEventListener("click", handleLogout);
+    logoutBtnSecondary?.addEventListener("click", handleLogout);
+
+    await loadAuthenticatedDashboard();
+
+    window.addEventListener("cakeouflage:auth:verified", () => {
+      void loadAuthenticatedDashboard();
     });
   };
 

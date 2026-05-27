@@ -22,6 +22,7 @@ $settingKeys = array(
     'business_postal_code',
     'business_phone',
     'business_email',
+    'business_website',
     'business_gst_number',
     'business_pan_number',
     'upi_apps_script_endpoint_url',
@@ -41,9 +42,15 @@ $settingKeys = array(
     'brand_secondary_color',
     'support_email',
     'support_phone',
+    'support_whatsapp',
     'order_delete_password_hash',
     'order_archive_retention_days',
     'invoice_duplicate_copy',
+    'business_logo',
+    'business_address',
+    'store_food_mode',
+    'currency_code',
+    'currency_symbol',
 );
 
 $settings = array();
@@ -61,6 +68,15 @@ $hasOrderDeletePassword = trim((string)($settings['order_delete_password_hash'] 
 $archiveRetentionDays = (int)($settings['order_archive_retention_days'] ?? 30);
 if ($archiveRetentionDays < 7 || $archiveRetentionDays > 3650) {
   $archiveRetentionDays = 30;
+}
+if (trim((string)($settings['currency_code'] ?? '')) === '') {
+  $settings['currency_code'] = 'INR';
+}
+if (trim((string)($settings['currency_symbol'] ?? '')) === '') {
+  $settings['currency_symbol'] = '₹';
+}
+if (trim((string)($settings['store_food_mode'] ?? '')) === '') {
+  $settings['store_food_mode'] = 'veg_only';
 }
 ?>
 
@@ -260,6 +276,10 @@ if ($archiveRetentionDays < 7 || $archiveRetentionDays > 3650) {
           <label for="business_email">Business Email</label>
           <input type="email" id="business_email" name="business_email" maxlength="190" placeholder="business@example.com" value="<?= htmlspecialchars($settings['business_email']) ?>">
         </div>
+        <div class="settings-field" style="grid-column: 1/-1">
+          <label for="business_website">Business Website</label>
+          <input type="url" id="business_website" name="business_website" maxlength="255" placeholder="https://www.cakeouflage.com" value="<?= htmlspecialchars($settings['business_website']) ?>">
+        </div>
       </div>
     </div>
 
@@ -367,7 +387,7 @@ if ($archiveRetentionDays < 7 || $archiveRetentionDays > 3650) {
     <!-- Email Branding Section -->
     <div class="settings-section">
       <h4>Email Branding</h4>
-      <p style="margin:0 0 14px;font-size:0.85rem;color:#5a3344;">Logo and brand colours used in all transactional emails. Upload your logo once — every email template reads it automatically via <code>{{email_logo_url}}</code>.</p>
+      <p style="margin:0 0 14px;font-size:0.85rem;color:#5a3344;">Logo and brand colours used in all transactional emails. Upload your logo once — every email template reads it automatically via <code>{{business_logo}}</code>.</p>
       <div class="settings-grid">
         <div class="settings-field" style="grid-column: 1/-1">
           <label>Email Logo</label>
@@ -384,6 +404,7 @@ if ($archiveRetentionDays < 7 || $archiveRetentionDays > 3650) {
             </div>
           </div>
           <input type="hidden" id="email_logo_url" name="email_logo_url" value="<?= htmlspecialchars($settings['email_logo_url']) ?>">
+          <input type="hidden" id="business_logo" name="business_logo" value="<?= htmlspecialchars($settings['business_logo'] ?: $settings['email_logo_url']) ?>">
           <p style="margin:6px 0 0;font-size:0.78rem;color:#888;">Recommended: PNG or SVG, transparent background, at least 400px wide.</p>
         </div>
         <div class="settings-field" style="grid-column: 1/-1">
@@ -442,6 +463,22 @@ if ($archiveRetentionDays < 7 || $archiveRetentionDays > 3650) {
           <label for="support_phone">Support Phone (shown in emails)</label>
           <input type="text" id="support_phone" name="support_phone" maxlength="40" placeholder="+91 XXXXX XXXXX" value="<?= htmlspecialchars($settings['support_phone']) ?>">
         </div>
+        <div class="settings-field">
+          <label for="support_whatsapp">Support WhatsApp (shown in emails)</label>
+          <input type="text" id="support_whatsapp" name="support_whatsapp" maxlength="40" placeholder="+91 XXXXX XXXXX" value="<?= htmlspecialchars($settings['support_whatsapp']) ?>">
+        </div>
+        <div class="settings-field">
+          <label for="currency_code">Currency Code</label>
+          <input type="text" id="currency_code" name="currency_code" maxlength="12" placeholder="INR" value="<?= htmlspecialchars($settings['currency_code']) ?>">
+        </div>
+        <div class="settings-field">
+          <label for="currency_symbol">Currency Symbol</label>
+          <input type="text" id="currency_symbol" name="currency_symbol" maxlength="8" placeholder="₹" value="<?= htmlspecialchars($settings['currency_symbol']) ?>">
+        </div>
+        <div class="settings-field" style="grid-column:1/-1;">
+          <label for="business_address">Business Address (single-line variable for templates)</label>
+          <textarea id="business_address" name="business_address" maxlength="380" placeholder="Full business address used in communications and invoice footers"><?= htmlspecialchars($settings['business_address']) ?></textarea>
+        </div>
       </div>
     </div>
 
@@ -480,6 +517,20 @@ if ($archiveRetentionDays < 7 || $archiveRetentionDays > 3650) {
           <label>Checkout Collection Policy</label>
           <input type="text" value="Full payment only (locked)" readonly>
           <p class="settings-hint">Partial/advance checkout has been disabled globally. UPI screenshot remains required for manual UPI verification.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <h4>Catalog Food Mode</h4>
+      <div class="settings-grid">
+        <div class="settings-field" style="grid-column:1/-1;">
+          <label for="store_food_mode">Store Food Mode</label>
+          <select id="store_food_mode" name="store_food_mode">
+            <option value="veg_only" <?= ($settings['store_food_mode'] ?? 'veg_only') === 'veg_only' ? 'selected' : '' ?>>Veg Only</option>
+            <option value="veg_nonveg" <?= ($settings['store_food_mode'] ?? 'veg_only') === 'veg_nonveg' ? 'selected' : '' ?>>Veg + Non-Veg</option>
+          </select>
+          <p class="settings-hint">This is the master switch for storefront filters, product dietary inputs, and BYOC dietary behavior.</p>
         </div>
       </div>
     </div>

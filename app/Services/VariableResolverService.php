@@ -8,9 +8,14 @@ final class VariableResolverService
     /** @param array<string,mixed> $context */
     public function resolveValue(string $key, array $context, ?string $fallback = null): string
     {
-        $normalized = trim($key);
+        $normalized = TemplateVariableRegistry::normalizeKey($key);
         if ($normalized === '') {
             return $fallback ?? '';
+        }
+
+        $registryValue = TemplateVariableRegistry::resolveFromContext($normalized, $context);
+        if ($registryValue !== '') {
+            return $registryValue;
         }
 
         $value = $context[$normalized] ?? null;
@@ -32,6 +37,37 @@ final class VariableResolverService
             $firstName = trim((string)($context['first_name'] ?? ''));
             if ($firstName !== '') {
                 return $firstName;
+            }
+        }
+
+        if ($normalized === 'payment_received_amount') {
+            return (string)($context['payment_received_amount'] ?? $context['grand_total'] ?? '0.00');
+        }
+        if ($normalized === 'delivery_method') {
+            return (string)($context['delivery_method'] ?? $context['fulfilment_mode'] ?? $context['fulfillment_mode'] ?? '');
+        }
+        if ($normalized === 'fulfillment_status' || $normalized === 'fulfilment_status') {
+            return (string)($context[$normalized] ?? $context['order_status'] ?? '');
+        }
+        if ($normalized === 'delivery_slot') {
+            return (string)($context['delivery_slot'] ?? $context['scheduled_slot_label'] ?? $context['scheduled_slot'] ?? '');
+        }
+        if ($normalized === 'transaction_reference') {
+            return (string)($context['transaction_reference'] ?? $context['payment_reference'] ?? $context['utr_number'] ?? $context['settlement_reference'] ?? '');
+        }
+        if ($normalized === 'coupon_discount' || $normalized === 'discount_amount') {
+            return (string)($context[$normalized] ?? $context['discount_total'] ?? '0.00');
+        }
+        if ($normalized === 'support_whatsapp_url') {
+            $url = trim((string)($context['support_whatsapp_url'] ?? ''));
+            if ($url !== '') {
+                return $url;
+            }
+
+            $phone = (string)($context['support_whatsapp'] ?? $context['support_phone'] ?? '');
+            $digits = preg_replace('/\D+/', '', $phone) ?? '';
+            if ($digits !== '') {
+                return 'https://wa.me/' . $digits;
             }
         }
 
@@ -63,6 +99,10 @@ final class VariableResolverService
             return number_format(max(0.0, $grandTotal - $totalRef), 2);
         }
 
+        if (!TemplateVariableRegistry::isRegistered($normalized)) {
+            return '';
+        }
+
         return $fallback ?? 'Valued Customer';
     }
 
@@ -72,6 +112,15 @@ final class VariableResolverService
         return preg_replace_callback('/{{\s*([a-zA-Z0-9_]+)\s*}}/', function (array $matches) use ($context, $defaultFallback): string {
             $key = (string)($matches[1] ?? '');
             return $this->resolveValue($key, $context, $defaultFallback);
+        }, $template) ?? $template;
+    }
+
+    /** @param array<string,mixed> $context */
+    public function renderStrict(string $template, array $context): string
+    {
+        return preg_replace_callback('/{{\s*([a-zA-Z0-9_]+)\s*}}/', function (array $matches) use ($context): string {
+            $key = (string)($matches[1] ?? '');
+            return $this->resolveValue($key, $context, '');
         }, $template) ?? $template;
     }
 
@@ -101,20 +150,37 @@ final class VariableResolverService
     {
         return [
             // Branding (injected at send-time by EmailBrandingService)
-            'email_logo_url'        => 'https://via.placeholder.com/240x80/80001F/ffffff?text=YOUR+LOGO',
+            'email_logo_url'        => '/client/assets/images/mainlogo.svg',
             'business_name'         => 'Cakeouflage',
             'brand_primary_color'   => '#80001F',
             'brand_secondary_color' => '#140b0f',
             'support_email'         => 'support@cakeouflage.com',
             'support_phone'         => '+91 00000 00000',
+            'support_whatsapp'      => '+91 00000 00000',
+            'support_whatsapp_url'  => 'https://wa.me/910000000000',
+            'business_logo'         => '/client/assets/images/mainlogo.svg',
+            'business_address'      => '123 Celebration Street, Nashik, Maharashtra 422001',
+            'business_website'      => 'https://www.cakeouflage.com',
+            'currency_symbol'       => 'Rs',
+            'currency_code'         => 'INR',
             // Customer / order context
             'customer_name' => 'Priya Sharma',
             'first_name' => 'Priya',
+            'customer_email' => 'priya.sharma@example.com',
+            'customer_phone' => '+91 98765 43210',
             'order_number' => 'CK1024',
+            'order_status' => 'confirmed',
+            'product_summary' => 'Chocolate Fantasy Cake x1',
+            'payment_status' => 'paid',
+            'payment_method' => 'upi',
+            'transaction_reference' => 'UPI-REF-424242',
             'invoice_number' => 'INV-2026-0008',
-            'invoice_amount' => 'INR 1,850',
-            'due_date' => '2026-04-05',
+            'invoice_date' => '2026-04-05',
+            'invoice_download_link' => 'https://cakeouflage.com/order_invoice.php?id=123',
             'delivery_date' => '2026-04-06',
+            'delivery_slot' => '09:00-11:00',
+            'delivery_method' => 'delivery',
+            'delivery_address' => '123 Celebration Street, Nashik',
             'pickup_time' => '05:30 PM',
             'course_name' => 'Beginner Cake Workshop',
             'batch_date' => '2026-04-18',
@@ -125,14 +191,16 @@ final class VariableResolverService
             'topper_price' => '₹0',
             'special_instructions' => 'No nuts please',
             'item_details' => '1× Chocolate Fantasy Cake',
+            'item_names' => 'Chocolate Fantasy Cake',
+            'item_count' => '1',
+            'grand_total' => '1850.00',
+            'payment_received_amount' => '1850.00',
+            'coupon_discount' => '0.00',
+            'coupon_code' => '',
             // Refund preview values
             'refund_amount'          => '1250.00',
             'refund_reason'          => 'Quality Complaint',
-            'refund_type'            => 'Partial',
-            'refund_notes'           => 'Customer received damaged cake',
-            'refund_reference'       => 'REF-20260523-A1B2',
-            'total_refunded'         => '1250.00',
-            'remaining_sales_amount' => '600.00',
+            'refund_status'          => 'processed',
         ];
     }
 }

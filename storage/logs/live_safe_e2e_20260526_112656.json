@@ -1,0 +1,33 @@
+{
+  "base_url": "https://cakeouflage.com",
+  "started_at": "2026-05-26T11:26:58",
+  "aliases": [
+    {
+      "route": "reports.php",
+      "status_code": 200,
+      "final_url": null,
+      "title": "Admin Panel"
+    },
+    {
+      "route": "accounting.php",
+      "status_code": 200,
+      "final_url": null,
+      "title": "Admin Panel"
+    }
+  ],
+  "collections": {
+    "action_response": null,
+    "before_log_count": 0,
+    "after_log_count": 0,
+    "recent_logs": null
+  },
+  "manual_order": {},
+  "online_order": {},
+  "byoc_order": {},
+  "rollback_ledger": [],
+  "admin_login": {
+    "success": false,
+    "final_url": null
+  },
+  "finished_at": "2026-05-26T11:27:32"
+}

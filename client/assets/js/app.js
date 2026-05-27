@@ -413,7 +413,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const addBtn = document.getElementById("addToCartButton");
 
     if (!slug) {
-      titleEl.textContent = "Product unavailable";
+      if (titleEl) titleEl.textContent = "Product unavailable";
       return;
     }
 
@@ -423,36 +423,45 @@ document.addEventListener("DOMContentLoaded", () => {
       const variants = payload.data?.variants || [];
       const related = payload.data?.related_products || [];
 
-      titleEl.textContent = product.name;
-      shortEl.textContent = product.short_description;
-      noteEl.textContent = product.customisation_note || "";
+      if (titleEl) titleEl.textContent = product.name;
+      if (shortEl) shortEl.textContent = product.short_description;
+      if (noteEl) noteEl.textContent = product.customisation_note || "";
 
-      variantEl.innerHTML = variants
-        .map((variant) => {
-          const displayPrice = Number(variant.discount_price || variant.price || 0);
-          return `<option value="${variant.id}">${variant.variant_label} - ${utils.formatInr(displayPrice)}</option>`;
-        })
-        .join("");
+      if (variantEl) {
+        variantEl.innerHTML = variants
+          .map((variant) => {
+            const displayPrice = Number(variant.discount_price || variant.price || 0);
+            return `<option value="${variant.id}">${variant.variant_label} - ${utils.formatInr(displayPrice)}</option>`;
+          })
+          .join("");
 
-      const setPriceFromSelectedVariant = () => {
-        const selected = variants.find((variant) => String(variant.id) === String(variantEl.value));
-        const displayPrice = Number(selected?.discount_price || selected?.price || product.starting_price || 0);
+        const setPriceFromSelectedVariant = () => {
+          const selected = variants.find((variant) => String(variant.id) === String(variantEl.value));
+          const displayPrice = Number(selected?.discount_price || selected?.price || product.starting_price || 0);
+          if (priceEl) priceEl.textContent = utils.formatInr(displayPrice);
+        };
+        setPriceFromSelectedVariant();
+        variantEl.addEventListener("change", setPriceFromSelectedVariant);
+      } else if (priceEl) {
+        const displayPrice = Number(variants[0]?.discount_price || variants[0]?.price || product.starting_price || 0);
         priceEl.textContent = utils.formatInr(displayPrice);
-      };
-      setPriceFromSelectedVariant();
-      variantEl.addEventListener("change", setPriceFromSelectedVariant);
+      }
 
-      relatedEl.innerHTML = related
-        .map((item) => {
-          const imageUrl = utils.safeImage(item.image || item.featured_image || "", utils.productPlaceholder);
-          return `<article class="product-card"><a class="product-card__image-wrap" href="${BASE}/product/${item.slug}"><img class="product-card__image" src="${imageUrl}" alt="${item.name}" loading="lazy" width="400" height="400" onerror="this.onerror=null;this.src='${utils.productPlaceholder}'" /></a><h3>${item.name}</h3><p>${utils.formatInr(item.starting_price)}</p><a class="btn btn--secondary" href="${BASE}/product/${item.slug}">View</a></article>`;
-        })
-        .join("");
+      if (relatedEl) {
+        relatedEl.innerHTML = related
+          .map((item) => {
+            const imageUrl = utils.safeImage(item.image || item.featured_image || "", utils.productPlaceholder);
+            return `<article class="product-card"><a class="product-card__image-wrap" href="${BASE}/product/${item.slug}"><img class="product-card__image" src="${imageUrl}" alt="${item.name}" loading="lazy" width="400" height="400" onerror="this.onerror=null;this.src='${utils.productPlaceholder}'" /></a><h3>${item.name}</h3><p>${utils.formatInr(item.starting_price)}</p><a class="btn btn--secondary" href="${BASE}/product/${item.slug}">View</a></article>`;
+          })
+          .join("");
+        utils.bindImageFallbacks?.(relatedEl);
+      }
 
       addBtn?.addEventListener("click", async () => {
         try {
-          await window.CakeouflageCart?.addItem(Number(product.id), Number(variantEl.value || 0), 1);
-          addBtn.textContent = "Added To Cart";
+          const variantId = variantEl ? Number(variantEl.value || 0) : 0;
+          await window.CakeouflageCart?.addItem(Number(product.id), variantId, 1);
+          if (addBtn) addBtn.textContent = "Added To Cart";
         } catch (error) {
           alert(error.message);
         }
@@ -468,8 +477,8 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       });
     } catch (error) {
-      titleEl.textContent = "Product unavailable";
-      shortEl.textContent = error.message;
+      if (titleEl) titleEl.textContent = "Product unavailable";
+      if (shortEl) shortEl.textContent = error.message;
     }
   };
 
@@ -1110,8 +1119,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
         try {
           await verifyOtp({ email, otp });
-          loginStatus.textContent = "OTP verified. Redirecting to account...";
-          window.location.href = "/account";
+          loginStatus.textContent = "OTP verified. Redirecting to dashboard...";
+          window.location.href = "/account/dashboard.php";
         } catch (error) {
           loginStatus.textContent = error.message;
         }
@@ -1165,8 +1174,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
         try {
           await verifyOtp({ email, otp, name: fullName, phone });
-          registerStatus.textContent = "Registration complete. Redirecting to account...";
-          window.location.href = "/account";
+          registerStatus.textContent = "Registration complete. Redirecting to dashboard...";
+          window.location.href = "/account/dashboard.php";
         } catch (error) {
           registerStatus.textContent = error.message;
         }

@@ -1,6 +1,17 @@
 (function () {
   'use strict';
 
+  function getCsrfToken() {
+    var meta = document.querySelector('meta[name="csrf-token"]');
+    if (meta && meta.getAttribute('content')) {
+      return meta.getAttribute('content');
+    }
+    if (typeof window.__csrf === 'string' && window.__csrf) {
+      return window.__csrf;
+    }
+    return '';
+  }
+
   function ensureToastStack() {
     var stack = document.getElementById('odToastStack');
     if (!stack) {
@@ -183,16 +194,24 @@
     var expected = parseFloat(options.expectedAmount || '0');
     var dialogResult = await showDialog({
       title: 'Confirm Payment',
-      description: 'Confirm received amount and reserve the slot for this order.',
+      description: 'Select payment mode, then confirm amount and reserve the slot for this order.',
       fields: [
-        '<div class="od-field"><label for="odReceivedAmount">Amount Received *</label><input id="odReceivedAmount" type="number" step="0.01" value="' + expected.toFixed(2) + '" data-autofocus="1"></div>',
+        '<div class="od-field"><label for="odPaymentMode">Mode of Payment *</label><select id="odPaymentMode" data-autofocus="1"><option value="">Select payment mode</option><option value="cod">Cash</option><option value="upi_manual">UPI / Bank</option><option value="credit">Credit</option></select></div>',
+        '<div class="od-field"><label for="odReceivedAmount">Amount Received *</label><input id="odReceivedAmount" type="number" step="0.01" value="' + expected.toFixed(2) + '"></div>',
         '<div class="od-field"><label for="odDiscountReason">Shortfall Reason</label><input id="odDiscountReason" type="text" placeholder="Required if shortfall exists"></div>',
         '<label style="display:flex;gap:8px;align-items:flex-start;font-size:12px;color:#374151;"><input id="odManagerOverride" type="checkbox"> <span>Manager override approved for discounts above 5%.</span></label>'
       ],
       onConfirm: function (backdrop) {
+        var paymentMode = (backdrop.querySelector('#odPaymentMode').value || '').trim();
         var received = parseFloat((backdrop.querySelector('#odReceivedAmount').value || '0').trim());
         var reason = (backdrop.querySelector('#odDiscountReason').value || '').trim();
         var override = !!backdrop.querySelector('#odManagerOverride').checked;
+        if (!paymentMode) {
+          return { ok: false, message: 'Please select mode of payment.' };
+        }
+        if (paymentMode === 'credit') {
+          return { ok: true, data: { paymentMode: paymentMode, received: null, reason: '', override: false } };
+        }
         if (!isFinite(received) || received <= 0) {
           return { ok: false, message: 'Enter a valid received amount.' };
         }
@@ -203,7 +222,7 @@
         if (expected > 0 && shortfall / expected > 0.05 && !override) {
           return { ok: false, message: 'Manager override is required for discounts above 5%.' };
         }
-        return { ok: true, data: { received: received, reason: reason, override: override } };
+        return { ok: true, data: { paymentMode: paymentMode, received: received, reason: reason, override: override } };
       }
     });
 
@@ -214,14 +233,18 @@
     var msg = document.getElementById('order-payment-action-msg');
     if (msg) msg.textContent = 'Processing…';
     try {
+      var csrfToken = getCsrfToken();
       var response = await fetch('/api/admin/orders/' + orderId + '/confirm-payment', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Requested-With': 'XMLHttpRequest'
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-CSRF-Token': csrfToken
         },
         credentials: 'same-origin',
         body: JSON.stringify({
+          _csrf: csrfToken,
+          payment_method: dialogResult.paymentMode,
           received_amount: dialogResult.received,
           discount_reason: dialogResult.reason,
           manager_override: dialogResult.override

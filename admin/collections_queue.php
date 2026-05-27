@@ -31,6 +31,9 @@ $totalRows = (int)$queue['totalRows'];
 $totalPages = (int)$queue['totalPages'];
 $page = (int)$queue['page'];
 
+$flashError = trim((string)($_GET['error'] ?? ''));
+$flashMessage = trim((string)($_GET['message'] ?? ''));
+
 $orderIds = [];
 foreach ($rows as $row) {
     $orderIds[] = (int)$row['id'];
@@ -38,47 +41,66 @@ foreach ($rows as $row) {
 
 $logsByOrder = [];
 $timelineSummaryByOrder = [];
+$hasCollectionFollowupLogs = false;
+try {
+  $hasCollectionFollowupLogs = (int)$db->fetchScalar(
+    'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = :table_name',
+    ['table_name' => 'collection_followup_logs']
+  ) > 0;
+} catch (\Throwable $e) {
+  $hasCollectionFollowupLogs = false;
+}
 if (!empty($orderIds)) {
-  $timelineSummaryRows = $db->fetchAll(
-    'SELECT
-      s.order_id,
-      s.total_events,
-      l.actor_name AS last_actor_name,
-      l.created_at AS last_created_at
-     FROM (
-      SELECT order_id, COUNT(*) AS total_events, MAX(id) AS max_id
-      FROM collection_followup_logs
-      WHERE order_id IN (' . implode(',', array_map('intval', $orderIds)) . ')
-      GROUP BY order_id
-     ) s
-     LEFT JOIN collection_followup_logs l ON l.id = s.max_id'
-  );
-  foreach ($timelineSummaryRows as $summary) {
-    $oid = (int)($summary['order_id'] ?? 0);
-    $timelineSummaryByOrder[$oid] = [
-      'total_events' => (int)($summary['total_events'] ?? 0),
-      'last_actor_name' => trim((string)($summary['last_actor_name'] ?? '')),
-      'last_created_at' => trim((string)($summary['last_created_at'] ?? '')),
-    ];
+  if ($hasCollectionFollowupLogs) {
+    try {
+      $timelineSummaryRows = $db->fetchAll(
+        'SELECT
+          s.order_id,
+          s.total_events,
+          l.actor_name AS last_actor_name,
+          l.created_at AS last_created_at
+         FROM (
+          SELECT order_id, COUNT(*) AS total_events, MAX(id) AS max_id
+          FROM collection_followup_logs
+          WHERE order_id IN (' . implode(',', array_map('intval', $orderIds)) . ')
+          GROUP BY order_id
+         ) s
+         LEFT JOIN collection_followup_logs l ON l.id = s.max_id'
+      );
+      foreach ($timelineSummaryRows as $summary) {
+        $oid = (int)($summary['order_id'] ?? 0);
+        $timelineSummaryByOrder[$oid] = [
+          'total_events' => (int)($summary['total_events'] ?? 0),
+          'last_actor_name' => trim((string)($summary['last_actor_name'] ?? '')),
+          'last_created_at' => trim((string)($summary['last_created_at'] ?? '')),
+        ];
+      }
+
+      $logRows = $db->fetchAll(
+          'SELECT order_id, action_type, followup_status, message_text, actor_name, created_at
+           FROM collection_followup_logs
+           WHERE order_id IN (' . implode(',', array_map('intval', $orderIds)) . ')
+           ORDER BY created_at DESC
+           LIMIT 500'
+      );
+
+      foreach ($logRows as $log) {
+          $oid = (int)($log['order_id'] ?? 0);
+          if (!isset($logsByOrder[$oid])) {
+              $logsByOrder[$oid] = [];
+          }
+          if (count($logsByOrder[$oid]) < 3) {
+              $logsByOrder[$oid][] = $log;
+          }
+      }
+    } catch (\Throwable $e) {
+      error_log('[collections_queue][timeline] ' . $e->getMessage());
+    }
   }
 
-    $logRows = $db->fetchAll(
-        'SELECT order_id, action_type, followup_status, message_text, actor_name, created_at
-         FROM collection_followup_logs
-         WHERE order_id IN (' . implode(',', array_map('intval', $orderIds)) . ')
-         ORDER BY created_at DESC
-         LIMIT 500'
-    );
-
-    foreach ($logRows as $log) {
-        $oid = (int)($log['order_id'] ?? 0);
-        if (!isset($logsByOrder[$oid])) {
-            $logsByOrder[$oid] = [];
-        }
-        if (count($logsByOrder[$oid]) < 3) {
-            $logsByOrder[$oid][] = $log;
-        }
-    }
+  if (!$hasCollectionFollowupLogs && $flashError === '') {
+    $flashError = 'Timeline log table is not available yet. Queue actions are still usable.';
+  }
 }
 
 function collection_queue_url(array $overrides = []): string
@@ -184,8 +206,8 @@ queue_write_export_audit($db, [
   'issued_by_name' => (string)($_SESSION['admin_name'] ?? ''),
 ]);
 
-$flashError = trim((string)($_GET['error'] ?? ''));
-$flashMessage = trim((string)($_GET['message'] ?? ''));
+$flashError = $flashError !== '' ? $flashError : trim((string)($_GET['error'] ?? ''));
+$flashMessage = $flashMessage !== '' ? $flashMessage : trim((string)($_GET['message'] ?? ''));
 $canEscalateCollections = admin_has_permission('order_reject') || admin_has_permission('can_approve_refund') || admin_is_super_admin() || in_array((string)($_SESSION['admin_role'] ?? ''), ['admin', 'ops_manager'], true);
 $canMarkSettledCollections = admin_has_permission('order_credit') || admin_has_permission('order_edit') || admin_is_super_admin() || in_array((string)($_SESSION['admin_role'] ?? ''), ['admin', 'sales_manager', 'ops_manager'], true);
 ?>
@@ -528,6 +550,24 @@ $canMarkSettledCollections = admin_has_permission('order_credit') || admin_has_p
       const promiseDate = prompt('Promise date (YYYY-MM-DD)', '');
       if (promiseDate !== null && promiseDate.trim() !== '') {
         formData.append('promise_date', promiseDate.trim());
+      }
+    }
+
+    if (actionType === 'payment_collected') {
+      const settlementRef = prompt('Settlement reference (UTR/receipt ID)', '');
+      if (settlementRef === null || settlementRef.trim() === '') {
+        alert('Settlement reference is required to mark payment as collected.');
+        return;
+      }
+      formData.append('settlement_reference', settlementRef.trim());
+
+      const paymentModeRaw = prompt('Settlement mode (cod / upi_manual / gateway)', 'upi_manual');
+      const paymentMode = paymentModeRaw && paymentModeRaw.trim() !== '' ? paymentModeRaw.trim().toLowerCase() : 'upi_manual';
+      formData.append('settlement_payment_method', paymentMode);
+
+      const settledAmountRaw = prompt('Settled amount (leave blank for full balance)', '');
+      if (settledAmountRaw !== null && settledAmountRaw.trim() !== '') {
+        formData.append('settled_amount', settledAmountRaw.trim());
       }
     }
 

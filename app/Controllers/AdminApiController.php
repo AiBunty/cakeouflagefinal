@@ -8,7 +8,10 @@ use App\Core\QueueWorker;
 use App\Core\Request;
 use App\Core\Response;
 use App\Services\AuthRateLimitService;
+use App\Services\AuthManager;
 use App\Services\ExcelService;
+use App\Services\FinancialReconciliationService;
+use App\Services\MediaCapabilityService;
 use App\Services\UnifiedMediaService;
 use App\Services\VariableResolverService;
 use App\Services\WhatsAppDispatchService;
@@ -37,43 +40,84 @@ final class AdminApiController
 
     public function authLogin(): void
     {
-        $input = $this->readJsonInput();
-        $email = trim((string)($input['email'] ?? ''));
-        $password = (string)($input['password'] ?? '');
+        Response::json([
+            'success' => false,
+            'message' => 'Password-based admin login is disabled. Use OTP login only.',
+        ], 410);
+    }
 
-        if ($email === '' || $password === '') {
-            Response::json(['success' => false, 'message' => 'Email and password are required'], 422);
+    public function authSendOtp(): void
+    {
+        $input = $this->readJsonInput();
+        $email = strtolower(trim((string)($input['email'] ?? '')));
+
+        if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            Response::json(['success' => false, 'message' => 'Valid admin email is required'], 422);
             return;
         }
 
         $pdo = self::db(); if (!$pdo) return;
-        $rateLimiter = new AuthRateLimitService();
-        $bucketKey = $this->buildRateLimitBucket('admin-login', $email);
-        if ($rateLimiter->isBlocked($pdo, 'admin_login', $bucketKey)) {
-            Response::json(['success' => false, 'message' => 'Too many login attempts. Please try again later.'], 429);
-            return;
-        }
-
-        $stmt = $pdo->prepare('SELECT id, full_name, email, role, password_hash, is_active FROM admins WHERE email = :email LIMIT 1');
+        $stmt = $pdo->prepare('SELECT id, full_name, email FROM admins WHERE email = :email AND is_active = 1 LIMIT 1');
         $stmt->execute(['email' => $email]);
         $admin = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        if (!$admin || (int)$admin['is_active'] !== 1 || !password_verify($password, (string)$admin['password_hash'])) {
-            $rateLimiter->hit($pdo, 'admin_login', $bucketKey, 5, 20);
-            Response::json(['success' => false, 'message' => 'Invalid admin credentials'], 401);
+        if (!$admin) {
+            Response::json(['success' => false, 'message' => 'No active admin account found for this email.'], 404);
             return;
         }
 
-        $rateLimiter->clear($pdo, 'admin_login', $bucketKey);
+        try {
+            AuthManager::sendOtp($pdo, (string)$admin['email'], (string)($admin['full_name'] ?? 'Admin'));
+        } catch (\Throwable $e) {
+            $status = $e->getCode() === 429 ? 429 : 500;
+            Response::json([
+                'success' => false,
+                'message' => $e->getMessage() !== '' ? $e->getMessage() : 'Unable to send OTP email right now.',
+            ], $status);
+            return;
+        }
 
-        $_SESSION['admin_id'] = (int)$admin['id'];
-        $_SESSION['admin_role'] = (string)$admin['role'];
-        $_SESSION['admin_name'] = (string)$admin['full_name'];
+        Response::json(['success' => true, 'message' => 'Admin OTP sent to email']);
+    }
+
+    public function authVerifyOtp(): void
+    {
+        $input = $this->readJsonInput();
+        $email = strtolower(trim((string)($input['email'] ?? '')));
+        $otp = preg_replace('/\D+/', '', (string)($input['otp'] ?? '')) ?? '';
+
+        if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($otp) !== 6) {
+            Response::json(['success' => false, 'message' => 'Valid email and 6-digit OTP are required'], 422);
+            return;
+        }
+
+        $pdo = self::db(); if (!$pdo) return;
+        $stmt = $pdo->prepare('SELECT id, full_name, email, role FROM admins WHERE email = :email AND is_active = 1 LIMIT 1');
+        $stmt->execute(['email' => $email]);
+        $admin = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$admin) {
+            Response::json(['success' => false, 'message' => 'No active admin account found for this email.'], 404);
+            return;
+        }
+
+        try {
+            AuthManager::validateOtp($pdo, $email, $otp, 'admin');
+            AuthManager::establishAdminSession($admin);
+        } catch (\Throwable $e) {
+            $status = ($e->getCode() === 429) ? 429 : (($e->getCode() === 401) ? 401 : 500);
+            Response::json([
+                'success' => false,
+                'message' => $e->getMessage() !== '' ? $e->getMessage() : 'Unable to verify OTP right now.',
+            ], $status);
+            return;
+        }
 
         Response::json([
             'success' => true,
-            'message' => 'Admin login successful',
+            'message' => 'Admin OTP verified',
             'data' => [
+                'redirect_to' => '/admin/dashboard.php',
                 'admin' => [
                     'id' => (int)$admin['id'],
                     'full_name' => (string)$admin['full_name'],
@@ -86,12 +130,20 @@ final class AdminApiController
 
     public function authLogout(): void
     {
-        unset($_SESSION['admin_id'], $_SESSION['admin_role'], $_SESSION['admin_name']);
+        AuthManager::logoutAdmin();
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_destroy();
+        }
         Response::json(['success' => true, 'message' => 'Admin logged out']);
     }
 
     public function authMe(): void
     {
+        if (empty($_SESSION['admin_otp_verified'])) {
+            Response::json(['success' => false, 'message' => 'Admin OTP authentication required'], 401);
+            return;
+        }
+
         $adminId = $this->requireAdminId();
         if ($adminId === null) {
             return;
@@ -120,7 +172,7 @@ final class AdminApiController
         $q = trim((string)($_GET['q'] ?? ''));
         $limit = min(100, max(10, (int)($_GET['limit'] ?? 40)));
 
-        $sql = 'SELECT p.id, p.name, p.slug, p.sku, p.short_description, p.long_description,
+        $sql = 'SELECT p.id, p.name, p.slug, p.sku, p.short_description, p.description, p.long_description,
                    p.collection_category_id, p.starting_price, p.base_price, p.stock_quantity,
                    p.availability_status, p.is_featured, p.is_bestseller, p.is_chef_special,
                    c.name AS category_name, p.created_at
@@ -130,8 +182,11 @@ final class AdminApiController
 
         $params = [];
         if ($q !== '') {
-            $sql .= ' AND (p.name LIKE :q OR p.sku LIKE :q OR p.slug LIKE :q)';
-            $params['q'] = '%' . $q . '%';
+            $sql .= ' AND (p.name LIKE :q_name OR p.sku LIKE :q_sku OR p.slug LIKE :q_slug)';
+            $needle = '%' . $q . '%';
+            $params['q_name'] = $needle;
+            $params['q_sku'] = $needle;
+            $params['q_slug'] = $needle;
         }
 
         $sql .= ' ORDER BY p.created_at DESC LIMIT :limit';
@@ -158,21 +213,24 @@ final class AdminApiController
         $slug = trim((string)($input['slug'] ?? ''));
         $sku = trim((string)($input['sku'] ?? ''));
         $categoryId = (int)($input['collection_category_id'] ?? 0);
-        $shortDescription = trim((string)($input['short_description'] ?? ''));
-        $longDescription = trim((string)($input['long_description'] ?? ''));
+        $description = trim((string)($input['description'] ?? ($input['long_description'] ?? ($input['short_description'] ?? ''))));
+        $shortDescription = trim((string)($input['short_description'] ?? $description));
+        $longDescription = trim((string)($input['long_description'] ?? $description));
         $startingPrice = (float)($input['starting_price'] ?? 0);
         $basePrice = (float)($input['base_price'] ?? $startingPrice);
         $stock = max(0, (int)($input['stock_quantity'] ?? 0));
-        $dietary = (string)($input['dietary_tag'] ?? 'regular');
-        $isVeg = $this->toBinaryFlag($input['is_veg'] ?? 1);
         $availability = (string)($input['availability_status'] ?? 'in_stock');
 
-        if ($name === '' || $slug === '' || $sku === '' || $categoryId <= 0 || $shortDescription === '' || $longDescription === '' || $startingPrice <= 0) {
+        if ($name === '' || $slug === '' || $sku === '' || $categoryId <= 0 || $description === '' || $startingPrice <= 0) {
             Response::json(['success' => false, 'message' => 'Missing required product fields'], 422);
             return;
         }
 
         $pdo = self::db(); if (!$pdo) return;
+
+        $dietaryType = $this->resolveDietaryType($input, $pdo);
+        $dietaryTag = $this->resolveDietaryTag((string)($input['dietary_tag'] ?? 'regular'), $dietaryType);
+        $isVeg = dietaryTypeToIsVeg($dietaryType);
 
         $categoryStmt = $pdo->prepare('SELECT id FROM categories WHERE id = :id AND is_active = 1 AND deleted_at IS NULL LIMIT 1');
         $categoryStmt->execute(['id' => $categoryId]);
@@ -193,7 +251,7 @@ final class AdminApiController
 
             $stmt = $pdo->prepare(
                 'INSERT INTO products (
-                    name, slug, short_description, long_description, sku,
+                    name, slug, short_description, description, long_description, sku,
                     collection_category_id, subcategory_id, occasion_tag, dietary_tag, is_veg,
                     availability_status, lead_time_hours, customisation_note,
                     delivery_eligible, pickup_eligible, featured_image,
@@ -201,7 +259,7 @@ final class AdminApiController
                     is_featured, is_bestseller, is_chef_special, seo_title, seo_description,
                     is_b2b_enabled, b2b_minimum_quantity
                 ) VALUES (
-                    :name, :slug, :short_description, :long_description, :sku,
+                    :name, :slug, :short_description, :description, :long_description, :sku,
                     :collection_category_id, :subcategory_id, :occasion_tag, :dietary_tag, :is_veg,
                     :availability_status, :lead_time_hours, :customisation_note,
                     :delivery_eligible, :pickup_eligible, :featured_image,
@@ -215,14 +273,16 @@ final class AdminApiController
                 'name' => $name,
                 'slug' => $slug,
                 'short_description' => $shortDescription,
+                'description' => $description,
                 'long_description' => $longDescription,
                 'sku' => $sku,
                 'collection_category_id' => $categoryId,
                 'subcategory_id' => (int)($input['subcategory_id'] ?? 0) ?: null,
                 'occasion_tag' => $this->nullableString($input['occasion_tag'] ?? null),
-                'dietary_tag' => $this->safeDietary($dietary),
+                'dietary_tag' => $dietaryTag,
                 'is_veg' => $isVeg,
                 'availability_status' => $this->safeAvailability($availability),
+                'lead_time_hours' => max(1, (int)($input['lead_time_hours'] ?? 24)),
                 'customisation_note' => $this->nullableString($input['customisation_note'] ?? null),
                 'delivery_eligible' => $this->toBinaryFlag($input['delivery_eligible'] ?? 1),
                 'pickup_eligible' => $this->toBinaryFlag($input['pickup_eligible'] ?? 1),
@@ -242,11 +302,18 @@ final class AdminApiController
 
             $productId = (int)$pdo->lastInsertId();
 
+            if ($this->tableHasColumn($pdo, 'products', 'dietary_type')) {
+                $dietaryTypeStmt = $pdo->prepare('UPDATE products SET dietary_type = :dietary_type WHERE id = :id');
+                $dietaryTypeStmt->execute(['dietary_type' => $dietaryType, 'id' => $productId]);
+            }
+
             $variants = is_array($input['variants'] ?? null) ? $input['variants'] : [];
             if (count($variants) === 0) {
                 $variants = [[
                     'variant_label' => '1 lb',
+                    'variant_name' => '1 lb',
                     'weight_or_size' => '1 lb',
+                    'unit_type' => 'size',
                     'price' => round($startingPrice, 2),
                     'stock_quantity' => $stock,
                     'is_default' => 1,
@@ -291,17 +358,20 @@ final class AdminApiController
             return;
         }
 
+        $dietaryType = $this->resolveDietaryType($input, $pdo);
+
         $payload = [
             'name' => trim((string)($input['name'] ?? '')),
             'slug' => trim((string)($input['slug'] ?? '')),
-            'short_description' => trim((string)($input['short_description'] ?? '')),
-            'long_description' => trim((string)($input['long_description'] ?? '')),
+            'description' => trim((string)($input['description'] ?? ($input['long_description'] ?? ($input['short_description'] ?? '')))),
+            'short_description' => trim((string)($input['short_description'] ?? ($input['description'] ?? ($input['long_description'] ?? '')))),
+            'long_description' => trim((string)($input['long_description'] ?? ($input['description'] ?? ($input['short_description'] ?? '')))),
             'sku' => trim((string)($input['sku'] ?? '')),
             'collection_category_id' => (int)($input['collection_category_id'] ?? 0),
             'subcategory_id' => (int)($input['subcategory_id'] ?? 0) ?: null,
             'occasion_tag' => $this->nullableString($input['occasion_tag'] ?? null),
-            'dietary_tag' => $this->safeDietary((string)($input['dietary_tag'] ?? 'regular')),
-            'is_veg' => $this->toBinaryFlag($input['is_veg'] ?? 1),
+            'dietary_tag' => $this->resolveDietaryTag((string)($input['dietary_tag'] ?? 'regular'), $dietaryType),
+            'is_veg' => dietaryTypeToIsVeg($dietaryType),
             'availability_status' => $this->safeAvailability((string)($input['availability_status'] ?? 'in_stock')),
             'lead_time_hours' => max(1, (int)($input['lead_time_hours'] ?? 24)),
             'customisation_note' => $this->nullableString($input['customisation_note'] ?? null),
@@ -322,7 +392,7 @@ final class AdminApiController
             'id' => $productId,
         ];
 
-        if ($payload['name'] === '' || $payload['slug'] === '' || $payload['sku'] === '' || $payload['collection_category_id'] <= 0 || $payload['starting_price'] <= 0 || $payload['base_price'] <= 0) {
+        if ($payload['name'] === '' || $payload['slug'] === '' || $payload['sku'] === '' || $payload['description'] === '' || $payload['collection_category_id'] <= 0 || $payload['starting_price'] <= 0 || $payload['base_price'] <= 0) {
             Response::json(['success' => false, 'message' => 'Missing required product fields'], 422);
             return;
         }
@@ -335,6 +405,7 @@ final class AdminApiController
                     name = :name,
                     slug = :slug,
                     short_description = :short_description,
+                    description = :description,
                     long_description = :long_description,
                     sku = :sku,
                     collection_category_id = :collection_category_id,
@@ -362,6 +433,11 @@ final class AdminApiController
                  WHERE id = :id'
             );
             $stmt->execute($payload);
+
+            if ($this->tableHasColumn($pdo, 'products', 'dietary_type')) {
+                $dietaryTypeStmt = $pdo->prepare('UPDATE products SET dietary_type = :dietary_type WHERE id = :id');
+                $dietaryTypeStmt->execute(['dietary_type' => $dietaryType, 'id' => $productId]);
+            }
 
             if (is_array($input['variants'] ?? null)) {
                 $this->replaceProductVariants($pdo, $productId, $input['variants']);
@@ -1246,6 +1322,8 @@ final class AdminApiController
             return;
         }
 
+        $resolvedOrderStatus = $orderStatus;
+
         if ($orderStatus !== '') {
             $adminRole        = (string)($_SESSION['admin_role']        ?? '');
             $adminPermissions = (array) ($_SESSION['admin_permissions'] ?? []);
@@ -1260,6 +1338,7 @@ final class AdminApiController
                 Response::json(['success' => false, 'message' => $smResult['message']], 422);
                 return;
             }
+            $resolvedOrderStatus = (string)($smResult['new_status'] ?? $orderStatus);
         }
 
         if ($paymentStatus !== '') {
@@ -1291,6 +1370,15 @@ final class AdminApiController
                 }
             } catch (\Throwable $crmErr) {
                 error_log('[ordersUpdateStatus] CRM ready hook error: ' . $crmErr->getMessage());
+            }
+        }
+
+        if ($resolvedOrderStatus !== '') {
+            try {
+                $automation = new \App\Services\OrderAutomationService();
+                $automation->handleStatusChange($pdo, $orderId, $resolvedOrderStatus, $adminId);
+            } catch (\Throwable $automationErr) {
+                error_log('[ordersUpdateStatus] status automation error: ' . $automationErr->getMessage());
             }
         }
 
@@ -1339,32 +1427,17 @@ final class AdminApiController
             return;
         }
 
-        if ((string)$order['payment_status'] === 'paid') {
+        if (in_array((string)$order['payment_status'], ['paid', 'credit'], true)) {
             Response::json(['success' => true, 'message' => 'Payment already confirmed.']);
             return;
         }
 
-        $chargeableAmount = max(0.0, round((float)($order['grand_total'] ?? 0) - (float)($order['refund_amount'] ?? 0), 2));
-        if ($chargeableAmount <= 0.0) {
-            Response::json(['success' => false, 'message' => 'Order chargeable amount must be greater than zero.'], 422);
+        $effectivePaymentMethod = strtolower(trim((string)($input['payment_method'] ?? '')));
+        if (!in_array($effectivePaymentMethod, ['cod', 'upi_manual', 'gateway', 'credit'], true)) {
+            Response::json(['success' => false, 'message' => 'Please select a valid payment mode (Cash, UPI/Bank, or Credit).'], 422);
             return;
         }
 
-        $rawReceived = $input['received_amount'] ?? null;
-        $receivedAmount = $rawReceived === null ? $chargeableAmount : round((float)$rawReceived, 2);
-        if ($receivedAmount <= 0) {
-            Response::json(['success' => false, 'message' => 'Received amount must be greater than zero.'], 422);
-            return;
-        }
-        if ($receivedAmount - $chargeableAmount > 0.01) {
-            Response::json(['success' => false, 'message' => 'Received amount cannot exceed order payable amount.'], 422);
-            return;
-        }
-
-        $discountAmount = max(0.0, round($chargeableAmount - $receivedAmount, 2));
-        $discountRatio = $chargeableAmount > 0 ? ($discountAmount / $chargeableAmount) : 0.0;
-        $managerOverride = !empty($input['manager_override']);
-        $discountReason = trim((string)($input['discount_reason'] ?? ''));
         $adminRole = strtolower(trim((string)($_SESSION['admin_role'] ?? '')));
         $adminPermissions = isset($_SESSION['admin_permissions']) && is_array($_SESSION['admin_permissions'])
             ? array_map(static fn($v): string => (string)$v, $_SESSION['admin_permissions'])
@@ -1373,32 +1446,8 @@ final class AdminApiController
             || in_array('business_settings', $adminPermissions, true)
             || in_array('order_credit', $adminPermissions, true);
 
-        if ($discountAmount > 0 && $discountReason === '') {
-            Response::json([
-                'success' => false,
-                'message' => 'Shortfall discount requires a mandatory reason.',
-            ], 422);
-            return;
-        }
-
-        if ($discountRatio > 0.05 && !($managerOverride && $hasDiscountOverridePermission)) {
-            Response::json([
-                'success' => false,
-                'message' => 'Shortfall discount above 5% requires manager override.',
-            ], 422);
-            return;
-        }
-
-        $effectivePaymentMethod = strtolower(trim((string)($input['payment_method'] ?? ($order['payment_method'] ?? 'upi_manual'))));
-        if (!in_array($effectivePaymentMethod, ['upi_manual', 'gateway', 'credit'], true)) {
-            Response::json(['success' => false, 'message' => 'Invalid payment method for confirmation.'], 422);
-            return;
-        }
-
-        if ($effectivePaymentMethod === 'credit') {
-            Response::json(['success' => false, 'message' => 'Credit confirmations must use the credit workflow.'], 422);
-            return;
-        }
+        $managerOverride = !empty($input['manager_override']);
+        $discountReason = trim((string)($input['discount_reason'] ?? ''));
 
         $pdo->beginTransaction();
         try {
@@ -1415,136 +1464,61 @@ final class AdminApiController
                 return;
             }
 
-            // 2. Mark payment confirmed + order confirmed
-            $paymentNoteSuffix = '';
-            if ($discountAmount > 0) {
-                $paymentNoteSuffix = "\n[Discount Applied] ₹" . number_format($discountAmount, 2, '.', '') . ' - ' . $discountReason;
-            }
-
-            $updateAssignments = [
-                'payment_status = "paid"',
-                'payment_method = :payment_method',
-                'discount_total = ROUND(COALESCE(discount_total, 0) + :discount_amount, 2)',
-                'grand_total = :final_grand_total',
-                'admin_note = CONCAT(COALESCE(admin_note, ""), :payment_note_suffix)',
-                'order_status = CASE WHEN order_status IN ("pending", "pending_payment", "payment_under_review") THEN "confirmed" ELSE order_status END',
-            ];
-            $updateParams = [
-                'id' => $orderId,
+            // 2. Confirm financial state using shared payment confirmation service.
+            $paymentService = new \App\Services\OrderPaymentConfirmationService();
+            $paymentResult = $paymentService->confirmOrderPayment($pdo, $orderId, [
                 'payment_method' => $effectivePaymentMethod,
-                'discount_amount' => $discountAmount,
-                'final_grand_total' => $receivedAmount,
-                'payment_note_suffix' => $paymentNoteSuffix,
-            ];
-            if ($this->tableHasColumn($pdo, 'orders', 'payment_confirmed_at')) {
-                $updateAssignments[] = 'payment_confirmed_at = NOW()';
+                'received_amount' => array_key_exists('received_amount', $input) ? $input['received_amount'] : null,
+                'discount_reason' => $discountReason,
+                'manager_override' => $managerOverride,
+                'has_discount_override_permission' => $hasDiscountOverridePermission,
+                'admin_id' => $adminId,
+                'admin_name' => (string)($_SESSION['admin_name'] ?? 'Admin'),
+                'source_reference' => 'AdminApiController::ordersConfirmPayment',
+                'source_event' => 'admin_api_confirm_payment',
+            ]);
+
+            if (!$paymentResult['success']) {
+                $pdo->rollBack();
+                Response::json([
+                    'success' => false,
+                    'message' => $paymentResult['message'] ?? 'Confirmation failed. Please try again.',
+                ], (int)($paymentResult['http_status'] ?? 422));
+                return;
             }
-            if ($this->tableHasColumn($pdo, 'orders', 'payment_confirmed_by_admin_id')) {
-                $updateAssignments[] = 'payment_confirmed_by_admin_id = :admin_id';
-                $updateParams['admin_id'] = $adminId;
-            }
 
-            $pdo->prepare(
-                'UPDATE orders SET ' . implode(', ', $updateAssignments) . ' WHERE id = :id'
-            )->execute($updateParams);
-
-            $recognizedAmount = $receivedAmount;
-            if ($recognizedAmount > 0) {
-                $engine = new \App\Services\FinancialTransactionEngine();
-                $adminName = (string)($_SESSION['admin_name'] ?? 'Admin');
-
-                if ((string)($order['payment_status'] ?? '') === 'credit') {
-                    $postResult = $engine->recordBalanceSettled([
-                        'order_id' => $orderId,
-                        'order_number' => (string)($order['order_number'] ?? ''),
-                        'amount' => $recognizedAmount,
-                        'payment_method' => $effectivePaymentMethod,
-                        'source_reference' => 'AdminApiController::ordersConfirmPayment',
-                        'idempotency_key' => 'admin-api-confirm-payment-balance:' . $orderId . ':' . number_format($recognizedAmount, 2, '.', ''),
-                        'admin_id' => $adminId,
-                        'admin_name' => $adminName,
-                        'narration' => 'Credit balance settled via admin API confirm payment',
-                    ]);
-                } else {
-                    $postResult = $engine->recordPaymentReceived([
-                        'order_id' => $orderId,
-                        'order_number' => (string)($order['order_number'] ?? ''),
-                        'amount' => $recognizedAmount,
-                        'payment_method' => $effectivePaymentMethod,
-                        'payment_status' => 'paid',
-                        'source_reference' => 'AdminApiController::ordersConfirmPayment',
-                        'idempotency_key' => 'admin-api-confirm-payment:' . $orderId . ':' . number_format($recognizedAmount, 2, '.', ''),
-                        'admin_id' => $adminId,
-                        'admin_name' => $adminName,
-                        'narration' => $discountAmount > 0
-                            ? ('Payment received via admin API confirm payment. Discount adjusted: ₹' . number_format($discountAmount, 2, '.', ''))
-                            : 'Payment received via admin API confirm payment',
-                    ]);
-                }
-
-                if (!$postResult['success']) {
-                    error_log('[ordersConfirmPayment][fte] ' . $postResult['message']);
-                }
-
-                try {
-                    $receiptService = new \App\Services\PaymentReceiptService($pdo);
-                    $receiptResult = $receiptService->issueAdvanceReceipt($orderId, [
-                        'source_event' => 'admin_api_confirm_payment',
-                        'source_reference' => 'admin-api-confirm-payment:' . $orderId . ':' . number_format($recognizedAmount, 2, '.', ''),
-                        'amount' => $recognizedAmount,
-                        'balance_due' => 0,
-                        'payment_method' => $effectivePaymentMethod,
-                        'payment_status' => 'paid',
-                        'issued_by_admin_id' => $adminId,
-                        'financial_transaction_id' => isset($postResult['transaction_id']) ? (int)$postResult['transaction_id'] : null,
-                        'metadata' => [
-                            'channel' => 'admin_api',
-                            'trigger' => 'confirm_payment',
-                        ],
-                    ]);
-                    if (!$receiptResult['success'] && !in_array($receiptResult['message'], ['No advance amount available for receipt', 'Payment receipt schema is not ready'], true)) {
-                        error_log('[ordersConfirmPayment][receipt] ' . $receiptResult['message']);
-                    }
-                } catch (\Throwable $receiptErr) {
-                    error_log('[ordersConfirmPayment][receipt] ' . $receiptErr->getMessage());
-                }
-
-                try {
-                    $snapshotService = new \App\Services\OrderFinanceSnapshotService();
-                    $snapshotService->syncOrderFinancialColumns($pdo, $orderId);
-                } catch (\Throwable $syncErr) {
-                    error_log('[ordersConfirmPayment][finance-sync] ' . $syncErr->getMessage());
-                }
-            }
+            $paymentData = is_array($paymentResult['data'] ?? null) ? $paymentResult['data'] : [];
+            $discountAmount = round((float)($paymentData['discount_amount'] ?? 0), 2);
+            $recognizedAmount = round((float)($paymentData['recognized_amount'] ?? 0), 2);
 
             $pdo->commit();
 
             $this->logAdminAction($pdo, $adminId, 'confirm_payment', 'orders', $orderId, [
                 'slot_result' => $slotResult['message'] ?? '',
-                'received_amount' => $receivedAmount,
+                'received_amount' => $recognizedAmount,
                 'discount_amount' => $discountAmount,
                 'discount_reason' => $discountReason,
                 'manager_override' => $managerOverride,
+                'payment_method' => $effectivePaymentMethod,
             ]);
 
             // 3. Queue automation (non-fatal)
             try {
                 $automation = new \App\Services\OrderAutomationService();
-                $automation->handleOrderPlaced($pdo, $orderId, 'admin_confirm');
+                $automation->handleStatusChange($pdo, $orderId, 'confirmed', $adminId);
             } catch (\Throwable $e) {
                 error_log('[ordersConfirmPayment] automation error: ' . $e->getMessage());
             }
 
             Response::json([
                 'success' => true,
-                'message' => $discountAmount > 0
-                    ? ('Payment confirmed with discount adjustment of ₹' . number_format($discountAmount, 2, '.', '') . '. Slot reserved.')
-                    : 'Payment confirmed. Slot reserved. Customer will be notified.',
+                'message' => ($paymentResult['message'] ?? 'Payment confirmed.') . ' Slot reserved. Customer will be notified.',
                 'slot'    => $slotResult,
                 'data' => [
-                    'received_amount' => $receivedAmount,
+                    'received_amount' => $recognizedAmount,
                     'discount_amount' => $discountAmount,
                     'discount_reason' => $discountReason,
+                    'payment_method' => $effectivePaymentMethod,
                 ],
             ]);
 
@@ -2142,12 +2116,17 @@ final class AdminApiController
                     p.is_bestseller,
                     p.is_chef_special,
                     p.is_b2b_enabled,
+                COALESCE(NULLIF(p.dietary_type, \'\'), IF(p.is_veg = 1, \'veg\', \'nonveg\')) AS dietary_type,
                     p.dietary_tag,
                     COALESCE(
                         GROUP_CONCAT(
-                            CONCAT(COALESCE(NULLIF(pv.variant_label, \"\"), pv.weight_or_size), \":\", FORMAT(pv.price, 2))
+                            CONCAT(
+                                COALESCE(NULLIF(pv.variant_name, \'\'), NULLIF(pv.variant_label, \'\'), pv.weight_or_size),
+                                \'(\', COALESCE(NULLIF(pv.unit_type, \'\'), \'custom\'), \')\',
+                                \':\', FORMAT(pv.price, 2)
+                            )
                             ORDER BY pv.is_default DESC, pv.id ASC
-                            SEPARATOR \" | \"
+                            SEPARATOR \' | \'
                         ),
                         \'\'
                     ) AS variants
@@ -2156,7 +2135,7 @@ final class AdminApiController
                 LEFT JOIN categories subcategory ON subcategory.id = p.subcategory_id
                 LEFT JOIN product_variants pv ON pv.product_id = p.id AND pv.is_active = 1
                 WHERE p.deleted_at IS NULL
-                GROUP BY p.id, collection.name, subcategory.name, p.name, p.is_featured, p.is_bestseller, p.is_chef_special, p.is_b2b_enabled, p.dietary_tag
+                GROUP BY p.id, collection.name, subcategory.name, p.name, p.is_featured, p.is_bestseller, p.is_chef_special, p.is_b2b_enabled, p.is_veg, p.dietary_type, p.dietary_tag
                 ORDER BY p.created_at DESC
                 LIMIT 10000';
 
@@ -2166,7 +2145,7 @@ final class AdminApiController
             return;
         }
 
-        $headers = ['Category', 'Subcategory', 'Product Name', 'Tags', 'Variants'];
+        $headers = ['Category', 'Subcategory', 'Product Name', 'Dietary Type', 'Tags', 'Variants'];
         $exportRows = [];
         while (($row = $stmt->fetch(PDO::FETCH_ASSOC)) !== false) {
             $tags = [];
@@ -2179,6 +2158,7 @@ final class AdminApiController
                 (string)($row['category'] ?? ''),
                 (string)($row['subcategory'] ?? ''),
                 (string)($row['product_name'] ?? ''),
+                normalizeDietaryType((string)($row['dietary_type'] ?? 'veg'), $pdo),
                 implode('|', $tags),
                 (string)($row['variants'] ?? ''),
             ];
@@ -2187,7 +2167,7 @@ final class AdminApiController
             $headers,
             $exportRows,
             'cakeouflage-products-export-' . date('Ymd-His') . '.xlsx',
-            [1 => 22, 2 => 22, 3 => 30, 4 => 30, 5 => 50]
+            [1 => 22, 2 => 22, 3 => 30, 4 => 14, 5 => 30, 6 => 50]
         );
     }
 
@@ -2330,6 +2310,16 @@ final class AdminApiController
                 continue;
             }
 
+            $recordDietaryType = normalizeDietaryType((string)($record['dietary_type'] ?? ''), $pdo);
+            if ((string)($record['dietary_type'] ?? '') === '' && in_array((int)$record['is_veg'], [0, 1], true)) {
+                $recordDietaryType = normalizeDietaryType((int)$record['is_veg'] === 1 ? 'veg' : 'nonveg', $pdo);
+            }
+            $recordDietaryTag = $this->resolveDietaryTag(
+                str_contains((string)$record['tags'], 'eggless') ? 'eggless' : 'regular',
+                $recordDietaryType
+            );
+            $recordIsVeg = dietaryTypeToIsVeg($recordDietaryType);
+
             try {
                 $pdo->beginTransaction();
 
@@ -2339,6 +2329,7 @@ final class AdminApiController
                             name = :name,
                             slug = :slug,
                             short_description = :short_description,
+                            description = :description,
                             long_description = :long_description,
                             collection_category_id = :collection_category_id,
                             starting_price = :starting_price,
@@ -2359,6 +2350,7 @@ final class AdminApiController
                         'name' => $record['product_name'],
                         'slug' => $this->slugify((string)$record['product_name']),
                         'short_description' => mb_substr((string)$record['description'], 0, 250),
+                        'description' => (string)$record['description'],
                         'long_description' => (string)$record['description'],
                         'collection_category_id' => $categoryId,
                         'starting_price' => (float)$record['price'],
@@ -2369,21 +2361,25 @@ final class AdminApiController
                         'is_featured' => str_contains((string)$record['tags'], 'featured') ? 1 : 0,
                         'is_bestseller' => str_contains((string)$record['tags'], 'bestseller') ? 1 : 0,
                         'is_chef_special' => str_contains((string)$record['tags'], 'chefs_special') ? 1 : 0,
-                        'dietary_tag' => str_contains((string)$record['tags'], 'eggless') ? 'eggless' : 'regular',
-                        'is_veg' => in_array((int)$record['is_veg'], [0, 1]) ? (int)$record['is_veg'] : 1,
+                        'dietary_tag' => $recordDietaryTag,
+                        'is_veg' => $recordIsVeg,
                         'availability_status' => max(0, (int)$record['stock']) > 0 ? 'in_stock' : 'out_of_stock',
                         'id' => $existingId,
                     ]);
+                    if ($this->tableHasColumn($pdo, 'products', 'dietary_type')) {
+                        $dietaryTypeStmt = $pdo->prepare('UPDATE products SET dietary_type = :dietary_type WHERE id = :id');
+                        $dietaryTypeStmt->execute(['dietary_type' => $recordDietaryType, 'id' => $existingId]);
+                    }
                     $this->replaceProductVariants($pdo, $existingId, $parsedVariants);
                 } else {
                     $insertStmt = $pdo->prepare(
                         'INSERT INTO products (
-                            name, slug, short_description, long_description, sku, collection_category_id,
+                            name, slug, short_description, description, long_description, sku, collection_category_id,
                             dietary_tag, is_veg, availability_status, lead_time_hours, delivery_eligible, pickup_eligible,
                             featured_image, starting_price, base_price, discount_price, stock_quantity,
                             is_featured, is_bestseller, is_chef_special, is_b2b_enabled
                         ) VALUES (
-                            :name, :slug, :short_description, :long_description, :sku, :collection_category_id,
+                            :name, :slug, :short_description, :description, :long_description, :sku, :collection_category_id,
                             :dietary_tag, :is_veg, :availability_status, 24, 1, 1,
                             :featured_image, :starting_price, :base_price, :discount_price, :stock_quantity,
                             :is_featured, :is_bestseller, :is_chef_special, :is_b2b_enabled
@@ -2393,11 +2389,12 @@ final class AdminApiController
                         'name' => $record['product_name'],
                         'slug' => $this->slugify((string)$record['product_name']),
                         'short_description' => mb_substr((string)$record['description'], 0, 250),
+                        'description' => (string)$record['description'],
                         'long_description' => (string)$record['description'],
                         'sku' => (string)$record['sku'],
                         'collection_category_id' => $categoryId,
-                        'dietary_tag' => str_contains((string)$record['tags'], 'eggless') ? 'eggless' : 'regular',
-                        'is_veg' => in_array((int)$record['is_veg'], [0, 1]) ? (int)$record['is_veg'] : 1,
+                        'dietary_tag' => $recordDietaryTag,
+                        'is_veg' => $recordIsVeg,
                         'availability_status' => max(0, (int)$record['stock']) > 0 ? 'in_stock' : 'out_of_stock',
                         'featured_image' => $this->nullableString($record['image_url']),
                         'starting_price' => (float)$record['price'],
@@ -2410,6 +2407,10 @@ final class AdminApiController
                         'is_b2b_enabled' => str_contains((string)$record['tags'], 'b2b') ? 1 : 0,
                     ]);
                     $productId = (int)$pdo->lastInsertId();
+                    if ($this->tableHasColumn($pdo, 'products', 'dietary_type')) {
+                        $dietaryTypeStmt = $pdo->prepare('UPDATE products SET dietary_type = :dietary_type WHERE id = :id');
+                        $dietaryTypeStmt->execute(['dietary_type' => $recordDietaryType, 'id' => $productId]);
+                    }
                     $this->replaceProductVariants($pdo, $productId, $parsedVariants);
                 }
 
@@ -2788,7 +2789,7 @@ final class AdminApiController
             }
             $sourcePath = $targetRelative;
             $canonicalPath = '/uploads/media/' . $yearMonth . '/' . $fileToken . '.mp4';
-            $publicUrl = $sourcePath;
+            $publicUrl = $canonicalPath;
         } else {
             $upload = UnifiedMediaService::upload($file, [
                 'module' => 'media_center',
@@ -2863,6 +2864,7 @@ final class AdminApiController
                 'conversion_status' => $conversionStatus,
                 'source_path' => $sourcePath,
                 'queue_id' => $queueId,
+                'media_engine' => MediaCapabilityService::detect(),
             ],
         ], 201);
     }
@@ -3011,6 +3013,8 @@ final class AdminApiController
             'optimized_without_queue' => $this->countOrphanOptimizedFiles($pdo),
         ];
 
+        $capability = MediaCapabilityService::detect();
+
         Response::json([
             'success' => true,
             'message' => 'Media processing summary',
@@ -3018,6 +3022,7 @@ final class AdminApiController
                 'counts' => $counts,
                 'storage' => $storage,
                 'orphans' => $orphans,
+                'capability' => $capability,
             ],
         ]);
     }
@@ -3083,44 +3088,40 @@ final class AdminApiController
         }
 
         $pdo = self::db(); if (!$pdo) return;
-        $metrics = [
-            'total_invoices' => 0,
-            'paid_invoices' => 0,
-            'unpaid_invoices' => 0,
-            'overdue_invoices' => 0,
-            'part_paid_invoices' => 0,
-            'retail_receivables' => 0.0,
-            'b2b_receivables' => 0.0,
-            'total_receivables' => 0.0,
-        ];
+        $todayReconciliation = (new FinancialReconciliationService())->summarizeToday();
+        $invoice = $todayReconciliation['invoices'] ?? [];
+        $orders = $todayReconciliation['orders'] ?? [];
+        $ledger = $todayReconciliation['ledger'] ?? [];
+        $variance = $todayReconciliation['variance'] ?? [];
 
-        $summaryStmt = $pdo->query(
-            'SELECT
-                COUNT(*) AS total_invoices,
-                SUM(CASE WHEN invoice_status = "paid" THEN 1 ELSE 0 END) AS paid_invoices,
-                SUM(CASE WHEN invoice_status IN ("pending_payment", "payment_under_verification", "unpaid_rejected") THEN 1 ELSE 0 END) AS unpaid_invoices,
-                SUM(CASE WHEN invoice_status = "overdue" THEN 1 ELSE 0 END) AS overdue_invoices,
-                SUM(CASE WHEN invoice_status = "part_paid" THEN 1 ELSE 0 END) AS part_paid_invoices,
-                SUM(CASE WHEN customer_type = "retail" THEN balance_due ELSE 0 END) AS retail_receivables,
-                SUM(CASE WHEN customer_type = "b2b" THEN balance_due ELSE 0 END) AS b2b_receivables,
-                SUM(balance_due) AS total_receivables
-             FROM invoices'
-        );
-        if ($summaryStmt instanceof \PDOStatement) {
-            $row = $summaryStmt->fetch(PDO::FETCH_ASSOC);
-            if (is_array($row)) {
-                $metrics = [
-                    'total_invoices' => (int)($row['total_invoices'] ?? 0),
-                    'paid_invoices' => (int)($row['paid_invoices'] ?? 0),
-                    'unpaid_invoices' => (int)($row['unpaid_invoices'] ?? 0),
-                    'overdue_invoices' => (int)($row['overdue_invoices'] ?? 0),
-                    'part_paid_invoices' => (int)($row['part_paid_invoices'] ?? 0),
-                    'retail_receivables' => (float)($row['retail_receivables'] ?? 0),
-                    'b2b_receivables' => (float)($row['b2b_receivables'] ?? 0),
-                    'total_receivables' => (float)($row['total_receivables'] ?? 0),
-                ];
-            }
-        }
+        $metrics = [
+            'total_invoices' => (int)($invoice['total_invoices'] ?? 0),
+            'paid_invoices' => (int)($invoice['paid_invoices'] ?? 0),
+            'unpaid_invoices' => (int)($invoice['unpaid_invoices'] ?? 0),
+            'overdue_invoices' => (int)($invoice['overdue_invoices'] ?? 0),
+            'part_paid_invoices' => (int)($invoice['part_paid_invoices'] ?? 0),
+            'retail_receivables' => (float)($invoice['retail_receivables'] ?? 0),
+            'b2b_receivables' => (float)($invoice['b2b_receivables'] ?? 0),
+            'total_receivables' => (float)($invoice['total_receivables'] ?? 0),
+            'cash_collections' => (float)($orders['cash_total'] ?? 0),
+            'bank_collections' => (float)($orders['bank_total'] ?? 0),
+            'net_collections' => (float)($orders['realized_total'] ?? 0),
+            'refunded_total' => (float)($orders['refunded_total'] ?? 0),
+            'ledger_cash_collections' => (float)($ledger['cash_total'] ?? 0),
+            'ledger_bank_collections' => (float)($ledger['bank_total'] ?? 0),
+            'ledger_net_revenue' => (float)($ledger['net_revenue'] ?? 0),
+            'reconciliation_status' => (string)($todayReconciliation['status'] ?? 'attention'),
+            'reconciliation_variance' => (float)($variance['absolute_sum'] ?? 0),
+            'reconciliation_breakdown' => [
+                'cash' => (float)($variance['cash'] ?? 0),
+                'bank' => (float)($variance['bank'] ?? 0),
+                'refund' => (float)($variance['refund'] ?? 0),
+                'net' => (float)($variance['net'] ?? 0),
+                'component_status' => $variance['component_status'] ?? [],
+            ],
+            'reconciliation_sources' => $todayReconciliation['source_tables'] ?? [],
+            'reconciliation_window' => $todayReconciliation['window'] ?? ['from_date' => date('Y-m-d'), 'to_date' => date('Y-m-d')],
+        ];
 
         Response::json(['success' => true, 'message' => 'ok', 'data' => $metrics]);
     }
@@ -4430,7 +4431,7 @@ final class AdminApiController
             }
         }
 
-        $stmt = $pdo->prepare('INSERT INTO whatsapp_template_mappings (event_key, template_id, is_active, updated_by) VALUES (:event_key, :template_id, :is_active, :updated_by) AS new ON DUPLICATE KEY UPDATE template_id = new.template_id, is_active = new.is_active, updated_by = new.updated_by, updated_at = NOW()');
+        $stmt = $pdo->prepare('INSERT INTO whatsapp_template_mappings (event_key, template_id, is_active, updated_by) VALUES (:event_key, :template_id, :is_active, :updated_by) ON DUPLICATE KEY UPDATE template_id = VALUES(template_id), is_active = VALUES(is_active), updated_by = VALUES(updated_by), updated_at = NOW()');
         $stmt->execute([
             'event_key' => $eventKey,
             'template_id' => $templateId,
@@ -5373,6 +5374,10 @@ final class AdminApiController
             return;
         }
         $pdo = self::db(); if (!$pdo) return;
+        $monthReconciliation = (new FinancialReconciliationService())->summarizeCurrentMonth();
+        $monthOrders = $monthReconciliation['orders'] ?? [];
+        $monthRefunds = $monthReconciliation['refunds'] ?? [];
+
         Response::json([
             'success' => true,
             'message' => 'ok',
@@ -5383,6 +5388,22 @@ final class AdminApiController
                 'queued_communications' => $this->fetchCount($pdo, 'SELECT COUNT(*) FROM communication_logs WHERE status = "queued"'),
                 'failed_communications' => $this->fetchCount($pdo, 'SELECT COUNT(*) FROM communication_logs WHERE status = "failed"'),
                 'whatsapp_approved_templates' => $this->fetchCount($pdo, 'SELECT COUNT(*) FROM whatsapp_templates WHERE approval_status = "approved"'),
+                'this_month_collected' => (float)($monthOrders['realized_total'] ?? 0),
+                'this_month_refunded' => (float)($monthOrders['refunded_total'] ?? 0),
+                'this_month_outstanding' => (float)($monthOrders['outstanding_total'] ?? 0),
+                'pending_refunds' => (int)($monthRefunds['pending_count'] ?? 0),
+                'processed_refunds' => (int)($monthRefunds['processed_count'] ?? 0),
+                'reconciliation_status' => (string)($monthReconciliation['status'] ?? 'attention'),
+                'reconciliation_variance' => (float)(($monthReconciliation['variance']['absolute_sum'] ?? 0)),
+                'reconciliation_breakdown' => [
+                    'cash' => (float)($monthReconciliation['variance']['cash'] ?? 0),
+                    'bank' => (float)($monthReconciliation['variance']['bank'] ?? 0),
+                    'refund' => (float)($monthReconciliation['variance']['refund'] ?? 0),
+                    'net' => (float)($monthReconciliation['variance']['net'] ?? 0),
+                    'component_status' => $monthReconciliation['variance']['component_status'] ?? [],
+                ],
+                'reconciliation_sources' => $monthReconciliation['source_tables'] ?? [],
+                'reconciliation_window' => $monthReconciliation['window'] ?? ['from_date' => date('Y-m-01'), 'to_date' => date('Y-m-d')],
             ],
         ]);
     }
@@ -5488,11 +5509,36 @@ final class AdminApiController
             return null;
         }
 
+        if (empty($_SESSION['admin_otp_verified'])) {
+            Response::json(['success' => false, 'message' => 'Admin OTP authentication required'], 401);
+            return null;
+        }
+
         if (!isset($_SESSION['admin_id'])) {
             $_SESSION['admin_id'] = $adminId;
         }
 
         return $adminId;
+    }
+
+    /** @return array<int,string> */
+    private function resolveAdminPermissions(PDO $pdo, int $adminId): array
+    {
+        $sessionPermissions = $_SESSION['admin_permissions'] ?? null;
+        if (is_array($sessionPermissions) && count($sessionPermissions) > 0) {
+            return array_values(array_unique(array_map(static fn($v): string => trim((string)$v), $sessionPermissions)));
+        }
+
+        $stmt = $pdo->prepare('SELECT permission_key FROM admin_permissions WHERE admin_id = :admin_id');
+        $stmt->execute(['admin_id' => $adminId]);
+        $permissions = array_map(
+            static fn(array $row): string => trim((string)($row['permission_key'] ?? '')),
+            $stmt->fetchAll(PDO::FETCH_ASSOC) ?: []
+        );
+        $permissions = array_values(array_filter(array_unique($permissions), static fn(string $perm): bool => $perm !== ''));
+        $_SESSION['admin_permissions'] = $permissions;
+
+        return $permissions;
     }
 
     private function ensureBankAlertSchema(PDO $pdo): void
@@ -5542,30 +5588,42 @@ final class AdminApiController
 
         $insertStmt = $pdo->prepare(
             'INSERT INTO product_variants (
-                product_id, variant_label, weight_or_size, flavor, price, discount_price,
-                stock_quantity, sku_suffix, is_default, is_active
+                product_id, variant_label, variant_name, weight_or_size, unit_type, flavor, price, discount_price,
+                stock_quantity, sku_suffix, sku, is_default, is_active
              ) VALUES (
-                :product_id, :variant_label, :weight_or_size, :flavor, :price, :discount_price,
-                :stock_quantity, :sku_suffix, :is_default, 1
+                :product_id, :variant_label, :variant_name, :weight_or_size, :unit_type, :flavor, :price, :discount_price,
+                :stock_quantity, :sku_suffix, :sku, :is_default, 1
              )'
         );
 
+        $seenVariantKeys = [];
         foreach ($variants as $index => $variant) {
-            $label = trim((string)($variant['variant_label'] ?? ''));
+            $label = trim((string)($variant['variant_label'] ?? ($variant['variant_name'] ?? '')));
+            $variantName = trim((string)($variant['variant_name'] ?? $label));
+            $unitType = trim((string)($variant['unit_type'] ?? 'custom'));
             $price = (float)($variant['price'] ?? 0);
-            if ($label === '' || $price <= 0) {
+            if ($label === '' || $variantName === '' || $unitType === '' || $price <= 0) {
                 continue;
             }
+
+            $uniqueKey = strtolower($variantName . '|' . $unitType);
+            if (isset($seenVariantKeys[$uniqueKey])) {
+                continue;
+            }
+            $seenVariantKeys[$uniqueKey] = true;
 
             $insertStmt->execute([
                 'product_id' => $productId,
                 'variant_label' => $label,
+                'variant_name' => $variantName,
                 'weight_or_size' => trim((string)($variant['weight_or_size'] ?? $label)),
+                'unit_type' => $unitType,
                 'flavor' => $this->nullableString($variant['flavor'] ?? null),
                 'price' => round($price, 2),
                 'discount_price' => ($variant['discount_price'] ?? null) !== null && (string)$variant['discount_price'] !== '' ? round((float)$variant['discount_price'], 2) : null,
                 'stock_quantity' => max(0, (int)($variant['stock_quantity'] ?? 0)),
-                'sku_suffix' => $this->nullableString($variant['sku_suffix'] ?? null),
+                'sku_suffix' => $this->nullableString($variant['sku_suffix'] ?? ($variant['sku'] ?? null)),
+                'sku' => $this->nullableString($variant['sku'] ?? null),
                 'is_default' => (int)($variant['is_default'] ?? ($index === 0 ? 1 : 0)) === 1 ? 1 : 0,
             ]);
         }
@@ -5611,6 +5669,7 @@ final class AdminApiController
             'tags' => strtolower($valueFor('tags')),
             'variant_info' => $valueFor('variant_info'),
             'image_url' => $valueFor('image_url'),
+            'dietary_type' => strtolower($valueFor('dietary_type')),
             'is_veg' => $valueFor('is_veg'),
         ];
     }
@@ -5638,6 +5697,9 @@ final class AdminApiController
         }
         if ($record['discount_price'] !== '' && (!is_numeric($record['discount_price']) || (float)$record['discount_price'] < 0)) {
             return 'discount_price must be numeric and non-negative';
+        }
+        if ($record['dietary_type'] !== '' && !in_array($record['dietary_type'], ['veg', 'nonveg'], true)) {
+            return 'dietary_type must be veg or nonveg';
         }
 
         if ($strictVariants) {
@@ -5697,7 +5759,9 @@ final class AdminApiController
 
             $variants[] = [
                 'variant_label' => $label,
+                'variant_name' => $label,
                 'weight_or_size' => $label,
+                'unit_type' => 'size',
                 'price' => $price,
                 'stock_quantity' => $stock,
                 'is_default' => $index === 0 ? 1 : 0,
@@ -5707,7 +5771,9 @@ final class AdminApiController
         if (count($variants) === 0 && !$strictVariants) {
             $variants[] = [
                 'variant_label' => '1 lb',
+                'variant_name' => '1 lb',
                 'weight_or_size' => '1 lb',
+                'unit_type' => 'size',
                 'price' => $defaultPrice,
                 'stock_quantity' => $stock,
                 'is_default' => 1,
@@ -5920,6 +5986,47 @@ final class AdminApiController
     private function fetchCount(PDO $pdo, string $sql): int
     {
         return (int)($pdo->query($sql)->fetchColumn() ?: 0);
+    }
+
+    /**
+     * @return array{0:string,1:string}
+     */
+    private function resolveDatePresetRange(string $preset, string $fromDate, string $toDate): array
+    {
+        $today = new \DateTimeImmutable('today');
+
+        if ($preset === 'custom') {
+            $from = $this->isYmdDate($fromDate) ? $fromDate : '';
+            $to = $this->isYmdDate($toDate) ? $toDate : '';
+            if ($from !== '' && $to !== '' && $from > $to) {
+                return [$to, $from];
+            }
+            return [$from, $to];
+        }
+
+        if ($preset === 'today') {
+            $value = $today->format('Y-m-d');
+            return [$value, $value];
+        }
+
+        if ($preset === 'weekly') {
+            $start = $today->modify('monday this week')->format('Y-m-d');
+            return [$start, $today->format('Y-m-d')];
+        }
+
+        if ($preset === 'yearly') {
+            $start = $today->format('Y-01-01');
+            return [$start, $today->format('Y-m-d')];
+        }
+
+        $start = $today->modify('first day of this month')->format('Y-m-d');
+        return [$start, $today->format('Y-m-d')];
+    }
+
+    private function isYmdDate(string $value): bool
+    {
+        $date = \DateTimeImmutable::createFromFormat('Y-m-d', $value);
+        return $date instanceof \DateTimeImmutable && $date->format('Y-m-d') === $value;
     }
 
     private function buildRateLimitBucket(string $scope, string $identifier): string
@@ -6189,6 +6296,34 @@ final class AdminApiController
             'version_token' => (string)time(),
             'uploaded_by_admin_id' => isset($asset['uploaded_by_admin_id']) ? (int)$asset['uploaded_by_admin_id'] : null,
         ]);
+
+        $extraSet = [];
+        $extraParams = ['canonical_path' => (string)($asset['canonical_path'] ?? '')];
+        if ($this->tableHasColumn($pdo, 'media_assets', 'optimized_path')) {
+            $extraSet[] = 'optimized_path = :optimized_path';
+            $extraParams['optimized_path'] = (string)($asset['optimized_path'] ?? ($asset['canonical_path'] ?? ''));
+        }
+        if ($this->tableHasColumn($pdo, 'media_assets', 'thumbnail_path')) {
+            $extraSet[] = 'thumbnail_path = :thumbnail_path';
+            $extraParams['thumbnail_path'] = $this->nullableString($asset['thumbnail_path'] ?? null);
+        }
+        if ($this->tableHasColumn($pdo, 'media_assets', 'transcoding_status')) {
+            $extraSet[] = 'transcoding_status = :transcoding_status';
+            $extraParams['transcoding_status'] = (string)($asset['transcoding_status'] ?? (($asset['conversion_status'] ?? 'ready') === 'ready' ? 'optimized' : ($asset['conversion_status'] ?? 'queued')));
+        }
+        if ($this->tableHasColumn($pdo, 'media_assets', 'duration_seconds')) {
+            $extraSet[] = 'duration_seconds = :duration_seconds';
+            $extraParams['duration_seconds'] = isset($asset['duration_seconds']) ? (float)$asset['duration_seconds'] : null;
+        }
+        if ($this->tableHasColumn($pdo, 'media_assets', 'resolution')) {
+            $extraSet[] = 'resolution = :resolution';
+            $extraParams['resolution'] = $this->nullableString($asset['resolution'] ?? null);
+        }
+
+        if ($extraSet !== []) {
+            $extraStmt = $pdo->prepare('UPDATE media_assets SET ' . implode(', ', $extraSet) . ', updated_at = NOW() WHERE canonical_path = :canonical_path');
+            $extraStmt->execute($extraParams);
+        }
     }
 
     /** @return array<string,array<string,mixed>> */
@@ -6493,6 +6628,21 @@ final class AdminApiController
     private function safeDietary(string $dietary): string
     {
         return in_array($dietary, ['regular', 'eggless', 'vegan', 'sugar_free', 'healthy'], true) ? $dietary : 'regular';
+    }
+
+    private function resolveDietaryType(array $input, ?PDO $pdo = null): string
+    {
+        $fallback = $this->toBinaryFlag($input['is_veg'] ?? 1) === 1 ? 'veg' : 'nonveg';
+        return normalizeDietaryType((string)($input['dietary_type'] ?? $fallback), $pdo ?? 'veg_only');
+    }
+
+    private function resolveDietaryTag(string $dietaryTag, string $dietaryType): string
+    {
+        $resolved = $this->safeDietary($dietaryTag);
+        if ($dietaryType === 'nonveg' && $resolved !== 'regular') {
+            return 'regular';
+        }
+        return $resolved;
     }
 
     private function safeAvailability(string $availability): string
@@ -6815,6 +6965,177 @@ final class AdminApiController
         Response::json(['success' => true, 'message' => 'Exception removed.']);
     }
 
+    /** GET /admin/api/holidays?from=YYYY-MM-DD&to=YYYY-MM-DD&slot_type=all|delivery|pickup */
+    public function holidaysList(): void
+    {
+        $adminId = $this->requireAdminId(); if ($adminId === null) return;
+        $pdo = self::db(); if (!$pdo) return;
+
+        $from = trim((string)($_GET['from'] ?? (new \DateTimeImmutable('today'))->format('Y-m-d')));
+        $to = trim((string)($_GET['to'] ?? (new \DateTimeImmutable('today'))->modify('+45 days')->format('Y-m-d')));
+        $slotType = trim((string)($_GET['slot_type'] ?? 'all'));
+
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $from) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $to)) {
+            Response::json(['success' => false, 'message' => 'from/to must be YYYY-MM-DD'], 422);
+            return;
+        }
+        if (!in_array($slotType, ['all', 'delivery', 'pickup'], true)) {
+            Response::json(['success' => false, 'message' => 'slot_type must be all, delivery or pickup'], 422);
+            return;
+        }
+
+        $sql =
+            'SELECT
+                ex.exception_date,
+                s.slot_type,
+                MAX(COALESCE(ex.note, "")) AS note,
+                COUNT(*) AS affected_slots
+            FROM order_slot_exceptions ex
+            INNER JOIN order_slots s ON s.id = ex.slot_id
+            WHERE ex.is_closed = 1
+              AND ex.exception_date BETWEEN :from_date AND :to_date';
+        if ($slotType !== 'all') {
+            $sql .= ' AND s.slot_type = :slot_type';
+        }
+        $sql .= ' GROUP BY ex.exception_date, s.slot_type ORDER BY ex.exception_date ASC, s.slot_type ASC';
+
+        $stmt = $pdo->prepare($sql);
+        $stmt->bindValue(':from_date', $from);
+        $stmt->bindValue(':to_date', $to);
+        if ($slotType !== 'all') {
+            $stmt->bindValue(':slot_type', $slotType);
+        }
+        $stmt->execute();
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+        Response::json([
+            'success' => true,
+            'data' => [
+                'from' => $from,
+                'to' => $to,
+                'entries' => $rows,
+            ],
+        ]);
+    }
+
+    /** POST /admin/api/holidays — create a date closure for delivery/pickup/all */
+    public function holidayCreate(): void
+    {
+        $adminId = $this->requireAdminId(); if ($adminId === null) return;
+        $pdo = self::db(); if (!$pdo) return;
+
+        $input = $this->readJsonInput();
+        $holidayDate = trim((string)($input['holiday_date'] ?? ''));
+        $slotType = trim((string)($input['slot_type'] ?? 'all'));
+        $note = trim((string)($input['note'] ?? ''));
+
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $holidayDate)) {
+            Response::json(['success' => false, 'message' => 'holiday_date must be YYYY-MM-DD'], 422);
+            return;
+        }
+        if (!in_array($slotType, ['all', 'delivery', 'pickup'], true)) {
+            Response::json(['success' => false, 'message' => 'slot_type must be all, delivery or pickup'], 422);
+            return;
+        }
+
+        $slotSql = 'SELECT id FROM order_slots WHERE is_active = 1';
+        if ($slotType !== 'all') {
+            $slotSql .= ' AND slot_type = :slot_type';
+        }
+        $slotSql .= ' ORDER BY id ASC';
+        $slotStmt = $pdo->prepare($slotSql);
+        if ($slotType !== 'all') {
+            $slotStmt->bindValue(':slot_type', $slotType);
+        }
+        $slotStmt->execute();
+        $slotIds = array_map(static fn($v): int => (int)$v, $slotStmt->fetchAll(PDO::FETCH_COLUMN) ?: []);
+
+        if (empty($slotIds)) {
+            Response::json(['success' => false, 'message' => 'No active slots found for selected slot_type'], 404);
+            return;
+        }
+
+        $upsert = $pdo->prepare(
+            'INSERT INTO order_slot_exceptions (slot_id, exception_date, override_capacity, is_closed, note)
+             VALUES (:slot_id, :exception_date, NULL, 1, :note)
+             ON DUPLICATE KEY UPDATE override_capacity = VALUES(override_capacity), is_closed = VALUES(is_closed), note = VALUES(note)'
+        );
+
+        $pdo->beginTransaction();
+        try {
+            foreach ($slotIds as $sid) {
+                $upsert->execute([
+                    'slot_id' => $sid,
+                    'exception_date' => $holidayDate,
+                    'note' => $note,
+                ]);
+            }
+            $pdo->commit();
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            Response::json(['success' => false, 'message' => 'Unable to save holiday closure'], 500);
+            return;
+        }
+
+        Response::json([
+            'success' => true,
+            'message' => 'Holiday closure saved.',
+            'data' => [
+                'holiday_date' => $holidayDate,
+                'slot_type' => $slotType,
+                'affected_slots' => count($slotIds),
+            ],
+        ]);
+    }
+
+    /** DELETE /admin/api/holidays?holiday_date=YYYY-MM-DD&slot_type=all|delivery|pickup */
+    public function holidayDelete(): void
+    {
+        $adminId = $this->requireAdminId(); if ($adminId === null) return;
+        $pdo = self::db(); if (!$pdo) return;
+
+        $holidayDate = trim((string)($_GET['holiday_date'] ?? ''));
+        $slotType = trim((string)($_GET['slot_type'] ?? 'all'));
+
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $holidayDate)) {
+            Response::json(['success' => false, 'message' => 'holiday_date must be YYYY-MM-DD'], 422);
+            return;
+        }
+        if (!in_array($slotType, ['all', 'delivery', 'pickup'], true)) {
+            Response::json(['success' => false, 'message' => 'slot_type must be all, delivery or pickup'], 422);
+            return;
+        }
+
+        $deleteSql =
+            'DELETE ex
+             FROM order_slot_exceptions ex
+             INNER JOIN order_slots s ON s.id = ex.slot_id
+             WHERE ex.exception_date = :holiday_date
+               AND ex.is_closed = 1';
+        if ($slotType !== 'all') {
+            $deleteSql .= ' AND s.slot_type = :slot_type';
+        }
+
+        $deleteStmt = $pdo->prepare($deleteSql);
+        $deleteStmt->bindValue(':holiday_date', $holidayDate);
+        if ($slotType !== 'all') {
+            $deleteStmt->bindValue(':slot_type', $slotType);
+        }
+        $deleteStmt->execute();
+
+        Response::json([
+            'success' => true,
+            'message' => 'Holiday closure removed.',
+            'data' => [
+                'holiday_date' => $holidayDate,
+                'slot_type' => $slotType,
+                'deleted_rows' => (int)$deleteStmt->rowCount(),
+            ],
+        ]);
+    }
+
     /** GET /admin/api/slots/usage?date=YYYY-MM-DD — live usage for a date */
     public function slotUsage(): void
     {
@@ -6880,20 +7201,31 @@ final class AdminApiController
      */
     public function refundProcess(string $id): void
     {
-        $this->requireAdminAuth();
+        $adminId = $this->requireAdminId();
+        if ($adminId === null) {
+            return;
+        }
 
-        if (!$this->hasPermission('order_refund')) {
-            $this->jsonError('Insufficient permissions to submit refund requests', 403);
+        $adminRole = (string)($_SESSION['admin_role'] ?? '');
+        $pdo = \App\Core\Database::getConnection();
+        $adminPermissions = $this->resolveAdminPermissions($pdo, $adminId);
+        $canRequestRefund = $adminRole === 'super_admin'
+            || $adminRole === 'admin'
+            || in_array('order_refund', $adminPermissions, true)
+            || in_array('can_approve_refund', $adminPermissions, true)
+            || in_array('can_force_refund', $adminPermissions, true);
+        if (!$canRequestRefund) {
+            Response::json(['success' => false, 'message' => 'Insufficient permissions to submit refund requests'], 403);
             return;
         }
 
         $orderId = (int)$id;
         if ($orderId <= 0) {
-            $this->jsonError('Invalid order ID', 400);
+            Response::json(['success' => false, 'message' => 'Invalid order ID'], 400);
             return;
         }
 
-        $body = $this->getJsonBody();
+        $body = $this->readJsonInput();
 
         $refundAmount       = isset($body['refund_amount'])        ? (float)$body['refund_amount']        : 0.0;
         $reasonCode         = isset($body['reason_code'])          ? trim((string)$body['reason_code'])         : '';
@@ -6902,7 +7234,7 @@ final class AdminApiController
         $settlementProofUrl = isset($body['settlement_proof_url']) ? trim((string)$body['settlement_proof_url']) : '';
 
         if ($refundAmount <= 0) {
-            $this->jsonError('refund_amount must be greater than zero', 400);
+            Response::json(['success' => false, 'message' => 'refund_amount must be greater than zero'], 400);
             return;
         }
 
@@ -6924,35 +7256,40 @@ final class AdminApiController
             $reasonCode = $legacyReasonMap[$reasonCode];
         }
 
-        $pdo       = \App\Core\Database::getConnection();
-        $adminId   = (int)($this->session['admin'] ?? 0);
-        $adminRole = (string)($this->session['admin_role'] ?? '');
-        $adminPerms = (array)($this->session['admin_permissions'] ?? []);
+        $adminPerms = $adminPermissions;
+
+        $reasonNotesForService = $reasonNotes;
+        if ($settlementRef !== '') {
+            $reasonNotesForService .= ($reasonNotesForService !== '' ? "\n" : '') . 'Settlement reference: ' . $settlementRef;
+        }
+        if ($settlementProofUrl !== '') {
+            $reasonNotesForService .= ($reasonNotesForService !== '' ? "\n" : '') . 'Settlement proof: ' . $settlementProofUrl;
+        }
 
         $service = new \App\Services\RefundService();
         $result  = $service->submitRequest($pdo, $orderId, [
             'requested_amount' => $refundAmount,
             'reason_code'      => $reasonCode,
-            'reason_notes'     => $reasonNotes,
+            'reason_notes'     => $reasonNotesForService,
         ], $adminId, [
             'admin_role'        => $adminRole,
             'admin_permissions' => $adminPerms,
             'ip_address'        => $_SERVER['REMOTE_ADDR'] ?? '',
-            'admin_name'        => (string)($this->session['admin_name'] ?? 'Admin'),
+            'admin_name'        => (string)($_SESSION['admin_name'] ?? 'Admin'),
         ]);
 
         if (!$result['success']) {
-            $this->jsonError($result['message'], 422);
+            Response::json(['success' => false, 'message' => (string)$result['message']], 422);
             return;
         }
 
-        $this->json([
+        Response::json([
             'success'       => true,
             'message'       => 'Refund request submitted. A separate approver must process it.',
             'refund_amount' => $refundAmount,
             'refund_id'     => $result['refund_id'] ?? null,
             'refund_number' => $result['refund_number'] ?? null,
-        ]);
+        ], 200);
     }
 
     /**
@@ -6962,22 +7299,36 @@ final class AdminApiController
      */
     public function refundUploadProof(): void
     {
-        $this->requireAdminAuth();
+        $adminId = $this->requireAdminId();
+        if ($adminId === null) {
+            return;
+        }
 
-        if (!$this->hasPermission('order_refund')) {
-            $this->jsonError('Insufficient permissions', 403);
+        $adminRole = (string)($_SESSION['admin_role'] ?? '');
+        $pdo = self::db();
+        if (!$pdo) {
+            return;
+        }
+        $adminPermissions = $this->resolveAdminPermissions($pdo, $adminId);
+        $canManageRefund = $adminRole === 'super_admin'
+            || $adminRole === 'admin'
+            || in_array('order_refund', $adminPermissions, true)
+            || in_array('can_approve_refund', $adminPermissions, true)
+            || in_array('can_force_refund', $adminPermissions, true);
+        if (!$canManageRefund) {
+            Response::json(['success' => false, 'message' => 'Insufficient permissions'], 403);
             return;
         }
 
         if (empty($_FILES['proof']) || $_FILES['proof']['error'] !== UPLOAD_ERR_OK) {
-            $this->jsonError('No file uploaded or upload error', 400);
+            Response::json(['success' => false, 'message' => 'No file uploaded or upload error'], 400);
             return;
         }
 
         $file    = $_FILES['proof'];
         $maxSize = 5 * 1024 * 1024; // 5 MB
         if ($file['size'] > $maxSize) {
-            $this->jsonError('File exceeds 5 MB limit', 400);
+            Response::json(['success' => false, 'message' => 'File exceeds 5 MB limit'], 400);
             return;
         }
 
@@ -6985,7 +7336,7 @@ final class AdminApiController
         $mimeType = $finfo->file($file['tmp_name']);
         $allowed  = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
         if (!in_array($mimeType, $allowed, true)) {
-            $this->jsonError('Only JPEG, PNG, WebP and PDF files are allowed', 400);
+            Response::json(['success' => false, 'message' => 'Only JPEG, PNG, WebP and PDF files are allowed'], 400);
             return;
         }
 
@@ -7000,11 +7351,11 @@ final class AdminApiController
                 'max_bytes' => $maxSize,
             ]);
             if (!$upload['ok']) {
-                $this->jsonError($upload['error'], 500);
+                Response::json(['success' => false, 'message' => (string)$upload['error']], 500);
                 return;
             }
 
-            $this->json(['success' => true, 'url' => (string)$upload['relative_url']]);
+            Response::json(['success' => true, 'url' => (string)$upload['relative_url']], 200);
             return;
         }
 
@@ -7018,11 +7369,11 @@ final class AdminApiController
 
         $destPath = $uploadDir . $filename;
         if (!move_uploaded_file($file['tmp_name'], $destPath)) {
-            $this->jsonError('Failed to save uploaded file', 500);
+            Response::json(['success' => false, 'message' => 'Failed to save uploaded file'], 500);
             return;
         }
 
-        $this->json(['success' => true, 'url' => 'uploads/refund-proofs/' . $filename]);
+        Response::json(['success' => true, 'url' => 'uploads/refund-proofs/' . $filename], 200);
     }
 
     /**
@@ -7031,7 +7382,10 @@ final class AdminApiController
      */
     public function refundReport(): void
     {
-        $this->requireAdminAuth();
+        $adminId = $this->requireAdminId();
+        if ($adminId === null) {
+            return;
+        }
 
         $pdo      = \App\Core\Database::getConnection();
         $dateFrom = trim((string)($_GET['date_from'] ?? date('Y-m-01')));
@@ -7045,20 +7399,24 @@ final class AdminApiController
             $dateTo = date('Y-m-d');
         }
 
-        $stmt = $pdo->prepare(
-            'SELECT rt.id, rt.order_id, rt.refund_number, rt.refund_type,
-                    rt.reason_code, rt.reason_notes, rt.approved_amount,
-                    rt.settlement_reference, rt.processed_at,
-                    o.order_number, o.customer_name, o.customer_email,
-                    CONCAT(a.first_name, " ", a.last_name) AS processed_by_name
-             FROM refund_transactions rt
-             JOIN orders o  ON o.id = rt.order_id
-             LEFT JOIN admins a ON a.id = rt.approved_by_admin_id
-             WHERE rt.status = "processed"
-               AND DATE(rt.processed_at) BETWEEN :date_from AND :date_to
-             ORDER BY rt.processed_at DESC
-             LIMIT 500'
-        );
+                $settlementReferenceSelect = $this->tableHasColumn($pdo, 'refund_transactions', 'settlement_reference')
+                        ? 'rt.settlement_reference'
+                        : 'NULL AS settlement_reference';
+
+                $stmt = $pdo->prepare(
+                        'SELECT rt.id, rt.order_id, rt.refund_number, rt.refund_type,
+                                        rt.reason_code, rt.reason_notes, rt.approved_amount,
+                                        ' . $settlementReferenceSelect . ', rt.processed_at,
+                                        o.order_number, o.customer_name, o.customer_email,
+                                        a.full_name AS processed_by_name
+                         FROM refund_transactions rt
+                         JOIN orders o  ON o.id = rt.order_id
+                         LEFT JOIN admins a ON a.id = rt.approved_by_admin_id
+                         WHERE rt.status = "processed"
+                             AND DATE(rt.processed_at) BETWEEN :date_from AND :date_to
+                         ORDER BY rt.processed_at DESC
+                         LIMIT 500'
+                );
         $stmt->execute(['date_from' => $dateFrom, 'date_to' => $dateTo]);
         $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC);
 
@@ -7066,7 +7424,7 @@ final class AdminApiController
         $partialCount   = count(array_filter($rows, static fn($r) => $r['refund_type'] === 'partial'));
         $fullCount      = count(array_filter($rows, static fn($r) => $r['refund_type'] === 'full'));
 
-        $this->json([
+        Response::json([
             'success'       => true,
             'date_from'     => $dateFrom,
             'date_to'       => $dateTo,
@@ -7074,7 +7432,7 @@ final class AdminApiController
             'partial_count' => $partialCount,
             'full_count'    => $fullCount,
             'rows'          => $rows,
-        ]);
+        ], 200);
     }
 
     /**
@@ -7089,7 +7447,19 @@ final class AdminApiController
             return;
         }
 
-        if (!$this->requirePermission('order_refund')) {
+        $adminRole = (string)($_SESSION['admin_role'] ?? '');
+        $pdo = self::db();
+        if (!$pdo) {
+            return;
+        }
+        $adminPermissions = $this->resolveAdminPermissions($pdo, $adminId);
+        $canRequestRefund = $adminRole === 'super_admin'
+            || $adminRole === 'admin'
+            || in_array('order_refund', $adminPermissions, true)
+            || in_array('can_approve_refund', $adminPermissions, true)
+            || in_array('can_force_refund', $adminPermissions, true);
+        if (!$canRequestRefund) {
+            Response::json(['success' => false, 'message' => 'Insufficient permissions to submit refund requests'], 403);
             return;
         }
 
@@ -7113,11 +7483,6 @@ final class AdminApiController
             return;
         }
 
-        $pdo = self::db();
-        if (!$pdo) {
-            return;
-        }
-
         $service = new \App\Services\RefundService();
         $result  = $service->submitRequest($pdo, $orderId, [
             'reason_code'      => $reasonCode,
@@ -7125,7 +7490,7 @@ final class AdminApiController
             'requested_amount' => $requestedAmt,
         ], $adminId, [
             'admin_role'        => (string)($_SESSION['admin_role']        ?? ''),
-            'admin_permissions' => (array) ($_SESSION['admin_permissions'] ?? []),
+            'admin_permissions' => $adminPermissions,
             'ip_address'        => $_SERVER['REMOTE_ADDR'] ?? '',
         ]);
 
@@ -7145,15 +7510,27 @@ final class AdminApiController
             return;
         }
 
-        $adminPermissions = (array)($_SESSION['admin_permissions'] ?? []);
+        $pdo = self::db();
+        if (!$pdo) {
+            return;
+        }
+
+        $adminPermissions = $this->resolveAdminPermissions($pdo, $adminId);
         $adminRole        = (string)($_SESSION['admin_role']        ?? '');
         $hasPermission    = $adminRole === 'super_admin'
+            || $adminRole === 'admin'
+            || count($adminPermissions) === 0
+            || in_array('order_refund', $adminPermissions, true)
             || in_array('can_approve_refund', $adminPermissions, true)
             || in_array('can_force_refund', $adminPermissions, true);
 
         if (!$hasPermission) {
             Response::json(['success' => false, 'message' => 'Insufficient permissions to approve refunds'], 403);
             return;
+        }
+
+        if (!in_array('can_approve_refund', $adminPermissions, true) && $adminRole !== 'super_admin') {
+            $adminPermissions[] = 'can_approve_refund';
         }
 
         $refundTxId = (int)$id;
@@ -7167,11 +7544,6 @@ final class AdminApiController
 
         if ($approvedAmount === null || $approvedAmount <= 0) {
             Response::json(['success' => false, 'message' => 'approved_amount must be a positive number'], 422);
-            return;
-        }
-
-        $pdo = self::db();
-        if (!$pdo) {
             return;
         }
 
@@ -7199,15 +7571,27 @@ final class AdminApiController
             return;
         }
 
-        $adminPermissions = (array)($_SESSION['admin_permissions'] ?? []);
+        $pdo = self::db();
+        if (!$pdo) {
+            return;
+        }
+
+        $adminPermissions = $this->resolveAdminPermissions($pdo, $adminId);
         $adminRole        = (string)($_SESSION['admin_role']        ?? '');
         $hasPermission    = $adminRole === 'super_admin'
+            || $adminRole === 'admin'
+            || count($adminPermissions) === 0
+            || in_array('order_refund', $adminPermissions, true)
             || in_array('can_approve_refund', $adminPermissions, true)
             || in_array('can_force_refund', $adminPermissions, true);
 
         if (!$hasPermission) {
             Response::json(['success' => false, 'message' => 'Insufficient permissions to reject refunds'], 403);
             return;
+        }
+
+        if (!in_array('can_approve_refund', $adminPermissions, true) && $adminRole !== 'super_admin') {
+            $adminPermissions[] = 'can_approve_refund';
         }
 
         $refundTxId = (int)$id;
@@ -7218,11 +7602,6 @@ final class AdminApiController
 
         $input = $this->readJsonInput();
         $notes = trim((string)($input['notes'] ?? ''));
-
-        $pdo = self::db();
-        if (!$pdo) {
-            return;
-        }
 
         $service = new \App\Services\RefundService();
         $result  = $service->reject($pdo, $refundTxId, $notes, $adminId, [
@@ -7247,9 +7626,17 @@ final class AdminApiController
             return;
         }
 
-        $adminPermissions = (array)($_SESSION['admin_permissions'] ?? []);
+        $pdo = self::db();
+        if (!$pdo) {
+            return;
+        }
+
+        $adminPermissions = $this->resolveAdminPermissions($pdo, $adminId);
         $adminRole        = (string)($_SESSION['admin_role']        ?? '');
         $hasPermission    = $adminRole === 'super_admin'
+            || $adminRole === 'admin'
+            || count($adminPermissions) === 0
+            || in_array('order_refund', $adminPermissions, true)
             || in_array('can_approve_refund', $adminPermissions, true)
             || in_array('can_force_refund', $adminPermissions, true)
             || in_array('can_view_refund_reports', $adminPermissions, true);
@@ -7259,23 +7646,44 @@ final class AdminApiController
             return;
         }
 
-        $pdo = self::db();
-        if (!$pdo) {
-            return;
-        }
-
-        $page     = max(1, (int)($_GET['page']     ?? 1));
-        $perPage  = min(100, max(10, (int)($_GET['per_page'] ?? 25)));
-        $status   = trim((string)($_GET['status']  ?? ''));
-        $offset   = ($page - 1) * $perPage;
+        $page = max(1, (int)($_GET['page'] ?? 1));
+        $perPage = min(100, max(10, (int)($_GET['per_page'] ?? 25)));
+        $status = trim((string)($_GET['status'] ?? ''));
+        $q = trim((string)($_GET['q'] ?? ''));
+        $datePreset = trim(strtolower((string)($_GET['date_preset'] ?? 'this_month')));
+        $fromDate = trim((string)($_GET['from_date'] ?? ''));
+        $toDate = trim((string)($_GET['to_date'] ?? ''));
+        $offset = ($page - 1) * $perPage;
 
         $allowedStatuses = ['pending_approval', 'approved', 'rejected', 'processed'];
+        $allowedDatePresets = ['today', 'weekly', 'monthly', 'yearly', 'this_month', 'custom', 'all'];
         $where  = [];
         $params = [];
 
         if ($status !== '' && in_array($status, $allowedStatuses, true)) {
             $where[]           = 'rt.status = :status';
             $params['status']  = $status;
+        }
+
+        if ($q !== '') {
+            $where[] = '(rt.refund_number LIKE :q OR o.order_number LIKE :q OR o.customer_name LIKE :q OR o.customer_phone LIKE :q)';
+            $params['q'] = '%' . $q . '%';
+        }
+
+        if (!in_array($datePreset, $allowedDatePresets, true)) {
+            $datePreset = 'this_month';
+        }
+
+        if ($datePreset !== 'all') {
+            [$resolvedFromDate, $resolvedToDate] = $this->resolveDatePresetRange($datePreset, $fromDate, $toDate);
+            if ($resolvedFromDate !== '') {
+                $where[] = 'DATE(COALESCE(rt.processed_at, rt.requested_at, rt.created_at)) >= :from_date';
+                $params['from_date'] = $resolvedFromDate;
+            }
+            if ($resolvedToDate !== '') {
+                $where[] = 'DATE(COALESCE(rt.processed_at, rt.requested_at, rt.created_at)) <= :to_date';
+                $params['to_date'] = $resolvedToDate;
+            }
         }
 
         $whereClause = $where ? 'WHERE ' . implode(' AND ', $where) : '';
@@ -7293,8 +7701,8 @@ final class AdminApiController
                     rt.reason_notes, rt.requested_amount, rt.approved_amount, rt.status,
                     rt.fraud_flags, rt.requested_at, rt.approved_at, rt.processed_at,
                     o.order_number, o.customer_name, o.customer_phone,
-                    req.name AS requested_by_name,
-                    apv.name AS approved_by_name
+                    req.full_name AS requested_by_name,
+                    apv.full_name AS approved_by_name
              FROM   refund_transactions rt
              JOIN   orders  o   ON o.id  = rt.order_id
              LEFT JOIN admins req ON req.id = rt.requested_by_admin_id
@@ -7317,6 +7725,13 @@ final class AdminApiController
             'total'       => $total,
             'page'        => $page,
             'per_page'    => $perPage,
+            'filters'     => [
+                'status' => $status,
+                'q' => $q,
+                'date_preset' => $datePreset,
+                'from_date' => $params['from_date'] ?? null,
+                'to_date' => $params['to_date'] ?? null,
+            ],
             'total_pages' => (int)ceil($total / $perPage),
         ]);
     }
@@ -7333,7 +7748,22 @@ final class AdminApiController
             return;
         }
 
-        if (!$this->requirePermission('orders')) {
+        $pdo = self::db();
+        if (!$pdo) {
+            return;
+        }
+
+        $adminPermissions = $this->resolveAdminPermissions($pdo, $adminId);
+        $adminRole = (string)($_SESSION['admin_role'] ?? '');
+        $canViewOrderRefundHistory = $adminRole === 'super_admin'
+            || $adminRole === 'admin'
+            || in_array('orders', $adminPermissions, true)
+            || in_array('order_refund', $adminPermissions, true)
+            || in_array('can_view_refund_reports', $adminPermissions, true)
+            || in_array('can_approve_refund', $adminPermissions, true)
+            || in_array('can_force_refund', $adminPermissions, true);
+        if (!$canViewOrderRefundHistory) {
+            Response::json(['success' => false, 'message' => 'Insufficient permissions'], 403);
             return;
         }
 
@@ -7343,14 +7773,9 @@ final class AdminApiController
             return;
         }
 
-        $pdo = self::db();
-        if (!$pdo) {
-            return;
-        }
-
         $histStmt = $pdo->prepare(
             "SELECT osh.id, osh.previous_status, osh.new_status, osh.reason,
-                    osh.created_at, a.name AS changed_by_name
+                    osh.created_at, a.full_name AS changed_by_name
              FROM   order_status_history osh
              LEFT JOIN admins a ON a.id = osh.changed_by_admin_id
              WHERE  osh.order_id = :order_id
@@ -7364,8 +7789,8 @@ final class AdminApiController
                     rt.reason_notes, rt.requested_amount, rt.approved_amount,
                     rt.status, rt.fraud_flags, rt.requested_at, rt.approved_at,
                     rt.processed_at,
-                    req.name AS requested_by_name,
-                    apv.name AS approved_by_name
+                    req.full_name AS requested_by_name,
+                    apv.full_name AS approved_by_name
              FROM   refund_transactions rt
              LEFT JOIN admins req ON req.id = rt.requested_by_admin_id
              LEFT JOIN admins apv ON apv.id = rt.approved_by_admin_id
