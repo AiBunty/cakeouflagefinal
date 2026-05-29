@@ -177,7 +177,7 @@ function getStatus($s){
       <button type="button" class="btn-back" style="background:#ef4444; color:#fff;" onclick="cancelOrder(<?php echo (int)$order['id']; ?>)">🚫 Cancel Order</button>
     <?php endif; ?>
     <?php if ($canRefund && $isRefundEligible): ?>
-      <button type="button" class="btn-back" style="background:#7c3aed; color:#fff;" data-bs-toggle="modal" data-bs-target="#refundModal" onclick="prepRefundModal(<?php echo (int)$order['id']; ?>, <?php echo (float)$order['grand_total']; ?>)">💰 Process Refund</button>
+      <button type="button" class="btn-back" style="background:#7c3aed; color:#fff;" data-bs-toggle="modal" data-bs-target="#refundModal" onclick="prepRefundModal(<?php echo (int)$order['id']; ?>, <?php echo (float)$order['grand_total']; ?>)">💰 Submit Refund Request</button>
     <?php elseif ($isAlreadyRefunded): ?>
       <span style="display:inline-flex;align-items:center;gap:6px;background:#f3f4f6;border:1px solid #d1d5db;padding:6px 14px;border-radius:20px;font-size:12px;font-weight:700;color:<?php echo $currentOrderStatus === 'fully_refunded' ? '#166534' : '#86198f'; ?>">
         <?php echo $currentOrderStatus === 'fully_refunded' ? '✅ Fully Refunded' : '🔶 Partially Refunded'; ?>
@@ -611,7 +611,7 @@ document.addEventListener('DOMContentLoaded', function() {
         setTimeout(function(){ location.reload(); }, 1600);
       } else {
         msg.style.color='#dc2626';
-        msg.textContent = '✗ ' + (data.message || 'Failed to process refund');
+        msg.textContent = '✗ ' + (data.message || 'Failed to submit refund request');
         document.getElementById('refund-submit-btn').disabled = false;
       }
     } catch (e) {
@@ -628,7 +628,7 @@ document.addEventListener('DOMContentLoaded', function() {
   <div class="modal-dialog modal-dialog-centered modal-lg">
     <div class="modal-content" style="border-radius:16px;overflow:hidden;">
       <div class="modal-header" style="background:linear-gradient(135deg,#7c3aed,#5b21b6);color:#fff;border:none;">
-        <h5 class="modal-title" id="refundModalLabel">💰 Process Refund</h5>
+        <h5 class="modal-title" id="refundModalLabel">💰 Submit Refund Request</h5>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body" style="padding:24px;">
@@ -659,16 +659,12 @@ document.addEventListener('DOMContentLoaded', function() {
           <label for="refund-reason" style="font-weight:600;font-size:14px;display:block;margin-bottom:4px;">Reason</label>
           <select id="refund-reason" style="width:100%;padding:9px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;">
             <option value="">— Select reason —</option>
-            <option value="QUALITY_COMPLAINT">Quality Complaint</option>
-            <option value="WRONG_CAKE_DELIVERED">Wrong Cake Delivered</option>
-            <option value="DELAYED_DELIVERY">Delayed Delivery</option>
-            <option value="DAMAGED_CAKE">Damaged Cake</option>
-            <option value="CUSTOMER_COMPLAINT">Customer Complaint</option>
-            <option value="DUPLICATE_ORDER">Duplicate Order</option>
-            <option value="KITCHEN_ISSUE">Kitchen Issue</option>
-            <option value="STAFF_ISSUE">Staff Issue</option>
-            <option value="FRAUD_PREVENTION">Fraud Prevention</option>
-            <option value="ADMIN_ADJUSTMENT">Admin Adjustment</option>
+            <option value="QUALITY_ISSUE">Quality Issue</option>
+            <option value="WRONG_ORDER">Wrong Order</option>
+            <option value="ITEM_NOT_DELIVERED">Item Not Delivered</option>
+            <option value="DAMAGED_ITEM">Damaged Item</option>
+            <option value="DUPLICATE_CHARGE">Duplicate Charge</option>
+            <option value="CUSTOMER_CANCELLED">Customer Cancelled</option>
             <option value="OTHER">Other</option>
           </select>
         </div>
@@ -693,7 +689,7 @@ document.addEventListener('DOMContentLoaded', function() {
       </div>
       <div class="modal-footer" style="border:none;padding:16px 24px;background:#f9fafb;">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-        <button type="button" id="refund-submit-btn" style="background:#7c3aed;color:#fff;border:none;padding:9px 20px;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer;">Process Refund</button>
+        <button type="button" id="refund-submit-btn" style="background:#7c3aed;color:#fff;border:none;padding:9px 20px;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer;">Submit Request</button>
       </div>
     </div>
   </div>

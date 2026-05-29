@@ -98,12 +98,12 @@ try {
 
         $refundService = new \App\Services\RefundService();
         $amount = (float)($order['grand_total'] ?? 0);
-        $result = $refundService->processRefund(
+        $result = $refundService->submitRequest(
             $pdo,
             $orderId,
             [
-                'refund_amount' => $amount,
-                'reason_code' => 'ADMIN_ADJUSTMENT',
+                'requested_amount' => $amount,
+                'reason_code' => 'OTHER',
                 'reason_notes' => $reason,
             ],
             $adminId,
@@ -121,22 +121,23 @@ try {
 
         $stateManager->writeOrderAudit($pdo, [
             'order_id' => $orderId,
-            'action_type' => 'refund_processed',
+            'action_type' => 'refund_requested',
             'previous_status' => (string)($order['order_status'] ?? ''),
-            'new_status' => (string)($result['order_status'] ?? ''),
-            'payment_status' => 'refunded',
+            'new_status' => 'refund_requested',
+            'payment_status' => (string)($order['payment_status'] ?? ''),
             'admin_id' => $adminId,
             'admin_role' => isset($_SESSION['admin_role']) ? (string)$_SESSION['admin_role'] : '',
             'ip_address' => $_SERVER['REMOTE_ADDR'] ?? '',
-            'message' => 'Refund processed from legacy endpoint',
+            'message' => 'Refund request submitted from legacy endpoint (awaiting separate approver)',
             'metadata' => ['refund_number' => $result['refund_number'] ?? null, 'reason' => $reason],
         ]);
 
         echo json_encode([
             'success' => true,
-            'message' => 'Refund processed successfully',
-            'new_status' => (string)($result['order_status'] ?? 'fully_refunded'),
-            'refund_amount' => $amount
+            'message' => 'Refund request submitted. Separate approver required.',
+            'new_status' => 'refund_requested',
+            'refund_amount' => $amount,
+            'refund_number' => (string)($result['refund_number'] ?? '')
         ], JSON_UNESCAPED_SLASHES);
         exit;
     }

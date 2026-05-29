@@ -1,0 +1,115 @@
+/* Orders module: strict mobile-first overrides */
+@media (max-width: 640px) {
+  .orders-shell {
+    border-radius: 12px;
+  }
+
+  .orders-head {
+    padding: 10px;
+    gap: 8px;
+  }
+
+  .orders-head h3 {
+    font-size: 1.05rem;
+  }
+
+  .orders-head-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .orders-meta {
+    font-size: 0.72rem;
+  }
+
+  .orders-filters {
+    padding: 8px 10px;
+    position: sticky;
+    top: 0;
+    z-index: 12;
+    background: #fffdfd;
+  }
+
+  .orders-chip-row {
+    overflow-x: auto;
+    white-space: nowrap;
+    padding-bottom: 2px;
+    flex-wrap: nowrap;
+  }
+
+  .orders-chip-row a {
+    flex: 0 0 auto;
+  }
+
+  .orders-advanced {
+    display: none;
+  }
+
+  .orders-advanced.open {
+    display: grid;
+    grid-template-columns: 1fr;
+    margin-top: 8px;
+  }
+
+  .orders-field-wide {
+    grid-column: span 1;
+  }
+
+  .order-row {
+    padding: 9px 10px;
+  }
+
+  .order-id {
+    font-size: 0.74rem;
+  }
+
+  .order-customer {
+    font-size: 0.8rem;
+  }
+
+  .order-line,
+  .order-item-preview {
+    font-size: 0.71rem;
+  }
+
+  .order-prod-preview {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
+  }
+
+  .order-actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+    gap: 6px;
+  }
+
+  .btnx {
+    height: 36px;
+    font-size: 0.72rem;
+    padding: 0 8px;
+  }
+
+  .order-actions .btnx-secondary-desktop {
+    display: none !important;
+  }
+
+  .order-more-menu {
+    left: 0;
+    right: auto;
+    min-width: 180px;
+  }
+
+  .orders-pagination {
+    padding: 10px;
+  }
+
+  .orders-pagination .btnx {
+    min-width: 90px;
+  }
+
+  .orders-rail {
+    display: none;
+  }
+}

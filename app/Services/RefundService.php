@@ -580,6 +580,7 @@ final class RefundService
         // Load refund transaction
         $refundStmt = $pdo->prepare(
             'SELECT rt.id, rt.order_id, rt.requested_amount, rt.status, rt.refund_number,
+                rt.requested_by_admin_id,
                     o.grand_total, o.delivery_fee, o.refund_amount AS already_refunded
              FROM refund_transactions rt
              JOIN orders o ON o.id = rt.order_id
@@ -594,6 +595,14 @@ final class RefundService
         }
         if ((string)($refund['status'] ?? '') !== 'pending_approval') {
             return ['success' => false, 'message' => 'Refund is not in pending_approval status'];
+        }
+
+        $requestedByAdminId = (int)($refund['requested_by_admin_id'] ?? 0);
+        if ($requestedByAdminId <= 0) {
+            return ['success' => false, 'message' => 'Refund request is missing requester identity. Re-submit the refund request.'];
+        }
+        if ($requestedByAdminId === $adminId) {
+            return ['success' => false, 'message' => 'Dual-approval enforced: requester cannot approve/process the same refund.'];
         }
 
         $requestedAmount = (float)($refund['requested_amount']  ?? 0);

@@ -325,14 +325,19 @@ final class FinancialTransactionEngine
         }
 
         $pdo = Database::getConnection();
-        $pdo->beginTransaction();
+        $startedLocalTransaction = !$pdo->inTransaction();
+        if ($startedLocalTransaction) {
+            $pdo->beginTransaction();
+        }
         try {
             $existingId = $this->db->fetchScalar(
                 'SELECT id FROM financial_transactions WHERE idempotency_key = :k LIMIT 1',
                 ['k' => (string)$payload['idempotency_key']]
             );
             if ($existingId !== null) {
-                $pdo->rollBack();
+                if ($startedLocalTransaction && $pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
                 return ['success' => true, 'posted' => false, 'transaction_id' => (int)$existingId, 'message' => 'Duplicate event ignored'];
             }
 
@@ -429,7 +434,9 @@ final class FinancialTransactionEngine
                 ]
             );
 
-            $pdo->commit();
+            if ($startedLocalTransaction && $pdo->inTransaction()) {
+                $pdo->commit();
+            }
 
             return [
                 'success' => true,
@@ -439,7 +446,7 @@ final class FinancialTransactionEngine
                 'message' => 'Financial transaction posted',
             ];
         } catch (\Throwable $e) {
-            if ($pdo->inTransaction()) {
+            if ($startedLocalTransaction && $pdo->inTransaction()) {
                 $pdo->rollBack();
             }
             error_log('[FinancialTransactionEngine] ' . $e->getMessage());

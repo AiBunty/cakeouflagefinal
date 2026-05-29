@@ -1310,14 +1310,14 @@ final class AdminApiController
      * POST /api/admin/orders/:id/confirm-payment
      * Marks payment as paid, confirms slot reservation, queues customer email + CRM.
      */
-    public function ordersConfirmPayment(): void
+    public function ordersConfirmPayment(string $id): void
     {
         $adminId = $this->requireAdminId();
         if ($adminId === null) { return; }
 
         $input = $this->readJsonInput();
 
-        $orderId = (int)($this->routeParams['id'] ?? 0);
+        $orderId = (int)$id;
         if ($orderId <= 0) {
             Response::json(['success' => false, 'message' => 'Invalid order ID'], 422);
             return;
@@ -1364,6 +1364,7 @@ final class AdminApiController
         $discountAmount = max(0.0, round($chargeableAmount - $receivedAmount, 2));
         $discountRatio = $chargeableAmount > 0 ? ($discountAmount / $chargeableAmount) : 0.0;
         $managerOverride = !empty($input['manager_override']);
+        $discountReason = trim((string)($input['discount_reason'] ?? ''));
         $adminRole = strtolower(trim((string)($_SESSION['admin_role'] ?? '')));
         $adminPermissions = isset($_SESSION['admin_permissions']) && is_array($_SESSION['admin_permissions'])
             ? array_map(static fn($v): string => (string)$v, $_SESSION['admin_permissions'])
@@ -1372,17 +1373,20 @@ final class AdminApiController
             || in_array('business_settings', $adminPermissions, true)
             || in_array('order_credit', $adminPermissions, true);
 
+        if ($discountAmount > 0 && $discountReason === '') {
+            Response::json([
+                'success' => false,
+                'message' => 'Shortfall discount requires a mandatory reason.',
+            ], 422);
+            return;
+        }
+
         if ($discountRatio > 0.05 && !($managerOverride && $hasDiscountOverridePermission)) {
             Response::json([
                 'success' => false,
                 'message' => 'Shortfall discount above 5% requires manager override.',
             ], 422);
             return;
-        }
-
-        $discountReason = trim((string)($input['discount_reason'] ?? ''));
-        if ($discountAmount > 0 && $discountReason === '') {
-            $discountReason = 'Auto-adjusted shortfall at payment confirmation';
         }
 
         $effectivePaymentMethod = strtolower(trim((string)($input['payment_method'] ?? ($order['payment_method'] ?? 'upi_manual'))));
@@ -1417,25 +1421,32 @@ final class AdminApiController
                 $paymentNoteSuffix = "\n[Discount Applied] ₹" . number_format($discountAmount, 2, '.', '') . ' - ' . $discountReason;
             }
 
-            $pdo->prepare(
-                'UPDATE orders SET
-                    payment_status = "paid",
-                    payment_method = :payment_method,
-                    payment_confirmed_at = NOW(),
-                    payment_confirmed_by_admin_id = :admin_id,
-                    discount_total = ROUND(COALESCE(discount_total, 0) + :discount_amount, 2),
-                    grand_total = :final_grand_total,
-                    admin_note = CONCAT(COALESCE(admin_note, ""), :payment_note_suffix),
-                    order_status = CASE WHEN order_status IN ("pending", "pending_payment", "payment_under_review") THEN "confirmed" ELSE order_status END
-                 WHERE id = :id'
-            )->execute([
+            $updateAssignments = [
+                'payment_status = "paid"',
+                'payment_method = :payment_method',
+                'discount_total = ROUND(COALESCE(discount_total, 0) + :discount_amount, 2)',
+                'grand_total = :final_grand_total',
+                'admin_note = CONCAT(COALESCE(admin_note, ""), :payment_note_suffix)',
+                'order_status = CASE WHEN order_status IN ("pending", "pending_payment", "payment_under_review") THEN "confirmed" ELSE order_status END',
+            ];
+            $updateParams = [
                 'id' => $orderId,
                 'payment_method' => $effectivePaymentMethod,
-                'admin_id' => $adminId,
                 'discount_amount' => $discountAmount,
                 'final_grand_total' => $receivedAmount,
                 'payment_note_suffix' => $paymentNoteSuffix,
-            ]);
+            ];
+            if ($this->tableHasColumn($pdo, 'orders', 'payment_confirmed_at')) {
+                $updateAssignments[] = 'payment_confirmed_at = NOW()';
+            }
+            if ($this->tableHasColumn($pdo, 'orders', 'payment_confirmed_by_admin_id')) {
+                $updateAssignments[] = 'payment_confirmed_by_admin_id = :admin_id';
+                $updateParams['admin_id'] = $adminId;
+            }
+
+            $pdo->prepare(
+                'UPDATE orders SET ' . implode(', ', $updateAssignments) . ' WHERE id = :id'
+            )->execute($updateParams);
 
             $recognizedAmount = $receivedAmount;
             if ($recognizedAmount > 0) {
@@ -1539,7 +1550,7 @@ final class AdminApiController
 
         } catch (\Throwable $e) {
             if ($pdo->inTransaction()) { $pdo->rollBack(); }
-            error_log('[ordersConfirmPayment] error: ' . $e->getMessage());
+            error_log('[ordersConfirmPayment] order_id=' . $orderId . ' admin_id=' . $adminId . ' error=' . get_class($e) . ': ' . $e->getMessage());
             Response::json(['success' => false, 'message' => 'Confirmation failed. Please try again.'], 500);
         }
     }
@@ -1548,12 +1559,12 @@ final class AdminApiController
      * POST /api/admin/orders/:id/reject-payment
      * Releases slot hold, marks order cancelled, queues rejection notification.
      */
-    public function ordersRejectPayment(): void
+    public function ordersRejectPayment(string $id): void
     {
         $adminId = $this->requireAdminId();
         if ($adminId === null) { return; }
 
-        $orderId = (int)($this->routeParams['id'] ?? 0);
+        $orderId = (int)$id;
         if ($orderId <= 0) {
             Response::json(['success' => false, 'message' => 'Invalid order ID'], 422);
             return;
@@ -5418,6 +5429,31 @@ final class AdminApiController
         return Request::json();
     }
 
+    private function tableHasColumn(PDO $pdo, string $table, string $column): bool
+    {
+        static $cache = [];
+        $cacheKey = strtolower($table . '.' . $column);
+        if (array_key_exists($cacheKey, $cache)) {
+            return $cache[$cacheKey];
+        }
+
+        try {
+            $stmt = $pdo->prepare(
+                'SELECT COUNT(*) FROM information_schema.columns
+                 WHERE table_schema = DATABASE() AND table_name = :table_name AND column_name = :column_name'
+            );
+            $stmt->execute([
+                'table_name' => $table,
+                'column_name' => $column,
+            ]);
+            $cache[$cacheKey] = ((int)$stmt->fetchColumn()) > 0;
+        } catch (\Throwable $e) {
+            $cache[$cacheKey] = false;
+        }
+
+        return $cache[$cacheKey];
+    }
+
     private function stripDeveloperFooterFragments(string $html): string
     {
         $original = trim($html);
@@ -6838,15 +6874,16 @@ final class AdminApiController
 
     /**
      * POST /api/admin/orders/:id/refund/process
-     * Atomic single-step refund — processes immediately with no approval queue.
-     * Required permissions: can_approve_refund (or super_admin / can_force_refund)
+     * Strict policy mode: submit refund request only.
+     * Processing is intentionally deferred to a separate approver via /api/admin/refunds/:id/approve.
+     * Required permissions: order_refund
      */
     public function refundProcess(string $id): void
     {
         $this->requireAdminAuth();
 
-        if (!$this->hasPermission('can_approve_refund') && !$this->hasPermission('can_force_refund')) {
-            $this->jsonError('Insufficient permissions to process refunds', 403);
+        if (!$this->hasPermission('order_refund')) {
+            $this->jsonError('Insufficient permissions to submit refund requests', 403);
             return;
         }
 
@@ -6869,18 +6906,34 @@ final class AdminApiController
             return;
         }
 
+        $legacyReasonMap = [
+            'QUALITY_COMPLAINT' => 'QUALITY_ISSUE',
+            'WRONG_CAKE_DELIVERED' => 'WRONG_ORDER',
+            'DELAYED_DELIVERY' => 'ITEM_NOT_DELIVERED',
+            'DAMAGED_CAKE' => 'DAMAGED_ITEM',
+            'CUSTOMER_COMPLAINT' => 'QUALITY_ISSUE',
+            'DUPLICATE_ORDER' => 'DUPLICATE_CHARGE',
+            'KITCHEN_ISSUE' => 'QUALITY_ISSUE',
+            'STAFF_ISSUE' => 'QUALITY_ISSUE',
+            'FRAUD_PREVENTION' => 'DUPLICATE_CHARGE',
+            'ADMIN_ADJUSTMENT' => 'OTHER',
+        ];
+        if ($reasonCode === '') {
+            $reasonCode = 'OTHER';
+        } elseif (isset($legacyReasonMap[$reasonCode])) {
+            $reasonCode = $legacyReasonMap[$reasonCode];
+        }
+
         $pdo       = \App\Core\Database::getConnection();
         $adminId   = (int)($this->session['admin'] ?? 0);
         $adminRole = (string)($this->session['admin_role'] ?? '');
         $adminPerms = (array)($this->session['admin_permissions'] ?? []);
 
         $service = new \App\Services\RefundService();
-        $result  = $service->processRefund($pdo, $orderId, [
-            'refund_amount'        => $refundAmount,
-            'reason_code'          => $reasonCode,
-            'reason_notes'         => $reasonNotes,
-            'settlement_reference' => $settlementRef,
-            'settlement_proof_url' => $settlementProofUrl,
+        $result  = $service->submitRequest($pdo, $orderId, [
+            'requested_amount' => $refundAmount,
+            'reason_code'      => $reasonCode,
+            'reason_notes'     => $reasonNotes,
         ], $adminId, [
             'admin_role'        => $adminRole,
             'admin_permissions' => $adminPerms,
@@ -6893,21 +6946,12 @@ final class AdminApiController
             return;
         }
 
-        // Fire order automation side-effects after commit
-        try {
-            $automation = new \App\Services\OrderAutomationService();
-            $automation->handleStatusChange($pdo, $orderId, $result['order_status'], $adminId);
-        } catch (\Throwable $e) {
-            error_log('[refundProcess] Automation error (non-fatal) for order #' . $orderId . ': ' . $e->getMessage());
-        }
-
         $this->json([
             'success'       => true,
-            'message'       => $result['message'],
-            'refund_type'   => $result['refund_type'],
+            'message'       => 'Refund request submitted. A separate approver must process it.',
             'refund_amount' => $refundAmount,
-            'order_status'  => $result['order_status'],
-            'refund_number' => $result['refund_number'],
+            'refund_id'     => $result['refund_id'] ?? null,
+            'refund_number' => $result['refund_number'] ?? null,
         ]);
     }
 
@@ -6920,7 +6964,7 @@ final class AdminApiController
     {
         $this->requireAdminAuth();
 
-        if (!$this->hasPermission('can_approve_refund') && !$this->hasPermission('can_force_refund')) {
+        if (!$this->hasPermission('order_refund')) {
             $this->jsonError('Insufficient permissions', 403);
             return;
         }
