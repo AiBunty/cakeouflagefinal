@@ -778,6 +778,9 @@ cursor: pointer;
 .floating-contact-rail__link--instagram {
   background: linear-gradient(135deg, #833ab4 0%, #fd1d1d 55%, #fcb045 100%);
 }
+.floating-contact-rail__link--maps {
+  background: linear-gradient(135deg, #1a73e8 0%, #34a853 100%);
+}
 .floating-contact-rail__icon {
   width: 36px;
   height: 36px;

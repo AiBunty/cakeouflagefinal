@@ -58,6 +58,104 @@ function add_product_enum_values(mysqli $conn, string $table, string $column, ar
     $vals = array_values(array_unique(array_map('strval', $m[1])));
     return $vals !== [] ? $vals : $fallback;
 }
+
+function add_product_size_master_rows(mysqli $conn): array
+{
+    $rows = [];
+    $result = $conn->query('SELECT id, label, sort_order, is_active FROM product_size_master ORDER BY sort_order ASC, id ASC');
+    if ($result) {
+        while ($row = $result->fetch_assoc()) {
+            $rows[] = $row;
+        }
+    }
+
+    if ($rows === []) {
+        $rows = [
+            ['id' => 0, 'label' => 'Per Pcs', 'sort_order' => 10, 'is_active' => 1],
+            ['id' => 0, 'label' => '0.5 kg', 'sort_order' => 20, 'is_active' => 1],
+            ['id' => 0, 'label' => '1 kg', 'sort_order' => 30, 'is_active' => 1],
+            ['id' => 0, 'label' => '1.5 kg', 'sort_order' => 40, 'is_active' => 1],
+            ['id' => 0, 'label' => '2 kg', 'sort_order' => 50, 'is_active' => 1],
+        ];
+    }
+
+    return $rows;
+}
+
+function add_product_normalize_size_label(string $label): string
+{
+    $value = strtolower(trim($label));
+    $value = preg_replace('/\s+/', ' ', $value) ?? $value;
+    return $value;
+}
+
+function add_product_parse_matrix_payload(string $raw): array
+{
+    $decoded = json_decode($raw, true);
+    if (!is_array($decoded)) {
+        return [];
+    }
+
+    $rows = [];
+    foreach ($decoded as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+
+        $label = trim((string)($row['label'] ?? ''));
+        if ($label === '') {
+            continue;
+        }
+
+        $rows[] = [
+            'label' => $label,
+            'price' => round((float)($row['price'] ?? 0), 2),
+            'stock_quantity' => max(0, (int)($row['stock_quantity'] ?? 0)),
+            'sku' => trim((string)($row['sku'] ?? '')),
+            'is_default' => (int)($row['is_default'] ?? 0) === 1 ? 1 : 0,
+            'size_id' => (int)($row['size_id'] ?? 0),
+        ];
+    }
+
+    return $rows;
+}
+
+function add_product_matrix_default_price(array $matrixRows): float
+{
+    foreach ($matrixRows as $row) {
+        $price = (float)($row['price'] ?? 0);
+        if ($price > 0) {
+            return round($price, 2);
+        }
+    }
+
+    return 0.0;
+}
+
+function add_product_matrix_to_variants(array $matrixRows): array
+{
+    $variants = [];
+    foreach ($matrixRows as $index => $row) {
+        $label = trim((string)($row['label'] ?? ''));
+        $price = round((float)($row['price'] ?? 0), 2);
+        if ($label === '' || $price <= 0) {
+            continue;
+        }
+
+        $variants[] = [
+            'variant_label' => $label,
+            'variant_name' => $label,
+            'weight_or_size' => $label,
+            'unit_type' => 'custom',
+            'price' => $price,
+            'stock_quantity' => max(0, (int)($row['stock_quantity'] ?? 0)),
+            'sku' => trim((string)($row['sku'] ?? '')),
+            'is_default' => (int)($row['is_default'] ?? 0) === 1 ? 1 : ($index === 0 ? 1 : 0),
+        ];
+    }
+
+    return $variants;
+}
 // =========================
 // BACKEND LOGIC
 // =========================
@@ -65,12 +163,14 @@ function add_product_enum_values(mysqli $conn, string $table, string $column, ar
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
     $name = $_POST['name'];
-  $base_price = $_POST['base_price'];
-  if ($base_price <= 0) {
-    die("Invalid base price");
-}
     $category_id = $_POST['category_id'];
     $description = $_POST['description'];
+    $matrixRows = add_product_parse_matrix_payload((string)($_POST['matrix_json'] ?? ''));
+    $legacyBasePrice = (float)($_POST['base_price'] ?? 0);
+    $base_price = !empty($matrixRows) ? add_product_matrix_default_price($matrixRows) : $legacyBasePrice;
+    if ($base_price <= 0) {
+        die("Invalid base price");
+    }
 
     // ❌ validation
     if (empty($category_id)) {
@@ -277,69 +377,41 @@ $base_price_str  = (string)(float)$base_price;
        $pi2Stmt->close();
    }
 
-   $variantNames = $_POST['variant_name'] ?? [];
-   $variantPrices = $_POST['variant_price'] ?? [];
-   $variantUnits = $_POST['variant_unit_type'] ?? [];
-   $variantSkus = $_POST['variant_sku'] ?? [];
-   $variantDefault = (int)($_POST['variant_default'] ?? 0);
-
-   $rows = [];
-   if (is_array($variantNames) && is_array($variantPrices)) {
-       $count = min(count($variantNames), count($variantPrices));
-       for ($i = 0; $i < $count; $i++) {
-           $vName = trim((string)($variantNames[$i] ?? ''));
-           $vPrice = (float)($variantPrices[$i] ?? 0);
-           if ($vName === '' || $vPrice <= 0) {
-               continue;
-           }
-           $rows[] = [
-               'label' => $vName,
-               'name' => $vName,
-               'weight_or_size' => $vName,
-               'unit_type' => trim((string)($variantUnits[$i] ?? 'custom')) ?: 'custom',
-               'price' => round($vPrice, 2),
-               'sku' => trim((string)($variantSkus[$i] ?? '')),
-               'is_default' => ($i === $variantDefault) ? 1 : 0,
-           ];
-       }
+    $rows = !empty($matrixRows) ? $matrixRows : [];
+   if ($rows === []) {
+       $rows = add_product_matrix_to_variants([[ 'label' => '1 lb', 'price' => $base_price, 'stock_quantity' => 100, 'sku' => '', 'is_default' => 1 ]]);
+   }
+   if (!empty($rows) && !array_filter($rows, static fn(array $row): bool => (int)($row['is_default'] ?? 0) === 1)) {
+       $rows[0]['is_default'] = 1;
    }
 
-   if ($rows === []) {
-       $rows[] = [
-           'label' => 'Base',
-           'name' => 'Base',
-           'weight_or_size' => 'Base',
+   $variantRows = !empty($matrixRows) ? add_product_matrix_to_variants($matrixRows) : $rows;
+   if ($variantRows === []) {
+       $variantRows = [[
+           'variant_label' => '1 lb',
+           'variant_name' => '1 lb',
+           'weight_or_size' => '1 lb',
            'unit_type' => 'custom',
            'price' => round((float)$base_price, 2),
+           'stock_quantity' => 100,
            'sku' => '',
            'is_default' => 1,
-       ];
-   }
-
-   $hasExplicitDefault = false;
-   foreach ($rows as $rowItem) {
-       if ((int)$rowItem['is_default'] === 1) {
-           $hasExplicitDefault = true;
-           break;
-       }
-   }
-   if (!$hasExplicitDefault) {
-       $rows[0]['is_default'] = 1;
+       ]];
    }
 
    $hasVariantName = add_product_column_exists($conn, 'product_variants', 'variant_name');
    $hasUnitType = add_product_column_exists($conn, 'product_variants', 'unit_type');
    $hasSku = add_product_column_exists($conn, 'product_variants', 'sku');
 
-   foreach ($rows as $rowItem) {
+   foreach ($variantRows as $rowItem) {
        $variantColumns = ['product_id', 'variant_label'];
-       $variantValues = [$product_id, $rowItem['label']];
+       $variantValues = [$product_id, $rowItem['variant_label']];
        $variantTypes = 'is';
 
        if ($hasVariantName) {
            $variantColumns[] = 'variant_name';
            $variantTypes .= 's';
-           $variantValues[] = $rowItem['name'];
+           $variantValues[] = $rowItem['variant_name'];
        }
 
        $variantColumns[] = 'weight_or_size';
@@ -358,7 +430,7 @@ $base_price_str  = (string)(float)$base_price;
 
        $variantColumns[] = 'stock_quantity';
        $variantTypes .= 'i';
-       $variantValues[] = 100;
+       $variantValues[] = (int)($rowItem['stock_quantity'] ?? 0);
 
        $variantColumns[] = 'is_default';
        $variantTypes .= 'i';
@@ -392,6 +464,7 @@ $base_price_str  = (string)(float)$base_price;
 // =========================
 
 $categories = $conn->query("SELECT id, name FROM categories WHERE is_active = 1 AND deleted_at IS NULL ORDER BY name ASC");
+$sizeMasterRows = add_product_size_master_rows($conn);
 
 $pageTitle = "Add Product";
 require_once __DIR__ . '/layout.php';
@@ -500,6 +573,81 @@ require_once __DIR__ . '/layout.php';
         margin: 0;
     }
 
+    .matrix-grid {
+        display: grid;
+        gap: 10px;
+    }
+
+    .matrix-row {
+        display: grid;
+        grid-template-columns: minmax(120px, 1.4fr) repeat(3, minmax(0, 1fr)) auto;
+        gap: 10px;
+        padding: 12px;
+        border: 1px solid rgba(128, 0, 31, 0.11);
+        border-radius: 14px;
+        background: linear-gradient(180deg, #fff, #fff9fb);
+        align-items: end;
+    }
+
+    .matrix-row__label {
+        display: grid;
+        gap: 4px;
+    }
+
+    .matrix-row__label strong {
+        color: #2d1f25;
+        font-size: 0.94rem;
+    }
+
+    .matrix-row__label span {
+        color: #8a7480;
+        font-size: 0.72rem;
+    }
+
+    .matrix-row__field {
+        display: grid;
+        gap: 6px;
+    }
+
+    .matrix-row__field label {
+        font-size: 0.72rem;
+        font-weight: 600;
+        color: #7b1a39;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+    }
+
+    .matrix-row__field input {
+        width: 100%;
+        padding: 11px 12px;
+        border-radius: 12px;
+        border: 1px solid rgba(128, 0, 31, 0.16);
+        background: #fffafb;
+        font: inherit;
+        box-sizing: border-box;
+    }
+
+    .matrix-row__field--default {
+        align-self: center;
+        padding-bottom: 4px;
+    }
+
+    .matrix-row__field--default label {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        text-transform: none;
+        letter-spacing: 0;
+        color: #4f2e39;
+        font-size: 0.8rem;
+    }
+
+    .matrix-summary {
+        margin-top: 8px;
+        color: #8f6e7b;
+        font-size: 0.78rem;
+    }
+
     .btn {
         background: #80001F;
         color: #fff;
@@ -531,6 +679,10 @@ require_once __DIR__ . '/layout.php';
         .feature-grid {
             grid-template-columns: 1fr;
         }
+
+        .matrix-row {
+            grid-template-columns: 1fr;
+        }
     }
 </style>
 
@@ -538,6 +690,8 @@ require_once __DIR__ . '/layout.php';
 <h2>Add Product</h2>
 
 <form method="POST" enctype="multipart/form-data">
+<input type="hidden" name="matrix_json" id="matrixJson" value="[]">
+<input type="hidden" name="base_price" id="matrixBasePrice" value="0">
 
 <div class="form-section">
 <h3>Basic Product Info</h3>
@@ -545,11 +699,6 @@ require_once __DIR__ . '/layout.php';
 <div class="form-group">
 <label>Name</label>
 <input class="form-control" type="text" name="name" required>
-</div>
-
-<div class="form-group">
-<label>Base Price</label>
-<input class="form-control" type="number" step="0.01" name="base_price" required>
 </div>
 
 <div class="form-group">
@@ -626,11 +775,11 @@ require_once __DIR__ . '/layout.php';
 </div>
 
 <div class="form-section">
-<h3>Variants</h3>
-<p class="form-section__hint">Add explicit variant rows. Leave blank rows removed automatically.</p>
-<div id="variantRows"></div>
+<h3>Pricing Matrix</h3>
+<p class="form-section__hint">Each active size is editable here. The first priced row becomes the compatibility base price.</p>
+<div id="matrixRows" class="matrix-grid"></div>
 <div class="form-actions" style="margin-top:10px;">
-    <button class="btn btn--secondary" id="addVariantBtn" type="button">+ Add Variant</button>
+    <button class="btn btn--secondary" id="addVariantBtn" type="button">+ Add Custom Size</button>
 </div>
 </div>
 
@@ -678,42 +827,48 @@ require_once __DIR__ . '/layout.php';
         });
     }
 
-    const variantRows = document.getElementById('variantRows');
+    const matrixRows = document.getElementById('matrixRows');
     const addVariantBtn = document.getElementById('addVariantBtn');
+    const matrixJson = document.getElementById('matrixJson');
+    const matrixBasePrice = document.getElementById('matrixBasePrice');
+    const sizeMasterRows = <?php echo json_encode(array_map(static function (array $row): array {
+        return [
+            'id' => (int)($row['id'] ?? 0),
+            'label' => (string)($row['label'] ?? ''),
+            'is_active' => (int)($row['is_active'] ?? 1),
+        ];
+    }, $sizeMasterRows), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
 
     function addVariantRow(seed) {
-        if (!variantRows) {
+        if (!matrixRows) {
             return;
         }
-        const rowIndex = variantRows.children.length;
+        const rowIndex = matrixRows.children.length;
         const row = document.createElement('div');
-        row.className = 'feature-grid';
-        row.style.marginBottom = '10px';
+        row.className = 'matrix-row';
+        row.dataset.matrixRow = '1';
+        row.dataset.sizeId = String(seed?.sizeId || 0);
+        row.dataset.sizeLabel = seed?.name || '';
         row.innerHTML = `
-            <div class="form-group" style="margin-bottom:0;">
-                <label>Variant Name</label>
-                <input class="form-control" type="text" name="variant_name[]" value="${seed?.name || ''}" placeholder="1 lb / Half Kg / Per Piece">
+            <div class="matrix-row__label">
+                <strong>${seed?.name || ''}</strong>
+                <span>${seed?.active ? 'Active size' : 'Disabled size'}</span>
             </div>
-            <div class="form-group" style="margin-bottom:0;">
+            <div class="matrix-row__field">
                 <label>Price</label>
-                <input class="form-control" type="number" step="0.01" min="0" name="variant_price[]" value="${seed?.price || ''}">
+                <input type="number" step="0.01" min="0" data-matrix-price value="${seed?.price || ''}">
             </div>
-            <div class="form-group" style="margin-bottom:0;">
-                <label>Unit Type</label>
-                <select class="form-control" name="variant_unit_type[]">
-                    <option value="size" ${seed?.unit === 'size' ? 'selected' : ''}>size</option>
-                    <option value="weight" ${seed?.unit === 'weight' ? 'selected' : ''}>weight</option>
-                    <option value="piece" ${seed?.unit === 'piece' ? 'selected' : ''}>piece</option>
-                    <option value="custom" ${!seed || seed?.unit === 'custom' ? 'selected' : ''}>custom</option>
-                </select>
+            <div class="matrix-row__field">
+                <label>Stock</label>
+                <input type="number" step="1" min="0" data-matrix-stock value="${seed?.stock || '0'}">
             </div>
-            <div class="form-group" style="margin-bottom:0;">
+            <div class="matrix-row__field">
                 <label>SKU (optional)</label>
-                <input class="form-control" type="text" name="variant_sku[]" value="${seed?.sku || ''}" placeholder="CK-CHOC-1LB">
+                <input type="text" data-matrix-sku value="${seed?.sku || ''}" placeholder="CK-CHOC-1LB">
             </div>
-            <div class="form-group" style="display:flex;align-items:flex-end;gap:8px;margin-bottom:0;">
+            <div class="matrix-row__field matrix-row__field--default">
                 <label style="display:flex;align-items:center;gap:6px;font-size:0.8rem;margin:0;">
-                    <input type="radio" name="variant_default" value="${rowIndex}" ${seed?.isDefault ? 'checked' : ''}>
+                    <input type="radio" name="matrix_default_row" value="${rowIndex}" ${seed?.isDefault ? 'checked' : ''} data-matrix-default>
                     Default
                 </label>
                 <button class="btn btn--danger" type="button">Remove</button>
@@ -724,7 +879,7 @@ require_once __DIR__ . '/layout.php';
         if (removeBtn) {
             removeBtn.addEventListener('click', function () {
                 row.remove();
-                const defaultInputs = variantRows.querySelectorAll('input[name="variant_default"]');
+                const defaultInputs = matrixRows.querySelectorAll('input[name="matrix_default_row"]');
                 defaultInputs.forEach((input, idx) => {
                     input.value = String(idx);
                 });
@@ -734,16 +889,64 @@ require_once __DIR__ . '/layout.php';
             });
         }
 
-        variantRows.appendChild(row);
+        matrixRows.appendChild(row);
+    }
+
+    function syncMatrixPayload() {
+        if (!matrixRows || !matrixJson || !matrixBasePrice) {
+            return;
+        }
+
+        const rows = Array.from(matrixRows.querySelectorAll('[data-matrix-row]')).map((row) => {
+            const priceInput = row.querySelector('[data-matrix-price]');
+            const stockInput = row.querySelector('[data-matrix-stock]');
+            const skuInput = row.querySelector('[data-matrix-sku]');
+            const defaultInput = row.querySelector('[data-matrix-default]');
+            return {
+                size_id: Number(row.dataset.sizeId || '0'),
+                label: row.dataset.sizeLabel || '',
+                price: Number(priceInput && priceInput.value ? priceInput.value : '0'),
+                stock_quantity: Number(stockInput && stockInput.value ? stockInput.value : '0'),
+                sku: String(skuInput && skuInput.value ? skuInput.value : '').trim(),
+                is_default: defaultInput && defaultInput.checked ? 1 : 0,
+            };
+        });
+
+        const firstPriced = rows.find((row) => Number(row.price || 0) > 0);
+        matrixBasePrice.value = firstPriced ? Number(firstPriced.price).toFixed(2) : '0';
+        matrixJson.value = JSON.stringify(rows);
+    }
+
+    if (matrixRows) {
+        matrixRows.addEventListener('input', syncMatrixPayload);
+        matrixRows.addEventListener('change', syncMatrixPayload);
     }
 
     if (addVariantBtn) {
         addVariantBtn.addEventListener('click', function () {
-            addVariantRow();
+            addVariantRow({ name: '', price: '', stock: '0', sku: '', isDefault: false, sizeId: 0, active: true });
         });
     }
 
-    addVariantRow({ name: '1 lb', price: '', unit: 'size', sku: '', isDefault: true });
+    sizeMasterRows.forEach(function (row, index) {
+        addVariantRow({
+            name: row.label,
+            price: '',
+            stock: '0',
+            sku: '',
+            isDefault: index === 0,
+            sizeId: row.id,
+            active: Number(row.is_active || 1) === 1,
+        });
+    });
+    syncMatrixPayload();
+
+    const form = document.querySelector('form[method="POST"]');
+    if (form) {
+        form.addEventListener('submit', function () {
+            syncMatrixPayload();
+        });
+    }
 </script>
 
 </div>

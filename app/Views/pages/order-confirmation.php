@@ -9,6 +9,7 @@ $advanceAmount = $order ? (float)($order['advance_amount'] ?? 0) : 0;
 $paymentStatus = $order ? (string)($order['payment_status'] ?? '') : '';
 $remaining = max(0, $grandTotal - $advanceAmount);
 $isPartial = ($paymentStatus === 'under_review' && $advanceAmount > 0 && $remaining > 0);
+$supportWhatsapp = build_whatsapp_link((string)($siteConfig['contact']['whatsapp_number'] ?? ''));
 ?>
 <main data-page="order-confirmation">
   <section class="section" style="padding:40px 0 60px;">
@@ -116,9 +117,11 @@ $isPartial = ($paymentStatus === 'under_review' && $advanceAmount > 0 && $remain
         <!-- Contact CTA -->
         <div style="text-align:center; padding:8px 0;">
           <p style="font-size:0.84rem; color:#7f6973; margin:0 0 12px;">Questions? Reach us on WhatsApp or call.</p>
-          <a href="https://wa.me/91XXXXXXXXXX" style="display:inline-flex; align-items:center; gap:8px; background:#25d366; color:#fff; font-weight:600; font-size:0.85rem; padding:10px 20px; border-radius:999px; text-decoration:none;">
-            💬 WhatsApp Cakeouflage
-          </a>
+          <?php if ($supportWhatsapp !== ''): ?>
+            <a href="<?= htmlspecialchars($supportWhatsapp, ENT_QUOTES, 'UTF-8') ?>" style="display:inline-flex; align-items:center; gap:8px; background:#25d366; color:#fff; font-weight:600; font-size:0.85rem; padding:10px 20px; border-radius:999px; text-decoration:none;" target="_blank" rel="noopener">
+              WhatsApp Cakeouflage
+            </a>
+          <?php endif; ?>
         </div>
 
       <?php endif; ?>

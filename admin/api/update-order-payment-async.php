@@ -17,7 +17,7 @@ $paymentMethod = trim((string)($_POST['payment_method'] ?? 'upi_manual'));
 $paymentStatus = trim((string)($_POST['payment_status'] ?? 'paid'));
 
 $allowedMethods = ['upi_manual', 'gateway', 'cod', 'credit'];
-$allowedStatuses = ['paid', 'pending', 'failed', 'refunded', 'credit'];
+$allowedStatuses = ['paid', 'part_paid', 'pending', 'failed', 'refunded', 'credit'];
 
 if ($orderId <= 0 || !in_array($paymentMethod, $allowedMethods, true) || !in_array($paymentStatus, $allowedStatuses, true)) {
     http_response_code(400);

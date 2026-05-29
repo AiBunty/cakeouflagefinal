@@ -585,6 +585,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <?php endif; ?>
 
   <form method="POST">
+    <input type="hidden" name="action" id="adminActionInput" value="send_otp">
     <div class="input-group">
       <label>Username or Email</label>
       <input type="text" name="login" value="<?= htmlspecialchars($prefillLogin, ENT_QUOTES, 'UTF-8') ?>" required>
@@ -596,8 +597,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </div>
 
     <div style="display:flex;gap:10px;flex-wrap:wrap;">
-      <button class="btn" name="action" value="send_otp" type="submit" id="adminSendOtpBtn"><?= $showOtpStep ? 'Resend OTP' : 'Send OTP' ?></button>
-      <button class="btn" name="action" value="verify_otp" type="submit" id="adminVerifyOtpBtn" style="<?= $showOtpStep ? '' : 'display:none;' ?>">Verify OTP & Login</button>
+      <button class="btn" type="submit" id="adminSendOtpBtn"><?= $showOtpStep ? 'Resend OTP' : 'Send OTP' ?></button>
     </div>
     <div id="adminOtpCooldownHint" style="margin-top:8px;font-size:12px;color:#666;"></div>
   </form>
@@ -617,13 +617,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const form = document.querySelector("form[method='POST']");
   const sendBtn = document.getElementById("adminSendOtpBtn");
-  const verifyBtn = document.getElementById("adminVerifyOtpBtn");
+  const actionInput = document.getElementById("adminActionInput");
   const otpGroup = document.getElementById("adminOtpInputGroup");
+  const otpInput = form ? form.querySelector('input[name="otp"]') : null;
   const loginInput = form ? form.querySelector('input[name="login"]') : null;
   const hintEl = document.getElementById("adminOtpCooldownHint");
   const defaultSendText = sendBtn ? sendBtn.textContent : "Send OTP";
 
-  if (!form || !sendBtn || !loginInput || !hintEl || !otpGroup || !verifyBtn) {
+  if (!form || !sendBtn || !loginInput || !hintEl || !otpGroup || !actionInput) {
     return;
   }
 
@@ -707,7 +708,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (otpSentThisRequest) {
     otpGroup.style.display = "";
-    verifyBtn.style.display = "";
     const currentLogin = String(loginInput.value || "").trim();
     const cooldownUntil = Date.now() + OTP_COOLDOWN_MS;
     setCooldown(currentLogin, cooldownUntil);
@@ -716,24 +716,31 @@ document.addEventListener("DOMContentLoaded", () => {
     clearCooldown(loginInput.value);
     clearUiToDefault();
     otpGroup.style.display = showOtpStep ? "" : "none";
-    verifyBtn.style.display = showOtpStep ? "" : "none";
   } else {
     otpGroup.style.display = showOtpStep ? "" : "none";
-    verifyBtn.style.display = showOtpStep ? "" : "none";
     applyCooldownFromCurrentLogin();
   }
+
+  // Auto-verify once admin enters all 6 OTP digits.
+  otpInput?.addEventListener("input", () => {
+    otpInput.value = String(otpInput.value || "").replace(/\D+/g, "").slice(0, 6);
+    if (otpInput.value.length === 6) {
+      actionInput.value = "verify_otp";
+      form.requestSubmit();
+    }
+  });
+
+  sendBtn.addEventListener("click", () => {
+    actionInput.value = "send_otp";
+  });
 
   loginInput.addEventListener("input", () => {
     applyCooldownFromCurrentLogin();
   });
 
   form.addEventListener("submit", (event) => {
-    const submitter = event.submitter;
-    if (!(submitter instanceof HTMLElement)) {
-      return;
-    }
-
-    if (submitter.getAttribute("name") === "action" && submitter.getAttribute("value") === "send_otp") {
+    const action = String(actionInput.value || "send_otp");
+    if (action === "send_otp") {
       if (!String(loginInput.value || "").trim()) {
         return;
       }

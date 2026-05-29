@@ -7,10 +7,6 @@ use PDO;
 
 final class AuthManager
 {
-    private const OTP_TTL_MINUTES = 5;
-    private const OTP_COOLDOWN_SECONDS = 60;
-    private const OTP_MAX_ATTEMPTS = 5;
-
     public static function isCustomerAuthenticated(): bool
     {
         $userId = (int)($_SESSION['user_id'] ?? 0);
@@ -30,101 +26,32 @@ final class AuthManager
 
     public static function sendOtp(PDO $pdo, string $email, string $name = 'User'): void
     {
-        if (self::otpRecentlyRequested($pdo, $email)) {
-            throw new \RuntimeException('Please wait 60 seconds before requesting a new OTP.', 429);
-        }
-
-        $otp = (string)random_int(100000, 999999);
+        $normalizedEmail = CustomerLookupService::normalizeEmail($email);
+        $otp = OtpService::issueOtp($pdo, $normalizedEmail, 'customer');
 
         try {
-            MailService::sendOtp($email, $otp, $name);
+            MailService::sendOtp($normalizedEmail, $otp, $name);
         } catch (\Throwable $e) {
+            OtpService::clearOtp($pdo, $normalizedEmail);
             throw new \RuntimeException('Unable to send OTP email right now. Please try again shortly.', 500, $e);
-        }
-
-        $pdo->prepare('DELETE FROM otp_verifications WHERE email = :email')->execute(['email' => $email]);
-
-        $stmt = $pdo->prepare(
-            'INSERT INTO otp_verifications (email, otp, expires_at)
-             VALUES (:email, :otp, NOW() + INTERVAL ' . self::OTP_TTL_MINUTES . ' MINUTE)'
-        );
-        if (!$stmt->execute(['email' => $email, 'otp' => $otp])) {
-            $pdo->prepare('DELETE FROM otp_verifications WHERE email = :email')->execute(['email' => $email]);
-            throw new \RuntimeException('Unable to finalize OTP right now. Please request a new OTP.', 500);
         }
     }
 
     public static function validateOtp(PDO $pdo, string $email, string $otp, string $scope = 'customer'): void
     {
-        $attemptKey = self::attemptKey($scope, $email);
-        self::ensureAttemptBucket($attemptKey);
-
-        $attemptInfo = $_SESSION[$attemptKey];
-        $now = time();
-        if (($now - (int)$attemptInfo['window_started']) > 600) {
-            $_SESSION[$attemptKey] = ['count' => 0, 'window_started' => $now];
-            $attemptInfo = $_SESSION[$attemptKey];
-        }
-
-        if ((int)$attemptInfo['count'] >= self::OTP_MAX_ATTEMPTS) {
-            throw new \RuntimeException('Too many OTP verification attempts. Please wait 10 minutes and try again.', 429);
-        }
-
-        $stmt = $pdo->prepare(
-            'SELECT id FROM otp_verifications
-             WHERE email = :email AND otp = :otp AND expires_at > NOW()
-             LIMIT 1'
-        );
-        $stmt->execute(['email' => $email, 'otp' => $otp]);
-        $otpRow = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        if (!$otpRow) {
-            $_SESSION[$attemptKey] = [
-                'count' => ((int)$attemptInfo['count']) + 1,
-                'window_started' => (int)$attemptInfo['window_started'],
-            ];
-            throw new \RuntimeException('Invalid or expired OTP', 401);
-        }
-
-        $pdo->prepare('DELETE FROM otp_verifications WHERE email = :email')->execute(['email' => $email]);
-        unset($_SESSION[$attemptKey]);
+        OtpService::consumeOtp($pdo, $email, $otp, $scope);
     }
 
     public static function establishCustomerSession(PDO $pdo, string $email, string $name, string $phone, bool $rememberDevice): int
     {
-        $stmt = $pdo->prepare('SELECT id FROM users WHERE email = :email LIMIT 1');
-        $stmt->execute(['email' => $email]);
-        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+        $normalizedEmail = CustomerLookupService::normalizeEmail($email);
+        $user = CustomerLookupService::findCustomerByEmail($pdo, $normalizedEmail);
 
         if ($user) {
             $userId = (int)$user['id'];
-            $updateParts = [];
-            $params = ['id' => $userId];
-
-            if ($name !== '') {
-                $updateParts[] = 'full_name = :name';
-                $params['name'] = $name;
-            }
-            if ($phone !== '') {
-                $updateParts[] = 'phone = :phone';
-                $params['phone'] = $phone;
-            }
-            if ($updateParts !== []) {
-                $pdo->prepare('UPDATE users SET ' . implode(', ', $updateParts) . ' WHERE id = :id')->execute($params);
-            }
+            CustomerLookupService::updateCustomerProfile($pdo, $userId, $name, $phone);
         } else {
-            $hash = password_hash(bin2hex(random_bytes(16)), PASSWORD_BCRYPT);
-            $insert = $pdo->prepare(
-                'INSERT INTO users (full_name, email, phone, password_hash, role)
-                 VALUES (:full_name, :email, :phone, :password_hash, "customer")'
-            );
-            $insert->execute([
-                'full_name' => $name !== '' ? $name : 'Guest User',
-                'email' => $email,
-                'phone' => $phone !== '' ? $phone : '0000000000',
-                'password_hash' => $hash,
-            ]);
-            $userId = (int)$pdo->lastInsertId();
+            $userId = CustomerLookupService::createCustomer($pdo, $normalizedEmail, $name, $phone);
         }
 
         session_regenerate_id(true);
@@ -132,7 +59,7 @@ final class AuthManager
         $_SESSION['user_role'] = 'customer';
         $_SESSION['otp_verified'] = true;
         $_SESSION['logged_in'] = true;
-        $_SESSION['user_email'] = $email;
+        $_SESSION['user_email'] = $normalizedEmail;
         $_SESSION['remember_device'] = $rememberDevice;
         $_SESSION['authenticated_at'] = time();
 
@@ -155,7 +82,7 @@ final class AuthManager
         $_SESSION['admin_authenticated_at'] = time();
     }
 
-    public static function logoutCustomer(): void
+    public static function logoutCustomer(bool $expireCookie = false): void
     {
         unset(
             $_SESSION['user_id'],
@@ -166,7 +93,9 @@ final class AuthManager
             $_SESSION['remember_device'],
             $_SESSION['authenticated_at']
         );
-        self::expireSessionCookie();
+        if ($expireCookie) {
+            self::expireSessionCookie();
+        }
     }
 
     public static function logoutAdmin(): void
@@ -181,32 +110,6 @@ final class AuthManager
             $_SESSION['admin_permissions']
         );
         self::expireSessionCookie();
-    }
-
-    private static function attemptKey(string $scope, string $email): string
-    {
-        return strtolower(trim($scope)) . '_otp_verify_attempts_' . strtolower(trim($email));
-    }
-
-    private static function ensureAttemptBucket(string $key): void
-    {
-        if (!isset($_SESSION[$key]) || !is_array($_SESSION[$key])) {
-            $_SESSION[$key] = ['count' => 0, 'window_started' => time()];
-        }
-    }
-
-    private static function otpRecentlyRequested(PDO $pdo, string $email): bool
-    {
-        $stmt = $pdo->prepare(
-            'SELECT 1 FROM otp_verifications
-             WHERE email = :email AND created_at > (NOW() - INTERVAL :cooldown SECOND)
-             LIMIT 1'
-        );
-        $stmt->bindValue(':email', $email);
-        $stmt->bindValue(':cooldown', self::OTP_COOLDOWN_SECONDS, PDO::PARAM_INT);
-        $stmt->execute();
-
-        return (bool)$stmt->fetchColumn();
     }
 
     private static function mergeGuestCartIntoCustomerCart(PDO $pdo, int $userId): void

@@ -1,4 +1,9 @@
-<?php /* Cakeouflage — B2B / Corporate Landing Page */ ?>
+<?php /* Cakeouflage — B2B / Corporate Landing Page */
+$b2bWhatsapp = build_whatsapp_link(
+  (string)($siteConfig['contact']['whatsapp_number'] ?? ''),
+  "Hi Cakeouflage! I'm interested in B2B ordering."
+);
+?>
 
 <!-- B2B HERO -->
 <section class="page-hero page-hero--b2b" aria-label="B2B hero">
@@ -105,7 +110,11 @@
         </p>
         <div class="b2b-cta-card__contact">
           <p>Have questions first?</p>
-          <a href="https://wa.me/919999999999?text=Hi%20Cakeouflage!%20I'm%20interested%20in%20B2B%20ordering." class="btn btn--whatsapp btn--block" target="_blank" rel="noopener">💬 WhatsApp Our Sales Team</a>
+          <?php if ($b2bWhatsapp !== ''): ?>
+            <a href="<?= htmlspecialchars($b2bWhatsapp, ENT_QUOTES, 'UTF-8') ?>" class="btn btn--whatsapp btn--block" target="_blank" rel="noopener">WhatsApp Our Sales Team</a>
+          <?php else: ?>
+            <a href="/contact" class="btn btn--primary btn--block">Contact Sales Team</a>
+          <?php endif; ?>
         </div>
       </div>
     </div>

@@ -20,6 +20,7 @@ final class OrderFinanceSnapshotService
     {
         $orderStmt = $pdo->prepare(
             'SELECT id, order_number, payment_status, grand_total,
+                COALESCE(revised_grand_total, grand_total) AS effective_total,
                     COALESCE(advance_amount, 0) AS advance_amount,
                     COALESCE(advance_received_amount, 0) AS advance_received_amount,
                     COALESCE(refund_amount, 0) AS refund_amount,
@@ -38,7 +39,7 @@ final class OrderFinanceSnapshotService
             ];
         }
 
-        $grossTotal = round((float)($order['grand_total'] ?? 0), 2);
+        $grossTotal = round((float)($order['effective_total'] ?? $order['grand_total'] ?? 0), 2);
         $paymentStatus = strtolower(trim((string)($order['payment_status'] ?? 'pending')));
 
         $refundAgg = $this->refundAgg($pdo, $orderId);
@@ -58,12 +59,13 @@ final class OrderFinanceSnapshotService
         $paymentsVerified = round((float)($paymentAgg['verified_total'] ?? 0), 2);
         $financialPosted = round((float)($financialAgg['posted_collection_total'] ?? 0), 2);
 
+        $measuredCollected = max($advanceReceived, $invoicePaid, $paymentsVerified, $financialPosted);
         $recognizedFromStatus = 0.0;
-        if (in_array($paymentStatus, ['paid', 'partially_refunded', 'refunded'], true)) {
+        if ($measuredCollected <= 0.01 && in_array($paymentStatus, ['paid', 'partially_refunded', 'refunded'], true)) {
             $recognizedFromStatus = max(0.0, round($grossTotal - $refundTotal, 2));
         }
 
-        $rawCollected = max($advanceReceived, $invoicePaid, $paymentsVerified, $financialPosted, $recognizedFromStatus);
+        $rawCollected = max($measuredCollected, $recognizedFromStatus);
         $netPayable = max(0.0, round($grossTotal - $refundTotal, 2));
         $collected = min($rawCollected, $netPayable > 0 ? $netPayable : $rawCollected);
         $advanceReceivedDerived = $advanceReceived;

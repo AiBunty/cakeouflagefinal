@@ -1,0 +1,25 @@
+{
+    "timestamp": "2026-05-29T12:33:36+05:30",
+    "config": {
+        "original_accounting_lock_days": 30,
+        "effective_accounting_lock_days": 1,
+        "restored_accounting_lock_days": 30
+    },
+    "tests": {
+        "refund_submit_locked": {
+            "order_id": 12,
+            "success": false,
+            "message": "Refund request blocked by anti-fraud check: ACCOUNTING_PERIOD_LOCKED"
+        },
+        "revision_submit_locked": {
+            "order_id": 34,
+            "success": false,
+            "message": "Order is locked for accounting period and cannot be revised"
+        },
+        "split_payment_locked": {
+            "order_id": 34,
+            "success": false,
+            "message": "Order is locked for accounting period and cannot accept split payment"
+        }
+    }
+}

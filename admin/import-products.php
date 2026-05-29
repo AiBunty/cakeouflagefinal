@@ -564,6 +564,44 @@ require_once __DIR__ . '/layout.php';
 .ver-badge--restore { background: #e0eeff; color: #1a3a6b; }
 .ver-empty { margin: 0; color: #987281; font-size: .82rem; padding: 14px 0; text-align: center; }
 
+.preview-box {
+    display: none;
+    margin-top: 12px;
+    border: 1px solid rgba(128,0,31,.16);
+    border-radius: 12px;
+    background: #fff8fb;
+    padding: 12px;
+}
+.preview-box.is-open { display: block; }
+.preview-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+}
+.preview-item {
+    border: 1px solid rgba(128,0,31,.12);
+    border-radius: 10px;
+    padding: 8px;
+    background: #fff;
+}
+.preview-item__label { font-size: .7rem; color: #7a5567; }
+.preview-item__num { font-size: 1.2rem; color: #80001F; font-weight: 700; }
+
+.size-master-list { margin-top: 12px; display: grid; gap: 8px; }
+.size-row {
+    display: grid;
+    grid-template-columns: 1fr auto auto auto;
+    gap: 8px;
+    align-items: center;
+    border: 1px solid rgba(128,0,31,.12);
+    border-radius: 10px;
+    padding: 8px 10px;
+    background: #fff;
+}
+.size-row.is-inactive { opacity: .55; }
+.size-label-chip { font-size: .8rem; font-weight: 600; color: #4b1e2d; }
+.size-row .imp-btn { min-height: 30px; padding: 0 10px; font-size: .72rem; }
+
 /* Results */
 .imp-result {
     border-radius: 18px;
@@ -709,23 +747,25 @@ require_once __DIR__ . '/layout.php';
                 ⚠️ Before uploading, verify your Excel contains <em>all</em> products you want live.
                 A missing row = that product gets archived from the storefront.
             </div>
-            <p><strong>Column layout (8 columns):</strong></p>
+            <p><strong>Column layout (matrix contract):</strong></p>
             <table class="imp-col-table">
                 <thead><tr><th>Col</th><th>Name</th><th>Example</th></tr></thead>
                 <tbody>
                     <tr><td>A</td><td>Product Name</td><td>Dark Truffle Cake</td></tr>
-                    <tr><td>B</td><td>Description</td><td>Rich chocolate ganache cake</td></tr>
-                    <tr><td>C</td><td>Category</td><td>Cakes</td></tr>
-                    <tr><td>D</td><td>Variant Name</td><td>1 lb</td></tr>
-                    <tr><td>E</td><td>Price</td><td>650</td></tr>
-                    <tr><td>F</td><td>Unit Type (optional)</td><td>size</td></tr>
-                    <tr><td>G</td><td>Variant SKU (optional)</td><td>CK-TRUFFLE-1LB</td></tr>
-                    <tr><td>H</td><td>Default Variant (optional)</td><td>1</td></tr>
+                    <tr><td>B</td><td>Category</td><td>Cakes</td></tr>
+                    <tr><td>C</td><td>SubCategory</td><td>Classic Cakes</td></tr>
+                    <tr><td>D</td><td>Description</td><td>Rich chocolate ganache cake</td></tr>
+                    <tr><td>E</td><td>Food Type</td><td>veg</td></tr>
+                    <tr><td>F</td><td>Dietary Tag</td><td>eggless</td></tr>
+                    <tr><td>G</td><td>Chef's Special</td><td>Yes/No</td></tr>
+                    <tr><td>H</td><td>Enable Topper Selection</td><td>Yes/No</td></tr>
+                    <tr><td>I</td><td>Enable Note on Cake</td><td>Yes/No</td></tr>
+                    <tr><td>J onward</td><td>Dynamic size columns</td><td>Per Pcs, 0.5 kg, 1 kg, ...</td></tr>
                 </tbody>
             </table>
             <p>
-                Add one row per variant. If a product has three variants, repeat Product Name/Description/Category
-                for three rows and change Variant Name/Price. The last 5 imports are versioned — restore any version from the history panel.
+                One row equals one product. Fill prices in active size columns; blank cell means variant disabled.
+                A preview summary is generated before commit. The last 5 imports are versioned and restorable.
             </p>
         </div>
     </details>
@@ -740,8 +780,12 @@ require_once __DIR__ . '/layout.php';
                 <label class="file-drop">
                     <span class="file-drop__title">Select CSV or Excel file</span>
                     <input type="file" name="file" accept=".csv,.xlsx" required class="file-input" id="fileInput">
-                    <span class="file-drop__hint">.csv and .xlsx supported · 17-column format</span>
+                    <span class="file-drop__hint">.csv and .xlsx supported · matrix format with dynamic size columns</span>
                 </label>
+
+                <div class="preview-box" id="previewBox">
+                    <div class="preview-grid" id="previewGrid"></div>
+                </div>
 
                 <label class="imp-confirm">
                     <input type="checkbox" id="confirmCheck" required>
@@ -822,6 +866,24 @@ require_once __DIR__ . '/layout.php';
             <?php endif; ?>
         </section>
 
+        <section class="imp-card">
+            <h3 class="imp-card__title">Dynamic Size Master</h3>
+            <p class="imp-card__sub">Manage labels used for matrix import/export headers. Reorder and toggle active state.</p>
+
+            <form class="imp-form" id="sizeCreateForm" onsubmit="return createSizeLabel(event)">
+                <label class="file-drop">
+                    <span class="file-drop__title">Add New Size Label</span>
+                    <input type="text" id="newSizeLabel" class="file-input" placeholder="Example: 4.5 kg" required>
+                </label>
+                <div class="imp-actions">
+                    <button type="submit" class="imp-btn imp-btn--primary">Add Size</button>
+                    <button type="button" class="imp-btn imp-btn--secondary" onclick="loadSizeMaster()">Refresh</button>
+                </div>
+            </form>
+
+            <div class="size-master-list" id="sizeMasterList"></div>
+        </section>
+
     </div>
 </div>
 
@@ -875,6 +937,11 @@ require_once __DIR__ . '/layout.php';
 const fileInput     = document.getElementById('fileInput');
 const confirmCheck  = document.getElementById('confirmCheck');
 const uploadTrigger = document.getElementById('uploadTrigger');
+const previewBox = document.getElementById('previewBox');
+const previewGrid = document.getElementById('previewGrid');
+const sizeMasterList = document.getElementById('sizeMasterList');
+
+let sizeMasterItems = [];
 
 function updateUploadBtn() {
     uploadTrigger.disabled = !(fileInput.files.length > 0 && confirmCheck.checked);
@@ -883,12 +950,161 @@ fileInput.addEventListener('change', updateUploadBtn);
 confirmCheck.addEventListener('change', updateUploadBtn);
 
 uploadTrigger.addEventListener('click', function () {
-    document.getElementById('uploadModal').classList.add('is-open');
+    openUploadPreviewAndConfirm();
 });
 function closeUploadModal() { document.getElementById('uploadModal').classList.remove('is-open'); }
 function doUpload() {
     document.getElementById('uploadModal').classList.remove('is-open');
     document.getElementById('realSubmit').click();
+}
+
+async function openUploadPreviewAndConfirm() {
+    if (!(fileInput.files.length > 0 && confirmCheck.checked)) {
+        return;
+    }
+    try {
+        const form = new FormData();
+        form.append('file', fileInput.files[0]);
+        const response = await fetch('/api/admin/import/products/preview', {
+            method: 'POST',
+            credentials: 'same-origin',
+            body: form
+        });
+        const payload = await response.json();
+        const summary = payload && payload.data ? payload.data.preview_summary : null;
+        if (summary) {
+            renderPreviewSummary(summary);
+        }
+    } catch (e) {
+        console.error('Preview failed', e);
+    }
+
+    document.getElementById('uploadModal').classList.add('is-open');
+}
+
+function renderPreviewSummary(summary) {
+    if (!previewBox || !previewGrid) {
+        return;
+    }
+    const items = [
+        ['New Products', Number(summary.new_products || 0)],
+        ['Updated', Number(summary.updated_products || 0)],
+        ['Invalid Rows', Number(summary.invalid_rows || 0)],
+        ['New Variants', Number(summary.new_variants || 0)],
+        ['Removed Variants', Number(summary.removed_variants || 0)],
+        ['Will Archive', Number(summary.archived_products || 0)],
+    ];
+    previewGrid.innerHTML = items.map(function (item) {
+        return '<div class="preview-item"><div class="preview-item__label">' + item[0] + '</div><div class="preview-item__num">' + item[1] + '</div></div>';
+    }).join('');
+    previewBox.classList.add('is-open');
+}
+
+async function apiJson(path, options) {
+    const response = await fetch(path, Object.assign({
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' }
+    }, options || {}));
+    const payload = await response.json();
+    if (!response.ok || !payload || payload.success === false) {
+        throw new Error((payload && payload.message) ? payload.message : 'Request failed');
+    }
+    return payload;
+}
+
+async function loadSizeMaster() {
+    try {
+        const payload = await apiJson('/api/admin/product-size-master', { method: 'GET', headers: {} });
+        sizeMasterItems = (payload.data && payload.data.items) ? payload.data.items : [];
+        renderSizeMaster();
+    } catch (error) {
+        sizeMasterList.innerHTML = '<p class="ver-empty">Failed to load size master: ' + error.message + '</p>';
+    }
+}
+
+function renderSizeMaster() {
+    if (!sizeMasterItems || sizeMasterItems.length === 0) {
+        sizeMasterList.innerHTML = '<p class="ver-empty">No size labels yet.</p>';
+        return;
+    }
+
+    sizeMasterList.innerHTML = sizeMasterItems.map(function (item, index) {
+        const inactiveClass = Number(item.is_active || 0) === 1 ? '' : ' is-inactive';
+        return '<div class="size-row' + inactiveClass + '">' +
+            '<span class="size-label-chip">' + escapeHtml(String(item.label || '')) + '</span>' +
+            '<button type="button" class="imp-btn imp-btn--secondary" onclick="moveSize(' + index + ', -1)">Up</button>' +
+            '<button type="button" class="imp-btn imp-btn--secondary" onclick="moveSize(' + index + ', 1)">Down</button>' +
+            '<button type="button" class="imp-btn ' + (Number(item.is_active || 0) === 1 ? 'imp-btn--danger' : 'imp-btn--primary') + '" onclick="toggleSize(' + Number(item.id) + ', ' + (Number(item.is_active || 0) === 1 ? 0 : 1) + ')">' +
+            (Number(item.is_active || 0) === 1 ? 'Disable' : 'Enable') +
+            '</button>' +
+            '</div>';
+    }).join('');
+}
+
+function moveSize(index, direction) {
+    const target = index + direction;
+    if (target < 0 || target >= sizeMasterItems.length) {
+        return;
+    }
+    const temp = sizeMasterItems[index];
+    sizeMasterItems[index] = sizeMasterItems[target];
+    sizeMasterItems[target] = temp;
+    renderSizeMaster();
+    persistSizeOrder();
+}
+
+async function persistSizeOrder() {
+    try {
+        const ids = sizeMasterItems.map(function (item) { return Number(item.id); });
+        await apiJson('/api/admin/product-size-master/reorder', {
+            method: 'POST',
+            body: JSON.stringify({ ids: ids })
+        });
+    } catch (error) {
+        alert('Failed to reorder size labels: ' + error.message);
+        loadSizeMaster();
+    }
+}
+
+async function toggleSize(id, isActive) {
+    try {
+        await apiJson('/api/admin/product-size-master/' + id, {
+            method: 'PATCH',
+            body: JSON.stringify({ is_active: isActive })
+        });
+        loadSizeMaster();
+    } catch (error) {
+        alert('Failed to update size label: ' + error.message);
+    }
+}
+
+async function createSizeLabel(event) {
+    event.preventDefault();
+    const input = document.getElementById('newSizeLabel');
+    const label = String(input.value || '').trim();
+    if (!label) {
+        return false;
+    }
+    try {
+        await apiJson('/api/admin/product-size-master', {
+            method: 'POST',
+            body: JSON.stringify({ label: label })
+        });
+        input.value = '';
+        loadSizeMaster();
+    } catch (error) {
+        alert('Failed to add size label: ' + error.message);
+    }
+    return false;
+}
+
+function escapeHtml(value) {
+    return value
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
 }
 
 function openRestoreModal(runId, runDate) {
@@ -907,4 +1123,6 @@ document.addEventListener('keydown', function (e) {
         document.querySelectorAll('.modal-overlay').forEach(function (m) { m.classList.remove('is-open'); });
     }
 });
+
+loadSizeMaster();
 </script>

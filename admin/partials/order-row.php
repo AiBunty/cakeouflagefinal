@@ -34,7 +34,12 @@ $paymentChipClass = $paymentClassMap[$pstatus] ?? 'chip-payment-unpaid';
 <div class="order-row" id="order-row-<?php echo $oid; ?>">
   <div class="order-row-main">
     <div class="order-meta-1">
-      <div class="order-id">#<?php echo htmlspecialchars((string)$row['order_number'], ENT_QUOTES, 'UTF-8'); ?></div>
+      <div class="order-id">
+        #<?php echo htmlspecialchars((string)$row['order_number'], ENT_QUOTES, 'UTF-8'); ?>
+        <?php if (!empty($row['is_revised'])): ?>
+          <span style="font-size:.65rem;padding:.1rem .4rem;border-radius:8px;background:#fff3cd;color:#e67e22;font-weight:700;margin-left:.35rem;vertical-align:middle">REV</span>
+        <?php endif; ?>
+      </div>
       <div class="order-customer"><?php echo htmlspecialchars((string)$row['customer_name'], ENT_QUOTES, 'UTF-8'); ?> • <?php echo htmlspecialchars((string)$row['customer_phone'], ENT_QUOTES, 'UTF-8'); ?></div>
     </div>
 
@@ -101,6 +106,15 @@ $paymentChipClass = $paymentClassMap[$pstatus] ?? 'chip-payment-unpaid';
         <button type="button" class="btnx btnx-danger" onclick="ordersRunDestructiveAction(<?php echo $oid; ?>, 'force_purge', '<?php echo htmlspecialchars((string)$row['order_number'], ENT_QUOTES, 'UTF-8'); ?>')">Delete</button>
       <?php endif; ?>
     <?php endif; ?>
+
+    <?php
+      $terminalStatuses = ['delivered','completed','cancelled','refunded','partially_refunded','fully_refunded','rejected'];
+      $isTerminalOrder = in_array($ostatus, $terminalStatuses, true);
+    ?>
+    <?php if (!$isTerminalOrder && $canOrderEdit && !$isArchived): ?>
+      <a href="order_revision.php?order_id=<?php echo $oid; ?>" class="btnx btnx-outline">Revise</a>
+    <?php endif; ?>
+    <a href="order_revision_history.php?order_id=<?php echo $oid; ?>" class="btnx btnx-muted" title="Revision History">Revisions</a>
 
     <div class="order-more">
       <button type="button" class="btnx btnx-outline" onclick="ordersToggleMore(this)">⋮</button>

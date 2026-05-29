@@ -43,6 +43,11 @@ $settingKeys = array(
     'support_email',
     'support_phone',
     'support_whatsapp',
+    'contact_phone',
+    'whatsapp_number',
+    'facebook_url',
+    'instagram_url',
+    'google_maps_url',
     'order_delete_password_hash',
     'order_archive_retention_days',
     'invoice_duplicate_copy',
@@ -279,6 +284,35 @@ if (trim((string)($settings['store_food_mode'] ?? '')) === '') {
         <div class="settings-field" style="grid-column: 1/-1">
           <label for="business_website">Business Website</label>
           <input type="url" id="business_website" name="business_website" maxlength="255" placeholder="https://www.cakeouflage.com" value="<?= htmlspecialchars($settings['business_website']) ?>">
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <h4>Public Contact &amp; Social Links</h4>
+      <div class="settings-grid">
+        <div class="settings-field">
+          <label for="contact_phone">Public Contact Phone</label>
+          <input type="text" id="contact_phone" name="contact_phone" maxlength="40" placeholder="+91 XXXXX XXXXX" value="<?= htmlspecialchars($settings['contact_phone']) ?>">
+          <p class="settings-hint">Used for floating call button and contact links across storefront.</p>
+        </div>
+        <div class="settings-field">
+          <label for="whatsapp_number">Public WhatsApp Number</label>
+          <input type="text" id="whatsapp_number" name="whatsapp_number" maxlength="40" placeholder="+91 XXXXX XXXXX" value="<?= htmlspecialchars($settings['whatsapp_number']) ?>">
+          <p class="settings-hint">Used for WhatsApp CTAs, enquiry links, and floating WhatsApp button.</p>
+        </div>
+        <div class="settings-field">
+          <label for="facebook_url">Facebook URL</label>
+          <input type="url" id="facebook_url" name="facebook_url" maxlength="255" placeholder="https://www.facebook.com/your-page" value="<?= htmlspecialchars($settings['facebook_url']) ?>">
+        </div>
+        <div class="settings-field">
+          <label for="instagram_url">Instagram URL</label>
+          <input type="url" id="instagram_url" name="instagram_url" maxlength="255" placeholder="https://www.instagram.com/your-handle" value="<?= htmlspecialchars($settings['instagram_url']) ?>">
+        </div>
+        <div class="settings-field" style="grid-column: 1/-1">
+          <label for="google_maps_url">Google Maps URL</label>
+          <input type="url" id="google_maps_url" name="google_maps_url" maxlength="500" placeholder="https://maps.google.com/..." value="<?= htmlspecialchars($settings['google_maps_url']) ?>">
+          <p class="settings-hint">Used for floating location button and "Open in Maps" links.</p>
         </div>
       </div>
     </div>

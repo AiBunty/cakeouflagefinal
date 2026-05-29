@@ -278,14 +278,12 @@
     const otpGroup = byId("customerOtpGroup");
     const otpSlots = Array.from(form.querySelectorAll(".otp-slot"));
     const otpHiddenInput = byId("customerOtp");
-    const verifyBtn = byId("customerVerifyBtn");
     const rememberDeviceInput = byId("customerRememberDevice");
     const statusEl = byId("customerLoginStatus");
     const cooldownEl = byId("customerOtpCooldown");
     const sendBtnLabel = sendBtn.querySelector(".customer-btn__label");
-    const verifyBtnLabel = verifyBtn.querySelector(".customer-btn__label");
 
-    if (!form || !emailInput || !sendBtn || !otpGroup || !otpHiddenInput || !verifyBtn || !statusEl || otpSlots.length !== 6) {
+    if (!form || !emailInput || !sendBtn || !otpGroup || !otpHiddenInput || !statusEl || otpSlots.length !== 6) {
       return;
     }
 
@@ -329,8 +327,6 @@
 
     const toggleOtp = (show) => {
       otpGroup.hidden = !show;
-      // Verify button is hidden — OTP auto-verifies on 6th digit entry.
-      verifyBtn.hidden = true;
     };
 
     const clearOtp = () => {
@@ -498,8 +494,9 @@
       }
 
       verifyingOtp = true;
-      verifyBtn.disabled = true;
-      setButtonLoading(verifyBtn, verifyBtnLabel, true, "Verifying");
+      otpSlots.forEach((slot) => {
+        slot.disabled = true;
+      });
       setStatus("Verifying OTP...", "info");
 
       try {
@@ -520,8 +517,9 @@
 
         if (!data.success) {
           setStatus(data.message || "OTP verification failed.", "error");
-          verifyBtn.disabled = false;
-          setButtonLoading(verifyBtn, verifyBtnLabel, false, "Verify & Continue");
+          otpSlots.forEach((slot) => {
+            slot.disabled = false;
+          });
           verifyingOtp = false;
           return;
         }
@@ -530,8 +528,9 @@
           await utils.apiGet("/api/auth/me");
         } catch (authError) {
           setStatus(authError.message || "Login succeeded but session validation failed. Please retry.", "error");
-          verifyBtn.disabled = false;
-          setButtonLoading(verifyBtn, verifyBtnLabel, false, "Verify & Continue");
+          otpSlots.forEach((slot) => {
+            slot.disabled = false;
+          });
           verifyingOtp = false;
           return;
         }
@@ -548,8 +547,9 @@
         window.location.href = data?.data?.redirect_to || "/account/dashboard.php";
       } catch (error) {
         setStatus(error.message || "Unable to verify OTP right now.", "error");
-        verifyBtn.disabled = false;
-        setButtonLoading(verifyBtn, verifyBtnLabel, false, "Verify & Continue");
+        otpSlots.forEach((slot) => {
+          slot.disabled = false;
+        });
         verifyingOtp = false;
       }
     });

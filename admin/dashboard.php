@@ -60,6 +60,13 @@ $lastYearRevenue = (float)$financeSnapshot['last_year_revenue'];
 
 $monthDelta = $lastMonthRevenue > 0 ? (($thisMonthRevenue - $lastMonthRevenue) / $lastMonthRevenue) * 100 : 0;
 $yearDelta = $lastYearRevenue > 0 ? (($thisYearRevenue - $lastYearRevenue) / $lastYearRevenue) * 100 : 0;
+
+$pendingRevisions = (int)metric_value($conn,
+    'SELECT COUNT(*) FROM order_revisions WHERE revision_status = "pending"');
+$revisedThisMonth = (int)metric_value($conn,
+    'SELECT COUNT(DISTINCT order_id) FROM order_revisions
+      WHERE revision_status = "confirmed"
+        AND DATE(updated_at) >= DATE_FORMAT(CURDATE(), "%Y-%m-01")');
 ?>
 
 <style>
@@ -202,6 +209,8 @@ $yearDelta = $lastYearRevenue > 0 ? (($thisYearRevenue - $lastYearRevenue) / $la
   }
   .delta-up { color: #166534; font-weight: 700; }
   .delta-down { color: #991b1b; font-weight: 700; }
+  .dash-card.revision-alert { border-color: #f59e0b; }
+  .dash-card.revision-alert .value { color: #b45309; }
   @media (max-width: 1080px) {
     .dash-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .dash-summary { grid-template-columns: 1fr; }
@@ -301,6 +310,18 @@ $yearDelta = $lastYearRevenue > 0 ? (($thisYearRevenue - $lastYearRevenue) / $la
       <strong>Total Refunded</strong>
       <div class="value" style="color:#dc2626;">&#8377;<?= number_format($totalRefundAmount, 0) ?></div>
       <div class="meta">Today: &#8377;<?= number_format($refundedToday, 0) ?></div>
+    </a>
+
+    <a class="dash-card<?= $pendingRevisions > 0 ? ' revision-alert' : '' ?>" href="order_revision.php?status=pending">
+      <strong>Pending Revisions</strong>
+      <div class="value"><?= $pendingRevisions ?></div>
+      <div class="meta"><?= $pendingRevisions > 0 ? '&#9888; Awaiting confirmation' : 'No revisions pending' ?></div>
+    </a>
+
+    <a class="dash-card" href="order_revision_history.php?from_date=<?= date('Y-m-01') ?>">
+      <strong>Revised Orders (Month)</strong>
+      <div class="value" style="color:#6d28d9;"><?= $revisedThisMonth ?></div>
+      <div class="meta">Confirmed order amendments this month</div>
     </a>
   </div>
 

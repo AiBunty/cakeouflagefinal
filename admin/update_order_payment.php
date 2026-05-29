@@ -57,7 +57,7 @@ if ($redirectTo === '') {
 }
 
 $allowedMethods = ['upi_manual', 'gateway', 'cod', 'credit'];
-$allowedStatuses = ['paid', 'pending', 'failed', 'refunded', 'credit'];
+$allowedStatuses = ['paid', 'part_paid', 'pending', 'failed', 'refunded', 'credit'];
 if (!in_array($paymentMethod, $allowedMethods, true) || !in_array($paymentStatus, $allowedStatuses, true) || $orderId <= 0) {
     http_response_code(400);
     echo 'Invalid payment update request';

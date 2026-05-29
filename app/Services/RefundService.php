@@ -135,7 +135,22 @@ final class RefundService
         // ── Anti-fraud checks ──────────────────────────────────────────────
         $fraudFlags = [];
 
-        // 1. Double refund: active (non-rejected) refund already exists
+        // 1. Accounting lock: order older than accounting_lock_days setting
+        $lockDays = $this->getAccountingLockDays($pdo);
+        if ($lockDays > 0 && $orderCreatedAt !== '') {
+            $createdTs = strtotime($orderCreatedAt);
+            $lockTs    = strtotime('+' . $lockDays . ' days', $createdTs ?: 0);
+            if (time() > $lockTs) {
+                $fraudFlags[] = 'ACCOUNTING_PERIOD_LOCKED';
+                return [
+                    'success'     => false,
+                    'message'     => 'Refund request blocked by anti-fraud check: ACCOUNTING_PERIOD_LOCKED',
+                    'fraud_flags' => $fraudFlags,
+                ];
+            }
+        }
+
+        // 2. Double refund: active (non-rejected) refund already exists
         $dupStmt = $pdo->prepare(
             "SELECT id FROM refund_transactions
              WHERE order_id = :order_id AND status NOT IN ('rejected')
@@ -144,16 +159,6 @@ final class RefundService
         $dupStmt->execute(['order_id' => $orderId]);
         if ($dupStmt->fetchColumn() !== false) {
             $fraudFlags[] = 'DUPLICATE_REFUND';
-        }
-
-        // 2. Accounting lock: order older than accounting_lock_days setting
-        $lockDays = $this->getAccountingLockDays($pdo);
-        if ($lockDays > 0 && $orderCreatedAt !== '') {
-            $createdTs = strtotime($orderCreatedAt);
-            $lockTs    = strtotime('+' . $lockDays . ' days', $createdTs ?: 0);
-            if (time() > $lockTs) {
-                $fraudFlags[] = 'ACCOUNTING_PERIOD_LOCKED';
-            }
         }
 
         // 3. Self-refund: requesting admin is the one who confirmed payment
@@ -181,7 +186,7 @@ final class RefundService
         }
 
         // Hard-block fraud flags (cannot submit at all)
-        $hardBlockFlags = ['DUPLICATE_REFUND', 'HIGH_VALUE_REQUIRES_FORCE_REFUND', 'AMOUNT_EXCEEDS_ORDER_TOTAL'];
+        $hardBlockFlags = ['DUPLICATE_REFUND', 'ACCOUNTING_PERIOD_LOCKED', 'HIGH_VALUE_REQUIRES_FORCE_REFUND', 'AMOUNT_EXCEEDS_ORDER_TOTAL'];
         foreach ($hardBlockFlags as $flag) {
             if (in_array($flag, $fraudFlags, true)) {
                 return [

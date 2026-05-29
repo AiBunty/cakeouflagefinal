@@ -40,15 +40,11 @@ $showNonVeg     = $foodMode === 'veg_nonveg';
 $leadHours      = (int)($product['lead_time_hours'] ?? 24);
 $protocol       = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
 $productUrl     = $protocol . '://' . $_SERVER['HTTP_HOST'] . '/product/' . $product['slug'];
-$waMsg          = rawurlencode(
-    "Hello! \xf0\x9f\x91\x8b I'm interested in ordering a cake from Cakeouflage.\n\n" .
-    "\xf0\x9f\x8e\x82 *" . $product['name'] . "*\n" .
-    "SKU: " . ($product['sku'] ?? '') . "\n" .
-    "\xf0\x9f\x94\x97 " . $productUrl . "\n\n" .
-    "Could you please share the availability, pricing and delivery details?\n\n" .
-    "Thank you! \xf0\x9f\x98\x8a"
-);
-$waLink         = "https://wa.me/" . ($businessPhone ?? '919673565935') . "?text={$waMsg}";
+$waNumber       = (string)($siteConfig['contact']['whatsapp_number'] ?? normalize_whatsapp_number((string)($siteConfig['contact']['whatsapp'] ?? '')));
+$waMessage      = "Hello, I want this cake: " . (string)($product['name'] ?? '') . "\n" .
+          "Product Link: " . $productUrl . "\n" .
+          "Please share price, availability, and delivery details.";
+$waLink         = build_whatsapp_link($waNumber, $waMessage);
 $currencySymbolRaw = (string)($siteConfig['currency_symbol'] ?? 'Rs');
 $currencySymbolEsc = htmlspecialchars($currencySymbolRaw, ENT_QUOTES, 'UTF-8');
 $productDescription = (string)($product['description'] ?? ($product['long_description'] ?? ($product['short_description'] ?? '')));

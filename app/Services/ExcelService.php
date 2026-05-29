@@ -19,6 +19,9 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
  */
 class ExcelService
 {
+    /** @var array<int, string> */
+    private const DEFAULT_MATRIX_SIZES = ['Per Pcs', '0.5 kg', '1 kg', '1.5 kg', '2 kg', '2.5 kg', '3 kg', '3.5 kg', '4 kg'];
+
     // -----------------------------------------------------------------------
     // Streaming helpers
     // -----------------------------------------------------------------------
@@ -124,19 +127,21 @@ class ExcelService
     public static function buildProductTemplate(PDO $pdo): Spreadsheet
     {
         $spreadsheet = new Spreadsheet();
+        $sizeLabels = self::resolveActiveSizeLabels($pdo);
 
         // ---- Sheet 2: Lists (hidden, data source for dropdowns) ----
         $listsSheet = new Worksheet($spreadsheet, 'Lists');
         $spreadsheet->addSheet($listsSheet);
 
-        $slugStmt = $pdo->query(
-            "SELECT slug FROM categories WHERE deleted_at IS NULL AND is_active = 1 ORDER BY name"
+        $categoryStmt = $pdo->query(
+            "SELECT name FROM categories WHERE deleted_at IS NULL AND is_active = 1 ORDER BY name"
         );
-        $slugs = $slugStmt ? $slugStmt->fetchAll(PDO::FETCH_COLUMN) : [];
+        $categoryNames = $categoryStmt ? $categoryStmt->fetchAll(PDO::FETCH_COLUMN) : [];
 
-        foreach ($slugs as $i => $slug) {
+        foreach ($categoryNames as $i => $name) {
             $cell = 'A' . (string)($i + 1);
-            $listsSheet->setCellValue($cell, $slug);
+            $listsSheet->setCellValue($cell, (string)$name);
+            $listsSheet->setCellValue('B' . (string)($i + 1), (string)$name);
         }
 
         // Hide the Lists sheet
@@ -148,50 +153,57 @@ class ExcelService
         $spreadsheet->setActiveSheetIndex(0);
 
         $headers = [
-            'product_name',
-            'category_slug',
-            'description',
-            'price',
-            'discount_price',
-            'sku',
-            'stock',
-            'tags',
-            'variant_info',
-            'image_url',
-            'dietary_type',
-            'is_veg',
+            'Product Name',
+            'Category',
+            'SubCategory',
+            'Description',
+            'Food Type',
+            'Dietary Tag',
+            "Chef's Special",
+            'Enable Topper Selection',
+            'Enable Note on Cake',
         ];
+        foreach ($sizeLabels as $sizeLabel) {
+            $headers[] = $sizeLabel;
+        }
 
         $examples = [
             [
                 'Belgian Velvet Truffle',
-                'classic-cakes',
+                'Cakes',
+                'Classic Cakes',
                 'Rich dark chocolate truffle cake',
-                '1200',
-                '999',
-                'BVT-001',
-                '50',
-                'bestseller|eggless',
-                '500g:500,1kg:900,2kg:1600',
-                '',
                 'veg',
-                '1',
+                'eggless',
+                'Yes',
+                'Yes',
+                'Yes',
             ],
             [
                 'Raspberry Cocoa Bloom',
-                'birthday-cakes',
+                'Cakes',
+                'Birthday Cakes',
                 'Light cocoa sponge with raspberry cream',
-                '1400',
-                '',
-                'RCB-002',
-                '30',
-                'featured|chefs_special',
-                '500g:600,1kg:1100,2kg:2000',
-                '',
                 'veg',
-                '1',
+                'regular',
+                'No',
+                'Yes',
+                'Yes',
             ],
         ];
+
+        foreach ($examples as $rowIndex => $row) {
+            foreach ($sizeLabels as $sizeLabel) {
+                $examples[$rowIndex][] = match (strtolower(trim($sizeLabel))) {
+                    'per pcs' => $rowIndex === 0 ? '120' : '',
+                    '0.5 kg' => $rowIndex === 0 ? '550' : '620',
+                    '1 kg' => $rowIndex === 0 ? '950' : '1120',
+                    '1.5 kg' => $rowIndex === 0 ? '1320' : '1540',
+                    '2 kg' => $rowIndex === 0 ? '1690' : '2020',
+                    default => '',
+                };
+            }
+        }
 
         // Write headers
         foreach ($headers as $colIdx => $label) {
@@ -200,7 +212,8 @@ class ExcelService
         }
 
         // Style headers
-        $importSheet->getStyle('A1:L1')->applyFromArray([
+        $lastHeaderColumnLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex(count($headers));
+        $importSheet->getStyle('A1:' . $lastHeaderColumnLetter . '1')->applyFromArray([
             'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
             'fill' => [
                 'fillType' => Fill::FILL_SOLID,
@@ -220,100 +233,124 @@ class ExcelService
         }
 
         // Column widths
-        $widths = [25, 25, 40, 10, 15, 15, 10, 30, 50, 50, 14, 10];
+        $widths = [28, 22, 22, 42, 14, 14, 16, 24, 20];
+        for ($i = 0; $i < count($sizeLabels); $i++) {
+            $widths[] = 12;
+        }
         foreach ($widths as $i => $width) {
             $letter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($i + 1);
             $importSheet->getColumnDimension($letter)->setWidth($width);
         }
 
-        // Data validation on B2:B1000 — category slug dropdown from Lists sheet
-        if (!empty($slugs)) {
-            $slugCount = count($slugs);
-            $listFormula = 'Lists!$A$1:$A$' . $slugCount;
+        // Data validation on Category + SubCategory from hidden list sheet.
+        if (!empty($categoryNames)) {
+            $categoryCount = count($categoryNames);
+            $categoryFormula = 'Lists!$A$1:$A$' . $categoryCount;
+            $subCategoryFormula = 'Lists!$B$1:$B$' . $categoryCount;
             for ($row = 2; $row <= 1000; $row++) {
                 $validation = $importSheet->getCell('B' . $row)->getDataValidation();
                 $validation->setType(DataValidation::TYPE_LIST);
                 $validation->setErrorStyle(DataValidation::STYLE_INFORMATION);
                 $validation->setAllowBlank(true);
-                $validation->setShowDropDown(true); // Note: false = show dropdown arrow
+                $validation->setShowDropDown(true);
                 $validation->setShowErrorMessage(true);
                 $validation->setErrorTitle('Invalid category');
-                $validation->setError('Please choose a slug from the dropdown or type a valid slug.');
-                $validation->setFormula1($listFormula);
+                $validation->setError('Please choose a valid category from dropdown.');
+                $validation->setFormula1($categoryFormula);
+
+                $subValidation = $importSheet->getCell('C' . $row)->getDataValidation();
+                $subValidation->setType(DataValidation::TYPE_LIST);
+                $subValidation->setErrorStyle(DataValidation::STYLE_INFORMATION);
+                $subValidation->setAllowBlank(true);
+                $subValidation->setShowDropDown(true);
+                $subValidation->setShowErrorMessage(true);
+                $subValidation->setErrorTitle('Invalid subcategory');
+                $subValidation->setError('Please choose a valid subcategory from dropdown.');
+                $subValidation->setFormula1($subCategoryFormula);
             }
         }
 
-        // Comment on H1 (tags column) describing valid tag values
-        $tagComment = $importSheet->getComment('H1');
-        $tagComment->getText()->createTextRun(
-            "Valid tags (pipe-separated):\n" .
-            "  featured\n" .
-            "  bestseller\n" .
-            "  chefs_special\n" .
-            "  eggless\n" .
-            "  b2b\n\n" .
-            "Example: featured|eggless"
+        // Comment on Food Type column.
+        $foodTypeComment = $importSheet->getComment('E1');
+        $foodTypeComment->getText()->createTextRun(
+            "Allowed values:\n" .
+            "  veg\n" .
+            "  nonveg"
         );
-        $tagComment->setWidth('180pt');
-        $tagComment->setHeight('120pt');
+        $foodTypeComment->setWidth('140pt');
+        $foodTypeComment->setHeight('65pt');
 
-        // Comment on I1 (variant_info) explaining format
-        $variantComment = $importSheet->getComment('I1');
-        $variantComment->getText()->createTextRun(
-            "Format: label:price pairs, comma-separated.\n" .
-            "Example: 500g:500,1kg:900,2kg:1600\n\n" .
-            "Leave blank for no variants."
-        );
-        $variantComment->setWidth('200pt');
-        $variantComment->setHeight('90pt');
-
-        // Comment on K1 (dietary_type) describing values
-        $dietaryTypeComment = $importSheet->getComment('K1');
+        // Comment on Dietary Tag column.
+        $dietaryTypeComment = $importSheet->getComment('F1');
         $dietaryTypeComment->getText()->createTextRun(
-            "Canonical dietary value.\n" .
-            "Allowed: veg, nonveg\n\n" .
-            "In veg-only stores, nonveg rows are normalized to veg."
+            "Allowed values:\n" .
+            "  regular\n" .
+            "  eggless\n" .
+            "  vegan\n" .
+            "  sugar_free"
         );
-        $dietaryTypeComment->setWidth('220pt');
-        $dietaryTypeComment->setHeight('80pt');
+        $dietaryTypeComment->setWidth('160pt');
+        $dietaryTypeComment->setHeight('85pt');
 
-        // Comment on L1 (is_veg) describing values
-        $vegComment = $importSheet->getComment('L1');
-        $vegComment->getText()->createTextRun(
-            "1 = Veg (green dot)\n" .
-            "0 = Non-Veg (red dot)\n\n" .
-            "Optional legacy fallback when dietary_type is empty."
-        );
-        $vegComment->setWidth('160pt');
-        $vegComment->setHeight('75pt');
-
-        // Dropdown validation on K2:K1000 — only allow veg/nonveg
+        // Dropdown validation on Food Type: veg/nonveg
         for ($row = 2; $row <= 1000; $row++) {
-            $validation = $importSheet->getCell('K' . $row)->getDataValidation();
+            $validation = $importSheet->getCell('E' . $row)->getDataValidation();
             $validation->setType(DataValidation::TYPE_LIST);
             $validation->setErrorStyle(DataValidation::STYLE_STOP);
             $validation->setAllowBlank(true);
             $validation->setShowDropDown(true);
             $validation->setShowErrorMessage(true);
-            $validation->setErrorTitle('Invalid dietary type');
+            $validation->setErrorTitle('Invalid food type');
             $validation->setError('Enter veg or nonveg.');
             $validation->setFormula1('"veg,nonveg"');
         }
 
-        // Dropdown validation on L2:L1000 — only allow 0 or 1
+        // Dropdown validation on Dietary Tag.
         for ($row = 2; $row <= 1000; $row++) {
-            $validation = $importSheet->getCell('L' . $row)->getDataValidation();
+            $validation = $importSheet->getCell('F' . $row)->getDataValidation();
             $validation->setType(DataValidation::TYPE_LIST);
             $validation->setErrorStyle(DataValidation::STYLE_STOP);
             $validation->setAllowBlank(true);
             $validation->setShowDropDown(true);
             $validation->setShowErrorMessage(true);
-            $validation->setErrorTitle('Invalid value');
-            $validation->setError('Enter 1 for Veg or 0 for Non-Veg.');
-            $validation->setFormula1('"1,0"');
+            $validation->setErrorTitle('Invalid dietary tag');
+            $validation->setError('Enter one of regular, eggless, vegan, sugar_free.');
+            $validation->setFormula1('"regular,eggless,vegan,sugar_free"');
+        }
+
+        // Toggle dropdowns (Yes/No).
+        foreach (['G', 'H', 'I'] as $colLetter) {
+            for ($row = 2; $row <= 1000; $row++) {
+                $validation = $importSheet->getCell($colLetter . $row)->getDataValidation();
+                $validation->setType(DataValidation::TYPE_LIST);
+                $validation->setErrorStyle(DataValidation::STYLE_STOP);
+                $validation->setAllowBlank(true);
+                $validation->setShowDropDown(true);
+                $validation->setShowErrorMessage(true);
+                $validation->setErrorTitle('Invalid toggle value');
+                $validation->setError('Enter Yes or No.');
+                $validation->setFormula1('"Yes,No"');
+            }
         }
 
         return $spreadsheet;
+    }
+
+    /** @return array<int, string> */
+    private static function resolveActiveSizeLabels(PDO $pdo): array
+    {
+        try {
+            $stmt = $pdo->query('SELECT label FROM product_size_master WHERE is_active = 1 ORDER BY sort_order ASC, id ASC');
+            $labels = $stmt ? $stmt->fetchAll(PDO::FETCH_COLUMN) : [];
+            $labels = array_values(array_filter(array_map(static fn($v): string => trim((string)$v), is_array($labels) ? $labels : []), static fn(string $v): bool => $v !== ''));
+            if (count($labels) > 0) {
+                return $labels;
+            }
+        } catch (\Throwable $e) {
+            // Fallback to defaults when table does not exist yet.
+        }
+
+        return self::DEFAULT_MATRIX_SIZES;
     }
 
     // -----------------------------------------------------------------------

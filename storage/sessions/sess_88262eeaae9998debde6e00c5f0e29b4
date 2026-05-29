@@ -1,0 +1,1 @@
+_csrf_token|s:64:"391f440dccf50f20435427084ad702a27a2f76b01dcb4f187d5d5d7cf7d0d6ae";admin|i:1;admin_id|i:1;admin_name|s:5:"Dcore";admin_role|s:11:"super_admin";admin_otp_verified|b:1;admin_department_label|s:0:"";admin_permissions|a:1:{i:0;s:1:"*";}

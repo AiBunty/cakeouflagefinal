@@ -1,4 +1,9 @@
-<?php /* Cakeouflage — Shipping & Delivery Page */ ?>
+<?php /* Cakeouflage — Shipping & Delivery Page */
+$shippingWhatsapp = (string)($siteConfig['contact']['whatsapp_link'] ?? '');
+if ($shippingWhatsapp === '') {
+  $shippingWhatsapp = build_whatsapp_link((string)($siteConfig['contact']['whatsapp_number'] ?? ''), 'Hi Cakeouflage! I have a delivery question.');
+}
+?>
 
 <section class="page-hero page-hero--soft" aria-label="Delivery info hero">
   <div class="container">
@@ -60,7 +65,11 @@
       <div class="card sidebar-card">
         <h3>💬 Need Help?</h3>
         <p>Questions about delivery to a specific area? WhatsApp us for a quick answer.</p>
-        <a href="https://wa.me/919999999999?text=Hi%20Cakeouflage!%20I%20have%20a%20delivery%20question." class="btn btn--whatsapp btn--block" target="_blank" rel="noopener">💬 WhatsApp Us</a>
+        <?php if ($shippingWhatsapp !== ''): ?>
+          <a href="<?= htmlspecialchars($shippingWhatsapp, ENT_QUOTES, 'UTF-8') ?>" class="btn btn--whatsapp btn--block" target="_blank" rel="noopener">WhatsApp Us</a>
+        <?php else: ?>
+          <a href="/contact" class="btn btn--primary btn--block">Contact Us</a>
+        <?php endif; ?>
       </div>
       <div class="card sidebar-card">
         <h3>📍 Check Delivery</h3>

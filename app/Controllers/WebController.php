@@ -939,12 +939,6 @@ final class WebController
                 LIMIT 6
             ", [(int)$product['subcategory_id'], (int)$product['id'], getDietaryMode()]);
 
-        // Load business phone from settings for WhatsApp enquiry link
-        $bizPhoneRow  = $db->fetchOne("SELECT setting_value FROM settings WHERE setting_key = 'business_phone' LIMIT 1");
-        $rawPhone     = $bizPhoneRow ? preg_replace('/\D/', '', (string)$bizPhoneRow['setting_value']) : '';
-        if ($rawPhone === '') { $rawPhone = '919673565935'; }
-        elseif (strlen($rawPhone) === 10) { $rawPhone = '91' . $rawPhone; }
-
         View::render('product', [
             'title'        => ($product['seo_title'] ?: $product['name']) . ' | Cakeouflage',
             'metaDesc'     => $product['seo_description'] ?? $product['short_description'] ?? '',
@@ -953,7 +947,6 @@ final class WebController
             'images'       => $images,
             'related'      => $related,
             'breadcrumbs'  => $breadcrumbs,
-            'businessPhone'=> $rawPhone,
         ]);
     }
 
@@ -1101,7 +1094,7 @@ final class WebController
 
     public function accountLogout(): void
     {
-        AuthManager::logoutCustomer();
+        AuthManager::logoutCustomer(true);
         if (session_status() === PHP_SESSION_ACTIVE) {
             session_destroy();
         }

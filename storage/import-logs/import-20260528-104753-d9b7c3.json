@@ -1,0 +1,18 @@
+{
+    "mode": "commit",
+    "strict_variants": false,
+    "abort_on_error": false,
+    "created_count": 1,
+    "updated_count": 0,
+    "duplicate_skus": [],
+    "failed_rows": [],
+    "preview_summary": {
+        "new_products": 1,
+        "updated_products": 0,
+        "invalid_rows": 0,
+        "new_variants": 3,
+        "removed_variants": 0,
+        "archived_products": 256
+    },
+    "generated_at": "2026-05-28T10:47:53+05:30"
+}

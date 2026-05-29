@@ -1,4 +1,8 @@
-<?php /* Cakeouflage — Privacy Policy */ ?>
+<?php /* Cakeouflage — Privacy Policy */
+$privacyEmail = trim((string)($siteConfig['contact']['email'] ?? 'cakeouflage@gmail.com'));
+$privacyPhone = trim((string)($siteConfig['contact']['phone'] ?? ''));
+$privacyWhatsapp = trim((string)($siteConfig['contact']['whatsapp_number'] ?? ''));
+?>
 <section class="section section--white">
   <div class="container content-prose-grid content-prose-grid--single">
     <div class="content-prose">
@@ -63,12 +67,12 @@
       <h2>10. Contact</h2>
       <p>If you have any questions about this Privacy Policy, or would like to place an order, please contact us:</p>
       <ul>
-        <li>Email: <a href="mailto:cakeouflage@gmail.com" class="link">cakeouflage@gmail.com</a></li>
-        <li>Phone / WhatsApp: +91 96735 65935</li>
+        <li>Email: <a href="mailto:<?= htmlspecialchars($privacyEmail, ENT_QUOTES, 'UTF-8') ?>" class="link"><?= htmlspecialchars($privacyEmail, ENT_QUOTES, 'UTF-8') ?></a></li>
+        <li>Phone / WhatsApp: <?= htmlspecialchars($privacyPhone !== '' ? $privacyPhone : $privacyWhatsapp, ENT_QUOTES, 'UTF-8') ?></li>
         <li>Address: Nashik, Maharashtra, India</li>
       </ul>
 
-      <p>To place an order quickly, WhatsApp us on <strong>+91 96735 65935</strong>. Thank you for choosing Cakeouflage.</p>
+      <p>To place an order quickly, WhatsApp us on <strong><?= htmlspecialchars($privacyWhatsapp !== '' ? $privacyWhatsapp : ($privacyPhone !== '' ? $privacyPhone : 'our support number'), ENT_QUOTES, 'UTF-8') ?></strong>. Thank you for choosing Cakeouflage.</p>
 
       <p>We may update this Privacy Policy from time to time. Any changes will be posted on this page with an updated date.</p>
     </div>

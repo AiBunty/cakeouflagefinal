@@ -28,6 +28,7 @@ $mobileSearch = $filters['mobile'];
 $paymentStatus = $filters['payment_status'];
 $orderStatus = $filters['order_status'];
 $paymentMethod = $filters['payment_method'];
+$sourceChannel = $filters['source_channel'];
 
 $register = $financeReports->getRegister($filters, $perPage, $page);
 $rows = $register['rows'];
@@ -35,6 +36,7 @@ $totals = $register['totals'];
 $totalRows = (int)$register['totalRows'];
 $totalPages = (int)$register['totalPages'];
 $page = (int)$register['page'];
+$revisionSummary = $financeReports->getRevisionSummary($fromDate, $toDate);
 $businessSettings = get_business_settings($conn);
 
 function sr_money(float $amount): string
@@ -71,6 +73,7 @@ function sales_register_url(array $overrides = []): string
     'payment_status' => $_GET['payment_status'] ?? 'finance_safe',
     'order_status' => $_GET['order_status'] ?? 'all',
     'payment_method' => $_GET['payment_method'] ?? 'all',
+    'source_channel' => $_GET['source_channel'] ?? '',
     'per_page' => $_GET['per_page'] ?? '20',
     'page' => $_GET['page'] ?? '1',
     ];
@@ -227,6 +230,14 @@ $currentUrl = sales_register_url(['page' => $page]);
   .sr-pill.info { background: #dbeafe; color: #1d4ed8; }
   .sr-pagination { margin-top: 10px; display: flex; gap: 8px; align-items: center; }
   .sr-muted { color: #8f7681; font-size: 0.82rem; }
+  .sr-revision-summary {
+    display: flex; flex-wrap: wrap; gap: 12px; align-items: center;
+    background: #fdf4ff; border: 1px solid #e9d5ff; border-radius: 8px;
+    padding: 10px 14px; margin: 8px 0 6px; font-size: 0.83rem; color: #3b0764;
+  }
+  .sr-revision-summary .sr-rev-label { font-weight: 600; color: #6d28d9; }
+  .sr-revision-summary .positive { color: #065f46; font-weight: 600; }
+  .sr-revision-summary .negative { color: #9f1239; font-weight: 600; }
   .sr-amount { white-space: nowrap; font-variant-numeric: tabular-nums; }
   .sr-amount.negative { color: #9f1239; }
   .sr-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
@@ -386,6 +397,11 @@ $currentUrl = sales_register_url(['page' => $page]);
             <option value="bank" <?= $paymentMethod === 'bank' ? 'selected' : '' ?>>Bank</option>
             <option value="credit" <?= $paymentMethod === 'credit' ? 'selected' : '' ?>>Credit</option>
           </select>
+          <select name="source_channel">
+            <option value="" <?= $sourceChannel === '' ? 'selected' : '' ?>>All Sources</option>
+            <option value="online" <?= $sourceChannel === 'online' ? 'selected' : '' ?>>Online</option>
+            <option value="admin" <?= $sourceChannel === 'admin' ? 'selected' : '' ?>>Admin</option>
+          </select>
           <select name="per_page">
             <?php foreach ($perPageOptions as $size): ?>
               <option value="<?= (int)$size ?>" <?= $perPage === (int)$size ? 'selected' : '' ?>><?= (int)$size ?> / page</option>
@@ -405,6 +421,18 @@ $currentUrl = sales_register_url(['page' => $page]);
         </div>
       </form>
       <p class="sr-muted">Rows: <?= number_format($totalRows) ?> | Date basis: <?= htmlspecialchars(ucfirst($dateBasis), ENT_QUOTES, 'UTF-8') ?> | Range: <?= htmlspecialchars($fromDate, ENT_QUOTES, 'UTF-8') ?> to <?= htmlspecialchars($toDate, ENT_QUOTES, 'UTF-8') ?></p>
+
+      <?php if ((float)($revisionSummary['original_sales'] ?? 0) > 0): ?>
+      <div class="sr-revision-summary">
+        <span class="sr-rev-label">Revision Impact (<?= htmlspecialchars($fromDate, ENT_QUOTES, 'UTF-8') ?> – <?= htmlspecialchars($toDate, ENT_QUOTES, 'UTF-8') ?>):</span>
+        <span>Original Sales: <strong><?= htmlspecialchars(sr_money((float)($revisionSummary['original_sales'] ?? 0)), ENT_QUOTES, 'UTF-8') ?></strong></span>
+        <span>Revised Sales: <strong><?= htmlspecialchars(sr_money((float)($revisionSummary['revised_sales'] ?? 0)), ENT_QUOTES, 'UTF-8') ?></strong></span>
+        <span class="positive">Upgrades: +<?= htmlspecialchars(sr_money((float)($revisionSummary['upgrade_revenue'] ?? 0)), ENT_QUOTES, 'UTF-8') ?></span>
+        <span class="negative">Downgrades: –<?= htmlspecialchars(sr_money((float)($revisionSummary['downgrade_adjustments'] ?? 0)), ENT_QUOTES, 'UTF-8') ?></span>
+        <?php $impact = (float)($revisionSummary['net_revision_impact'] ?? 0); ?>
+        <span class="<?= $impact >= 0 ? 'positive' : 'negative' ?>">Net Impact: <?= $impact >= 0 ? '+' : '' ?><?= htmlspecialchars(sr_money($impact), ENT_QUOTES, 'UTF-8') ?></span>
+      </div>
+      <?php endif; ?>
 
       <div class="sr-table-wrap">
         <table class="sr-table">
@@ -426,12 +454,13 @@ $currentUrl = sales_register_url(['page' => $page]);
               <th>Payment Status</th>
               <th>Order Status</th>
               <th>Channel</th>
+              <th>Source</th>
               <th>Action</th>
             </tr>
           </thead>
           <tbody>
             <?php if (empty($rows)): ?>
-              <tr><td colspan="16" class="sr-muted">No finance-safe rows found for the selected filters.</td></tr>
+              <tr><td colspan="18" class="sr-muted">No finance-safe rows found for the selected filters.</td></tr>
             <?php else: ?>
               <?php foreach ($rows as $row): ?>
                 <?php
@@ -465,6 +494,7 @@ $currentUrl = sales_register_url(['page' => $page]);
                   <td><span id="payment-status-pill-<?= $rowId ?>" class="sr-pill <?= $statusClass ?>"><?= htmlspecialchars((string)$row['payment_status'], ENT_QUOTES, 'UTF-8') ?></span></td>
                   <td id="order-status-text-<?= $rowId ?>"><?= htmlspecialchars((string)$row['order_status'], ENT_QUOTES, 'UTF-8') ?></td>
                   <td id="payment-channel-text-<?= $rowId ?>"><?= htmlspecialchars(sales_payment_channel_label((string)$row['payment_method']), ENT_QUOTES, 'UTF-8') ?></td>
+                  <td><?= htmlspecialchars(ucfirst((string)($row['source_channel'] ?? 'admin')), ENT_QUOTES, 'UTF-8') ?></td>
                   <td>
                     <div class="sr-actions">
                       <a class="sr-link" href="order_details.php?id=<?= (int)$row['id'] ?>&return_to=<?= $returnTo ?>">Open</a>

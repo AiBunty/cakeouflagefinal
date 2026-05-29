@@ -40,6 +40,11 @@ final class View
                 'website' => Env::get('BAKERY_WEBSITE', ''),
                 'business_hours' => Env::get('BUSINESS_HOURS', ''),
                 'map_embed_url' => Env::get('CONTACT_MAP_EMBED_URL', ''),
+                'google_maps_url' => '',
+            ],
+            'social' => [
+                'facebook_url' => '',
+                'instagram_url' => '',
             ],
             'business' => [
                 'address_line1' => '',
@@ -83,6 +88,13 @@ final class View
                 'footer_logo_url',
                 'business_website',
                 'support_whatsapp',
+                'support_email',
+                'support_phone',
+                'contact_phone',
+                'whatsapp_number',
+                'facebook_url',
+                'instagram_url',
+                'google_maps_url',
                 'business_hours',
                 'contact_map_embed_url',
             ];
@@ -99,20 +111,37 @@ final class View
             if (($settings['business_name'] ?? '') !== '') {
                 $brand['name'] = $settings['business_name'];
             }
-            if (($settings['business_phone'] ?? '') !== '') {
+            if (($settings['contact_phone'] ?? '') !== '') {
+                $siteConfig['contact']['phone'] = $settings['contact_phone'];
+            } elseif (($settings['support_phone'] ?? '') !== '') {
+                $siteConfig['contact']['phone'] = $settings['support_phone'];
+            } elseif (($settings['business_phone'] ?? '') !== '') {
                 $siteConfig['contact']['phone'] = $settings['business_phone'];
             }
-            if (($settings['business_email'] ?? '') !== '') {
+            if (($settings['support_email'] ?? '') !== '') {
+                $siteConfig['contact']['email'] = $settings['support_email'];
+            } elseif (($settings['business_email'] ?? '') !== '') {
                 $siteConfig['contact']['email'] = $settings['business_email'];
             }
             if (($settings['business_city'] ?? '') !== '') {
                 $siteConfig['contact']['city'] = $settings['business_city'];
             }
-            if (($settings['support_whatsapp'] ?? '') !== '') {
+            if (($settings['whatsapp_number'] ?? '') !== '') {
+                $siteConfig['contact']['whatsapp'] = $settings['whatsapp_number'];
+            } elseif (($settings['support_whatsapp'] ?? '') !== '') {
                 $siteConfig['contact']['whatsapp'] = $settings['support_whatsapp'];
             }
             if (($settings['business_website'] ?? '') !== '') {
                 $siteConfig['contact']['website'] = $settings['business_website'];
+            }
+            if (($settings['google_maps_url'] ?? '') !== '') {
+                $siteConfig['contact']['google_maps_url'] = $settings['google_maps_url'];
+            }
+            if (($settings['facebook_url'] ?? '') !== '') {
+                $siteConfig['social']['facebook_url'] = $settings['facebook_url'];
+            }
+            if (($settings['instagram_url'] ?? '') !== '') {
+                $siteConfig['social']['instagram_url'] = $settings['instagram_url'];
             }
             if (($settings['business_hours'] ?? '') !== '') {
                 $siteConfig['contact']['business_hours'] = $settings['business_hours'];
@@ -153,6 +182,26 @@ final class View
         } catch (\Throwable $e) {
             // Keep env defaults when DB settings are unavailable.
         }
+
+        $siteConfig['contact']['phone'] = trim((string)($siteConfig['contact']['phone'] ?? ''));
+        $siteConfig['contact']['email'] = trim((string)($siteConfig['contact']['email'] ?? ''));
+        $siteConfig['contact']['website'] = normalize_business_url((string)($siteConfig['contact']['website'] ?? ''));
+        $siteConfig['social']['facebook_url'] = normalize_business_url((string)($siteConfig['social']['facebook_url'] ?? ''));
+        $siteConfig['social']['instagram_url'] = normalize_business_url((string)($siteConfig['social']['instagram_url'] ?? ''));
+        $siteConfig['contact']['google_maps_url'] = normalize_business_url((string)($siteConfig['contact']['google_maps_url'] ?? ''));
+
+        $whatsappNumber = normalize_whatsapp_number((string)($siteConfig['contact']['whatsapp'] ?? ''));
+        if ($whatsappNumber === '') {
+            $fallbackPhoneDigits = normalize_whatsapp_number((string)($siteConfig['contact']['phone'] ?? ''));
+            $whatsappNumber = $fallbackPhoneDigits;
+        }
+        $siteConfig['contact']['whatsapp_number'] = $whatsappNumber;
+        $siteConfig['contact']['whatsapp'] = $whatsappNumber;
+        $siteConfig['contact']['whatsapp_link'] = build_whatsapp_link($whatsappNumber, 'Hi Cakeouflage! I would like to place a cake order.');
+        $siteConfig['contact']['phone_href'] = build_tel_href((string)($siteConfig['contact']['phone'] ?? ''));
+        $siteConfig['contact']['email_href'] = $siteConfig['contact']['email'] !== ''
+            ? 'mailto:' . $siteConfig['contact']['email']
+            : '';
 
         $branding = BusinessBrandingService::build($siteConfig);
         $siteConfig['branding'] = $branding;

@@ -2,6 +2,7 @@
 require_once __DIR__ . '/includes/auth.php';
 require_permission_for_current_admin_page();
 require_once __DIR__ . '/includes/db.php';
+require_once __DIR__ . '/../app/Support/business-contact-links.php';
 
 function upsert_setting(mysqli $conn, string $key, string $value, int $adminId): bool
 {
@@ -98,6 +99,11 @@ $brandSecondaryColor = trim((string)($_POST['brand_secondary_color'] ?? '#140b0f
 $supportEmail       = trim((string)($_POST['support_email'] ?? ''));
 $supportPhone       = trim((string)($_POST['support_phone'] ?? ''));
 $supportWhatsapp    = trim((string)($_POST['support_whatsapp'] ?? ''));
+$contactPhone       = trim((string)($_POST['contact_phone'] ?? ''));
+$whatsappNumber     = trim((string)($_POST['whatsapp_number'] ?? ''));
+$facebookUrl        = trim((string)($_POST['facebook_url'] ?? ''));
+$instagramUrl       = trim((string)($_POST['instagram_url'] ?? ''));
+$googleMapsUrl      = trim((string)($_POST['google_maps_url'] ?? ''));
 $businessLogo       = trim((string)($_POST['business_logo'] ?? ''));
 $businessAddress    = trim((string)($_POST['business_address'] ?? ''));
 $storeFoodMode      = normalizeDietaryMode((string)($_POST['store_food_mode'] ?? 'veg_only'));
@@ -141,9 +147,43 @@ if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
     exit;
 }
 
-if ($businessWebsite !== '' && !filter_var($businessWebsite, FILTER_VALIDATE_URL)) {
+if ($supportEmail !== '' && !filter_var($supportEmail, FILTER_VALIDATE_EMAIL)) {
+    header('Location: business-settings.php?status=error&message=' . rawurlencode('Invalid support email format.'));
+    exit;
+}
+
+$businessWebsiteNormalized = normalize_business_url($businessWebsite);
+if ($businessWebsite !== '' && $businessWebsiteNormalized === '') {
     header('Location: business-settings.php?status=error&message=' . rawurlencode('Invalid business website URL.'));
     exit;
+}
+$businessWebsite = $businessWebsiteNormalized;
+
+$facebookUrlNormalized = normalize_business_url($facebookUrl);
+if ($facebookUrl !== '' && $facebookUrlNormalized === '') {
+    header('Location: business-settings.php?status=error&message=' . rawurlencode('Invalid Facebook URL.'));
+    exit;
+}
+$facebookUrl = $facebookUrlNormalized;
+
+$instagramUrlNormalized = normalize_business_url($instagramUrl);
+if ($instagramUrl !== '' && $instagramUrlNormalized === '') {
+    header('Location: business-settings.php?status=error&message=' . rawurlencode('Invalid Instagram URL.'));
+    exit;
+}
+$instagramUrl = $instagramUrlNormalized;
+
+$googleMapsUrlNormalized = normalize_business_url($googleMapsUrl);
+if ($googleMapsUrl !== '' && $googleMapsUrlNormalized === '') {
+    header('Location: business-settings.php?status=error&message=' . rawurlencode('Invalid Google Maps URL.'));
+    exit;
+}
+$googleMapsUrl = $googleMapsUrlNormalized;
+
+$normalizedWhatsappNumber = normalize_whatsapp_number($whatsappNumber);
+$normalizedSupportWhatsapp = normalize_whatsapp_number($supportWhatsapp);
+if ($normalizedSupportWhatsapp === '' && $normalizedWhatsappNumber !== '') {
+    $normalizedSupportWhatsapp = $normalizedWhatsappNumber;
 }
 
 if ($appsScriptEndpoint !== '' && !filter_var($appsScriptEndpoint, FILTER_VALIDATE_URL)) {
@@ -226,7 +266,12 @@ try {
     upsert_setting($conn, 'brand_secondary_color', $brandSecondaryColor, $adminId);
     upsert_setting($conn, 'support_email', $supportEmail, $adminId);
     upsert_setting($conn, 'support_phone', $supportPhone, $adminId);
-    upsert_setting($conn, 'support_whatsapp', $supportWhatsapp, $adminId);
+    upsert_setting($conn, 'support_whatsapp', $normalizedSupportWhatsapp, $adminId);
+    upsert_setting($conn, 'contact_phone', $contactPhone, $adminId);
+    upsert_setting($conn, 'whatsapp_number', $normalizedWhatsappNumber, $adminId);
+    upsert_setting($conn, 'facebook_url', $facebookUrl, $adminId);
+    upsert_setting($conn, 'instagram_url', $instagramUrl, $adminId);
+    upsert_setting($conn, 'google_maps_url', $googleMapsUrl, $adminId);
     if ($businessAddress === '') {
         $addressParts = array_filter([
             $addressLine1,

@@ -1,0 +1,25 @@
+{
+    "timestamp": "2026-05-29T12:36:26+05:30",
+    "selected_order": {
+        "id": 34,
+        "order_number": "MAN-20260528-1CCF8D6D",
+        "payment_status": "credit",
+        "advance_amount": "0.00",
+        "effective_total": "1950.00"
+    },
+    "register_assertions": {
+        "order_id": 34,
+        "expected_advance_floor": 400,
+        "realized_gross_amount": 400,
+        "net_collected_amount": 400,
+        "balance_due_amount": 1550,
+        "collection_status_label": "Advance Paid",
+        "finance_status_label": "Advance Paid"
+    },
+    "variance_snapshot": {
+        "gl_total": 10655.5,
+        "orders_total": 9105.5,
+        "variance": 1550,
+        "has_discrepancy": true
+    }
+}

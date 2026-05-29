@@ -1,4 +1,7 @@
-<?php /* Cakeouflage — Terms & Conditions */ ?>
+<?php /* Cakeouflage — Terms & Conditions */
+$termsEmail = trim((string)($siteConfig['contact']['email'] ?? 'cakeouflage@gmail.com'));
+$termsWhatsapp = trim((string)($siteConfig['contact']['whatsapp_number'] ?? ''));
+?>
 <section class="section section--white">
   <div class="container content-prose-grid content-prose-grid--single">
     <div class="content-prose">
@@ -58,7 +61,7 @@
       <p>These terms are governed by the laws of India. Any disputes shall be subject to the jurisdiction of courts in Nashik, Maharashtra.</p>
 
       <h2>9. Contact</h2>
-      <p>For any questions regarding these terms, contact us at <a href="mailto:hello@cakeouflage.com" class="link">hello@cakeouflage.com</a> or WhatsApp us at ++91 9870471017.</p>
+      <p>For any questions regarding these terms, contact us at <a href="mailto:<?= htmlspecialchars($termsEmail, ENT_QUOTES, 'UTF-8') ?>" class="link"><?= htmlspecialchars($termsEmail, ENT_QUOTES, 'UTF-8') ?></a><?php if ($termsWhatsapp !== ''): ?> or WhatsApp us at <?= htmlspecialchars($termsWhatsapp, ENT_QUOTES, 'UTF-8') ?><?php endif; ?>.</p>
     </div>
   </div>
 </section>

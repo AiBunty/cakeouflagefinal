@@ -24,7 +24,7 @@ $screenshotRequired  = isset($screenshotRequired)  ? (bool)$screenshotRequired  
   main[data-page="checkout"] .page-inner-header {
     align-items: flex-start;
     gap: 16px;
-    margin-bottom: 20px;
+    margin-bottom: 14px;
   }
   main[data-page="checkout"] .page-inner-desc {
     max-width: 620px;
@@ -44,56 +44,16 @@ $screenshotRequired  = isset($screenshotRequired)  ? (bool)$screenshotRequired  
     text-transform: uppercase;
   }
   .checkout-layout {
-    gap: 22px;
+    gap: 18px;
   }
   .checkout-form {
-    gap: 16px;
+    gap: 12px;
   }
-  .checkout-hero,
   .checkout-section.card,
   .checkout-summary,
   .checkout-mobile-bar {
     border: 1px solid var(--checkout-line);
     box-shadow: 0 18px 45px rgba(85, 32, 48, 0.08);
-  }
-  .checkout-hero {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 18px;
-    padding: 18px 20px;
-    border-radius: 24px;
-    background: var(--checkout-blush);
-    align-items: center;
-  }
-  .checkout-hero__title {
-    margin: 0;
-    font-size: clamp(1.15rem, 1rem + 0.8vw, 1.6rem);
-    color: var(--checkout-ink);
-  }
-  .checkout-hero__text {
-    margin: 6px 0 0;
-    color: var(--checkout-muted);
-    font-size: 0.95rem;
-    line-height: 1.55;
-  }
-  .checkout-hero__chips {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    justify-content: flex-end;
-  }
-  .checkout-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 8px 11px;
-    border-radius: 999px;
-    background: #fff;
-    border: 1px solid rgba(128, 0, 31, 0.1);
-    color: var(--checkout-ink);
-    font-size: 0.82rem;
-    font-weight: 600;
-    white-space: nowrap;
   }
   .checkout-form-grid {
     display: grid;
@@ -241,7 +201,65 @@ $screenshotRequired  = isset($screenshotRequired)  ? (bool)$screenshotRequired  
   .checkout-auth-row {
     display: grid;
     gap: 10px;
+    margin-top: 8px;
+  }
+    .checkout-phone-group {
+      display: grid;
+      grid-template-columns: minmax(180px, 1fr) minmax(0, 1.1fr);
+      gap: 8px;
+    }
+    .checkout-phone-group__country {
+      display: grid;
+      gap: 6px;
+    }
+    .checkout-phone-group__country input,
+    .checkout-phone-group__country select,
+    .checkout-phone-group > input {
+      min-height: 44px;
+    }
+  .checkout-auth-mode {
+    margin-top: 8px;
+    padding: 14px;
+    border-radius: 18px;
+    background: linear-gradient(180deg, rgba(255, 248, 244, 0.94), rgba(255, 255, 255, 0.98));
+    border: 1px solid rgba(128, 0, 31, 0.1);
+  }
+  .checkout-auth-mode__eyebrow {
+    display: block;
+    margin-bottom: 6px;
+    color: var(--checkout-burgundy);
+    font-size: 0.76rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .checkout-auth-mode__title {
+    margin: 0;
+    color: var(--checkout-ink);
+    font-size: 0.98rem;
+    font-weight: 700;
+  }
+  .checkout-auth-mode__subtitle {
+    margin: 4px 0 0;
+    color: var(--checkout-muted);
+    font-size: 0.86rem;
+    line-height: 1.45;
+  }
+  .checkout-auth-mode__actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
     margin-top: 12px;
+  }
+  .checkout-auth-mode__actions .btn {
+    min-height: 48px;
+    justify-content: center;
+    text-align: center;
+  }
+  .checkout-auth-mode__actions .btn.is-active {
+    background: var(--checkout-burgundy);
+    border-color: var(--checkout-burgundy);
+    color: #fff;
   }
   .checkout-auth-button {
     width: 100%;
@@ -303,6 +321,9 @@ $screenshotRequired  = isset($screenshotRequired)  ? (bool)$screenshotRequired  
     width: 100%;
     justify-content: center;
   }
+  .checkout-section--hidden-by-mode {
+    display: none !important;
+  }
   .checkout-section--collapsible .checkout-section__header {
     display: flex;
     align-items: flex-start;
@@ -332,6 +353,15 @@ $screenshotRequired  = isset($screenshotRequired)  ? (bool)$screenshotRequired  
   }
   .checkout-section--collapsed .checkout-section__toggle {
     transform: rotate(-45deg);
+  }
+  @media (max-width: 720px) {
+    .checkout-auth-mode__actions {
+      grid-template-columns: 1fr;
+    }
+    .checkout-auth-meta {
+      flex-direction: column;
+      align-items: flex-start;
+    }
   }
   .porter-notice {
     margin-bottom: 12px;
@@ -429,6 +459,9 @@ $screenshotRequired  = isset($screenshotRequired)  ? (bool)$screenshotRequired  
   .checkout-toast[data-tone="error"] { background: rgba(163, 61, 61, 0.96); }
   @media (max-width: 980px) {
     .checkout-form-grid {
+    .checkout-phone-group {
+      grid-template-columns: 1fr;
+    }
       grid-template-columns: 1fr;
     }
     .checkout-section--half {
@@ -570,18 +603,6 @@ $screenshotRequired  = isset($screenshotRequired)  ? (bool)$screenshotRequired  
 
       <!-- Left: Form -->
       <form class="checkout-form" id="checkoutForm" novalidate>
-        <section class="checkout-hero" aria-label="Checkout highlights">
-          <div>
-            <h2 class="checkout-hero__title">Fast, clear, bakery-first checkout</h2>
-            <p class="checkout-hero__text">Confirm your contact details once, choose delivery or pickup, then pay securely with UPI. Your order summary stays visible while you complete the essentials.</p>
-          </div>
-          <div class="checkout-hero__chips">
-            <span class="checkout-chip">🔒 Secure payment proof</span>
-            <span class="checkout-chip">⏱ Quick OTP verification</span>
-            <span class="checkout-chip">🚚 Delivery or pickup</span>
-          </div>
-        </section>
-
         <div class="checkout-steps" id="checkoutSteps">
 
           <!-- ── Step 1: Contact & Verification ── -->
@@ -590,65 +611,20 @@ $screenshotRequired  = isset($screenshotRequired)  ? (bool)$screenshotRequired  
               <div class="checkout-step__num">1</div>
               <div>
                 <p class="checkout-step__heading">Contact &amp; Verification</p>
-                <p class="checkout-step__summary" id="step1Summary"><?= $isLoggedIn ? 'Logged in — details pre-filled' : 'Email + OTP verification' ?></p>
+                <p class="checkout-step__summary" id="step1Summary"><?= $isLoggedIn ? 'Logged in — details pre-filled' : 'Email-first smart verification' ?></p>
               </div>
               <button type="button" class="checkout-step__edit-btn" data-edit-step="step-contact"<?= $isLoggedIn ? '' : ' hidden' ?>>Edit</button>
             </div>
             <div class="checkout-step__body">
               <div id="checkoutUserDetection" class="checkout-inline-banner" hidden></div>
-              <?php if ($isLoggedIn): ?>
-              <div class="checkout-login-note">✅ Logged in — contact details pre-filled. You can edit if needed.</div>
-              <?php endif; ?>
-              <div class="form-row-2">
-                <label class="form-control" id="customerNameField">
-                  <span class="form-label">Full Name <span class="form-required">*</span></span>
-                  <input id="customerName" name="customer_name" required autocomplete="name" placeholder="Priya Sharma" value="<?= $prefillName ?>" data-autosave="customer_name">
-                  <span class="field-error-msg" aria-live="polite"></span>
-                </label>
-                <label class="form-control" id="customerPhoneField">
-                  <span class="form-label">Phone <span class="form-required">*</span></span>
-                  <input id="customerPhone" name="customer_phone" type="tel" autocomplete="tel" placeholder="+91 98765 43210" value="<?= $prefillPhone ?>" data-autosave="customer_phone">
-                  <span class="field-error-msg" aria-live="polite"></span>
-                </label>
-              </div>
-              <label class="form-control">
-                <span class="form-label">Email <span class="form-required">*</span></span>
-                <input id="customerEmail" name="customer_email" type="email" required autocomplete="email" placeholder="you@email.com" value="<?= $prefillEmail ?>" data-autosave="customer_email">
-                <span class="field-error-msg" aria-live="polite"></span>
-              </label>
-              <div class="checkout-inline-banner">Use the same email you want all order confirmations and updates sent to.</div>
-              <!-- OTP UI START -->
-<?php if (!$isLoggedIn): ?>
-              <div class="checkout-auth-row">
-                <button type="button" id="sendOtpBtn" class="btn btn--primary btn--lg btn--block checkout-auth-button">
-                  <span aria-hidden="true">✉️</span>
-                  <span>Send Verification OTP</span>
-                </button>
-                <div class="checkout-auth-meta">
-                  <span>Verify once to unlock order placement.</span>
-                  <span id="otpCooldownHint">Takes a few seconds</span>
-                </div>
-                <div id="otpNotice" class="otp-notice" aria-live="polite"></div>
-              </div>
-              <div id="otpSection" class="checkout-auth-step" hidden>
-                <label class="form-control" style="margin-bottom:10px;">
-                  <span class="form-label">Enter the 6-digit OTP <span class="form-required">*</span></span>
-                </label>
-                <div class="otp-grid" id="checkoutOtpGrid" aria-label="OTP input">
-                  <input class="otp-cell" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="1" data-otp-slot="0">
-                  <input class="otp-cell" type="text" inputmode="numeric" maxlength="1" data-otp-slot="1">
-                  <input class="otp-cell" type="text" inputmode="numeric" maxlength="1" data-otp-slot="2">
-                  <input class="otp-cell" type="text" inputmode="numeric" maxlength="1" data-otp-slot="3">
-                  <input class="otp-cell" type="text" inputmode="numeric" maxlength="1" data-otp-slot="4">
-                  <input class="otp-cell" type="text" inputmode="numeric" maxlength="1" data-otp-slot="5">
-                </div>
-                <input type="hidden" id="otpInput" maxlength="6">
-                <p class="otp-note">Paste the code from your email or type it one box at a time.</p>
-                <button type="button" id="verifyOtpBtn" class="btn btn--primary btn--lg btn--block checkout-auth-verify">Verify &amp; Continue to Checkout</button>
-              </div>
+              <div
+                id="checkoutAuthStateRoot"
+                data-prefill-name="<?= htmlspecialchars($prefillName, ENT_QUOTES, 'UTF-8') ?>"
+                data-prefill-phone="<?= htmlspecialchars($prefillPhone, ENT_QUOTES, 'UTF-8') ?>"
+                data-prefill-email="<?= htmlspecialchars($prefillEmail, ENT_QUOTES, 'UTF-8') ?>"
+                data-is-logged-in="<?= $isLoggedIn ? '1' : '0' ?>"
+              ></div>
               <p id="otpStatus" class="checkout-feedback" aria-live="polite"></p>
-<?php endif; ?>
-              <!-- OTP UI END -->
 
             </div><!-- end step-contact body -->
           </div><!-- end step-contact -->
@@ -993,6 +969,11 @@ document.addEventListener("DOMContentLoaded", () => {
     button.textContent = isLoading ? loadingText : (defaultText || button.dataset.defaultLabel);
   };
 
+  const getCheckoutCsrfToken = () => {
+    const metaToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+    return String(metaToken || window.__csrf || '').trim();
+  };
+
   const markFieldValidity = (field, isValid, msg = '') => {
     if (!field) return isValid;
     field.classList.toggle('field-invalid', !isValid);
@@ -1020,6 +1001,50 @@ document.addEventListener("DOMContentLoaded", () => {
     field.addEventListener('input', () => { if (field.classList.contains('field-invalid')) markFieldValidity(field, true); });
     field.addEventListener('change', () => { if (field.classList.contains('field-invalid')) markFieldValidity(field, true); });
   };
+
+  const normalizeCountryCode = (value) => {
+    const digits = String(value || '').replace(/\D+/g, '');
+    if (!digits) {
+      return '+91';
+    }
+    return '+' + digits;
+  };
+
+  const normalizeCheckoutPhone = (countryCode, rawPhone) => {
+    const raw = String(rawPhone || '').trim();
+    const hasPlusPrefix = raw.startsWith('+');
+    const normalizedCountryCode = normalizeCountryCode(countryCode);
+    const digitsOnly = raw.replace(/\D+/g, '');
+    const countryDigits = normalizedCountryCode.slice(1);
+
+    let localDigits = digitsOnly;
+    if (countryDigits && localDigits.startsWith(countryDigits) && localDigits.length > countryDigits.length) {
+      localDigits = localDigits.slice(countryDigits.length);
+    }
+
+    const e164 = hasPlusPrefix && digitsOnly
+      ? ('+' + digitsOnly)
+      : (localDigits ? (normalizedCountryCode + localDigits) : '');
+    return {
+      countryCode: normalizedCountryCode,
+      localNumber: localDigits,
+      e164,
+    };
+  };
+
+  const validateCheckoutPhone = (countryCode, rawPhone) => {
+    const normalized = normalizeCheckoutPhone(countryCode, rawPhone);
+    if (!normalized.localNumber) {
+      return false;
+    }
+    if (normalized.countryCode === '+91') {
+      return normalized.localNumber.length === 10;
+    }
+    return normalized.localNumber.length >= 6 && normalized.localNumber.length <= 15;
+  };
+
+  window.__checkoutNormalizePhone = normalizeCheckoutPhone;
+  window.__checkoutValidatePhone = validateCheckoutPhone;
 
   // ── Payment proof file preview + drag-drop ──
   const initProofUpload = () => {
@@ -1151,7 +1176,8 @@ document.addEventListener("DOMContentLoaded", () => {
       if (id === 'customerEmail') {
         validateField(field, (value) => /.+@.+\..+/.test(value));
       } else if (id === 'customerPhone') {
-        validateField(field, (value) => value.replace(/\D+/g, '').length >= 10);
+        const countryCode = document.getElementById('customerCountryCode')?.value || '+91';
+        validateField(field, (value) => validateCheckoutPhone(countryCode, value));
       } else if (id === 'deliveryPincode') {
         validateField(field, (value) => /^\d{6}$/.test(value));
       } else {
@@ -1159,6 +1185,36 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
   });
+
+  // Dynamic auth-state fields are rendered after load; keep draft + validation wired via delegation.
+  form.addEventListener('input', (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    if (target.matches('#customerName, #customerPhone, #customerEmail, #countryCodeSearch')) {
+      persistDraft();
+    }
+  });
+
+  form.addEventListener('change', (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    if (target.matches('#customerCountryCode')) {
+      persistDraft();
+    }
+  });
+
+  form.addEventListener('blur', (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement)) return;
+    if (target.id === 'customerEmail') {
+      validateField(target, (value) => /.+@.+\..+/.test(value));
+    } else if (target.id === 'customerPhone') {
+      const countryCode = document.getElementById('customerCountryCode')?.value || '+91';
+      validateField(target, (value) => validateCheckoutPhone(countryCode, value));
+    } else if (target.id === 'customerName') {
+      validateField(target);
+    }
+  }, true);
 
   syncPaymentUi();
   syncPaymentType();
@@ -1206,8 +1262,10 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
+    const checkoutAuthState = String(window.__checkoutAuthState || 'email-entry');
     const customerName = document.getElementById('customerName');
     const customerPhone = document.getElementById('customerPhone');
+    const customerCountryCode = document.getElementById('customerCountryCode');
     const customerEmail = document.getElementById('customerEmail');
     const deliveryDate = document.getElementById('deliveryDate');
     const deliverySlot = document.getElementById('deliverySlot');
@@ -1221,14 +1279,14 @@ document.addEventListener("DOMContentLoaded", () => {
     [customerName, customerPhone, customerEmail, deliveryDate, deliverySlot,
      deliveryStreet, deliveryPincode, paymentProof].forEach(attachAutoClear);
 
-    const requireIdentityFields = !window.__checkoutExistingCustomer;
+    const requireIdentityFields = checkoutAuthState === 'new-user-details' || (checkoutAuthState === 'otp-verification' && !window.__checkoutExistingCustomer);
     const validations = [
       requireIdentityFields
         ? validateField(customerName, null, 'Full name is required')
-        : markFieldValidity(customerName, true),
+        : true,
       requireIdentityFields
-        ? validateField(customerPhone, (v) => v.replace(/\D+/g, '').length >= 10, 'Enter a valid 10-digit phone number')
-        : markFieldValidity(customerPhone, true),
+        ? validateField(customerPhone, (v) => validateCheckoutPhone(customerCountryCode?.value || '+91', v), 'Enter a valid phone number')
+        : true,
       validateField(customerEmail, (v) => /.+@.+\..+/.test(v), 'Please enter a valid email address'),
       validateField(deliveryDate, null, 'Please select a delivery date'),
       validateField(deliverySlot, null, 'Please select a delivery slot')
@@ -1262,14 +1320,27 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     const formData = new FormData(form);
-    const resolvedCustomerName = customerName.value.trim() || 'Customer';
-    const resolvedCustomerPhone = customerPhone.value.trim() || String(window.__checkoutExistingCustomerPhone || '');
+    const csrfToken = getCheckoutCsrfToken();
+    const resolvedCustomerName = String(customerName?.value || window.__checkoutExistingCustomerUser?.full_name || 'Customer').trim();
+    const resolvedCountryCode = String(customerCountryCode?.value || '+91').trim();
+    const resolvedCustomerPhoneRaw = String(customerPhone?.value || window.__checkoutExistingCustomerPhone || window.__checkoutExistingCustomerUser?.phone || '').trim();
+    const normalizedPhone = normalizeCheckoutPhone(resolvedCountryCode, resolvedCustomerPhoneRaw);
+    const fallbackPhone = normalizedPhone.localNumber
+      ? (normalizedPhone.countryCode.replace('+', '') + normalizedPhone.localNumber)
+      : '';
+    const resolvedCustomerPhone = normalizedPhone.e164 || fallbackPhone;
     formData.set('customer_name', resolvedCustomerName);
     formData.set('customer_phone', resolvedCustomerPhone);
-    formData.set('customer_email', customerEmail.value.trim());
+    formData.set('customer_country_code', normalizedPhone.countryCode);
+    formData.set('customer_phone_local', normalizedPhone.localNumber);
+    formData.set('customer_phone_e164', normalizedPhone.e164);
+    formData.set('customer_email', String(customerEmail?.value || '').trim());
     formData.set('slot_id', deliverySlot.value);
     formData.set('payment_method', paymentMethod);
     formData.set('payment_type', 'full');
+    if (csrfToken && !formData.has('_csrf')) {
+      formData.set('_csrf', csrfToken);
+    }
 
     if (fulfilmentMode === 'delivery') {
       formData.set('delivery_street', deliveryStreet.value.trim());
@@ -1287,7 +1358,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const response = await fetch(window.BASE_URL + "/api/orders/place", {
         method: 'POST',
         headers: {
-          'X-CSRF-Token': window.__csrf
+          'X-CSRF-Token': csrfToken
         },
         body: formData,
         credentials: 'include'
@@ -1326,6 +1397,7 @@ document.addEventListener("DOMContentLoaded", () => {
   window.__checkoutSetFeedback = setFeedback;
   window.__checkoutShowToast = showToast;
   window.__checkoutSetButtonState = setButtonState;
+  window.__checkoutGetCsrfToken = getCheckoutCsrfToken;
   window.__checkoutSyncPaymentType = syncPaymentType;
   window.__checkoutSyncMobileTotals = syncMobileTotals;
 
@@ -1335,14 +1407,9 @@ document.addEventListener("DOMContentLoaded", () => {
 <script>
 document.addEventListener('DOMContentLoaded', function () {
   var detectionBanner = document.getElementById('checkoutUserDetection');
-  var nameInput = document.getElementById('customerName');
-  var phoneInput = document.getElementById('customerPhone');
-  var emailInput = document.getElementById('customerEmail');
-  var nameField = document.getElementById('customerNameField');
-  var phoneField = document.getElementById('customerPhoneField');
   var stepSummary = document.getElementById('step1Summary');
 
-  if (!detectionBanner || !nameInput || !phoneInput || !emailInput) {
+  if (!detectionBanner) {
     return;
   }
 
@@ -1351,67 +1418,35 @@ document.addEventListener('DOMContentLoaded', function () {
     detectionBanner.textContent = message || '';
   };
 
-  var lockField = function (field) {
-    if (!field) {
-      return;
-    }
-    field.readOnly = true;
-    field.classList.add('is-readonly');
-    field.setAttribute('aria-readonly', 'true');
-  };
-
   var applyExistingCustomerMode = function (isExisting, user) {
     var existing = Boolean(isExisting);
     var profile = user || {};
 
     window.__checkoutExistingCustomer = existing;
+    window.__checkoutExistingCustomerUser = profile;
 
     if (existing) {
-      var fullName = String(profile.full_name || '').trim();
       var phone = String(profile.phone || '').trim();
-
-      if (!nameInput.value.trim() && fullName) {
-        nameInput.value = fullName;
-      }
-      if (!phoneInput.value.trim() && phone) {
-        phoneInput.value = phone;
-      }
       if (phone) {
         window.__checkoutExistingCustomerPhone = phone;
       }
 
-      if (nameField) {
-        nameField.hidden = true;
-      }
-      if (phoneField) {
-        phoneField.hidden = true;
-      }
-      nameInput.required = false;
-
       if (stepSummary) {
-        stepSummary.textContent = 'Existing account detected — email + OTP checkout';
+        stepSummary.textContent = 'Welcome back — verify with OTP to continue';
       }
       setBanner('Existing user detected. Verify this email with OTP to continue. Saved profile and addresses will auto-load.');
       return;
     }
 
-    if (nameField) {
-      nameField.hidden = false;
-    }
-    if (phoneField) {
-      phoneField.hidden = false;
-    }
-    nameInput.required = true;
-
     if (stepSummary) {
-      stepSummary.textContent = 'New customer checkout — name, phone, email + OTP';
+      stepSummary.textContent = 'New customer — complete profile and verify OTP';
     }
-    setBanner('Proceed as guest, or sign in for faster checkout with saved details.');
+    setBanner('Looks like you are new here. Please enter name and phone, then verify OTP.');
   };
 
   window.__checkoutApplyExistingCustomerMode = applyExistingCustomerMode;
 
-  fetch(window.BASE_URL + '/api/auth/me', {
+  fetch('/api/auth/me', {
     method: 'GET',
     credentials: 'include',
     headers: {
@@ -1425,23 +1460,7 @@ document.addEventListener('DOMContentLoaded', function () {
         return;
       }
 
-      var user = payload.data.user || {};
-      var fullName = String(user.full_name || '').trim();
-      var phone = String(user.phone || '').trim();
-      var email = String(user.email || '').trim();
-
-      if (!nameInput.value.trim() && fullName) {
-        nameInput.value = fullName;
-      }
-      if (!phoneInput.value.trim() && phone) {
-        phoneInput.value = phone;
-      }
-      if (!emailInput.value.trim() && email) {
-        emailInput.value = email;
-      }
-
-      lockField(emailInput);
-      applyExistingCustomerMode(true, user);
+      applyExistingCustomerMode(true, payload.data.user || {});
     })
     .catch(function () {
       applyExistingCustomerMode(false, null);
@@ -1742,16 +1761,17 @@ loadCheckoutSummary();
 document.getElementById("applyCheckoutCouponBtn")?.addEventListener("click", async () => {
   const code = (document.getElementById("checkoutCouponInput")?.value || "").trim();
   const statusEl = document.getElementById("checkoutCouponStatus");
+  const csrfToken = (window.__checkoutGetCsrfToken ? window.__checkoutGetCsrfToken() : String(window.__csrf || '').trim());
 
   try {
     const response = await fetch(window.BASE_URL + "/api/cart/coupon", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-CSRF-Token": window.__csrf
+        "X-CSRF-Token": csrfToken
       },
       credentials: "include",
-      body: JSON.stringify({ code })
+      body: JSON.stringify({ code, _csrf: csrfToken })
     });
 
     const payload = await response.json();
@@ -1803,274 +1823,567 @@ function generateQR(amount) {
 document.addEventListener("DOMContentLoaded", () => {
   const OTP_COOLDOWN_MS = 60000;
   const OTP_STORAGE_KEY = "otp_cooldown_checkout_until";
-
-  const sendBtn = document.getElementById("sendOtpBtn");
+  const root = document.getElementById("checkoutAuthStateRoot");
   const statusEl = document.getElementById("otpStatus");
-  const noticeEl = document.getElementById("otpNotice");
-  const cooldownHint = document.getElementById("otpCooldownHint");
-  const otpStepEl = document.getElementById("otpSection");
-  const emailInput = document.getElementById("customerEmail");
-  const nameInput = document.getElementById("customerName");
-  const otpInput = document.getElementById("otpInput");
-  const otpSlots = Array.from(document.querySelectorAll('#checkoutOtpGrid [data-otp-slot]'));
+  const detectionBanner = document.getElementById("checkoutUserDetection");
+  const stepSummary = document.getElementById("step1Summary");
   const applyExistingCustomerMode = window.__checkoutApplyExistingCustomerMode || function () {};
-  const defaultSendText = sendBtn ? sendBtn.textContent.trim() : "Send Verification OTP";
-  let cooldownTimer = null;
-
   const setFeedback = window.__checkoutSetFeedback || function (element, message) {
     if (element) element.textContent = message || '';
   };
   const showToast = window.__checkoutShowToast || function () {};
+  const getCheckoutCsrfToken = () => {
+    if (window.__checkoutGetCsrfToken) {
+      return window.__checkoutGetCsrfToken();
+    }
+    return String(window.__csrf || document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '').trim();
+  };
+
+  if (!root) {
+    return;
+  }
+
+  const COUNTRY_DIAL_OPTIONS = Object.freeze([
+    { code: 'AF', name: 'Afghanistan', dial: '+93', flag: '🇦🇫' },
+    { code: 'AL', name: 'Albania', dial: '+355', flag: '🇦🇱' },
+    { code: 'DZ', name: 'Algeria', dial: '+213', flag: '🇩🇿' },
+    { code: 'AD', name: 'Andorra', dial: '+376', flag: '🇦🇩' },
+    { code: 'AO', name: 'Angola', dial: '+244', flag: '🇦🇴' },
+    { code: 'AG', name: 'Antigua and Barbuda', dial: '+1', flag: '🇦🇬' },
+    { code: 'AR', name: 'Argentina', dial: '+54', flag: '🇦🇷' },
+    { code: 'AM', name: 'Armenia', dial: '+374', flag: '🇦🇲' },
+    { code: 'AU', name: 'Australia', dial: '+61', flag: '🇦🇺' },
+    { code: 'AT', name: 'Austria', dial: '+43', flag: '🇦🇹' },
+    { code: 'AZ', name: 'Azerbaijan', dial: '+994', flag: '🇦🇿' },
+    { code: 'BS', name: 'Bahamas', dial: '+1', flag: '🇧🇸' },
+    { code: 'BH', name: 'Bahrain', dial: '+973', flag: '🇧🇭' },
+    { code: 'BD', name: 'Bangladesh', dial: '+880', flag: '🇧🇩' },
+    { code: 'BB', name: 'Barbados', dial: '+1', flag: '🇧🇧' },
+    { code: 'BY', name: 'Belarus', dial: '+375', flag: '🇧🇾' },
+    { code: 'BE', name: 'Belgium', dial: '+32', flag: '🇧🇪' },
+    { code: 'BZ', name: 'Belize', dial: '+501', flag: '🇧🇿' },
+    { code: 'BJ', name: 'Benin', dial: '+229', flag: '🇧🇯' },
+    { code: 'BT', name: 'Bhutan', dial: '+975', flag: '🇧🇹' },
+    { code: 'BO', name: 'Bolivia', dial: '+591', flag: '🇧🇴' },
+    { code: 'BA', name: 'Bosnia and Herzegovina', dial: '+387', flag: '🇧🇦' },
+    { code: 'BW', name: 'Botswana', dial: '+267', flag: '🇧🇼' },
+    { code: 'BR', name: 'Brazil', dial: '+55', flag: '🇧🇷' },
+    { code: 'BN', name: 'Brunei', dial: '+673', flag: '🇧🇳' },
+    { code: 'BG', name: 'Bulgaria', dial: '+359', flag: '🇧🇬' },
+    { code: 'BF', name: 'Burkina Faso', dial: '+226', flag: '🇧🇫' },
+    { code: 'BI', name: 'Burundi', dial: '+257', flag: '🇧🇮' },
+    { code: 'KH', name: 'Cambodia', dial: '+855', flag: '🇰🇭' },
+    { code: 'CM', name: 'Cameroon', dial: '+237', flag: '🇨🇲' },
+    { code: 'CA', name: 'Canada', dial: '+1', flag: '🇨🇦' },
+    { code: 'CV', name: 'Cape Verde', dial: '+238', flag: '🇨🇻' },
+    { code: 'CF', name: 'Central African Republic', dial: '+236', flag: '🇨🇫' },
+    { code: 'TD', name: 'Chad', dial: '+235', flag: '🇹🇩' },
+    { code: 'CL', name: 'Chile', dial: '+56', flag: '🇨🇱' },
+    { code: 'CN', name: 'China', dial: '+86', flag: '🇨🇳' },
+    { code: 'CO', name: 'Colombia', dial: '+57', flag: '🇨🇴' },
+    { code: 'KM', name: 'Comoros', dial: '+269', flag: '🇰🇲' },
+    { code: 'CG', name: 'Congo', dial: '+242', flag: '🇨🇬' },
+    { code: 'CD', name: 'Congo (DRC)', dial: '+243', flag: '🇨🇩' },
+    { code: 'CR', name: 'Costa Rica', dial: '+506', flag: '🇨🇷' },
+    { code: 'CI', name: 'Cote d\'Ivoire', dial: '+225', flag: '🇨🇮' },
+    { code: 'HR', name: 'Croatia', dial: '+385', flag: '🇭🇷' },
+    { code: 'CU', name: 'Cuba', dial: '+53', flag: '🇨🇺' },
+    { code: 'CY', name: 'Cyprus', dial: '+357', flag: '🇨🇾' },
+    { code: 'CZ', name: 'Czechia', dial: '+420', flag: '🇨🇿' },
+    { code: 'DK', name: 'Denmark', dial: '+45', flag: '🇩🇰' },
+    { code: 'DJ', name: 'Djibouti', dial: '+253', flag: '🇩🇯' },
+    { code: 'DM', name: 'Dominica', dial: '+1', flag: '🇩🇲' },
+    { code: 'DO', name: 'Dominican Republic', dial: '+1', flag: '🇩🇴' },
+    { code: 'EC', name: 'Ecuador', dial: '+593', flag: '🇪🇨' },
+    { code: 'EG', name: 'Egypt', dial: '+20', flag: '🇪🇬' },
+    { code: 'SV', name: 'El Salvador', dial: '+503', flag: '🇸🇻' },
+    { code: 'GQ', name: 'Equatorial Guinea', dial: '+240', flag: '🇬🇶' },
+    { code: 'ER', name: 'Eritrea', dial: '+291', flag: '🇪🇷' },
+    { code: 'EE', name: 'Estonia', dial: '+372', flag: '🇪🇪' },
+    { code: 'SZ', name: 'Eswatini', dial: '+268', flag: '🇸🇿' },
+    { code: 'ET', name: 'Ethiopia', dial: '+251', flag: '🇪🇹' },
+    { code: 'FJ', name: 'Fiji', dial: '+679', flag: '🇫🇯' },
+    { code: 'FI', name: 'Finland', dial: '+358', flag: '🇫🇮' },
+    { code: 'FR', name: 'France', dial: '+33', flag: '🇫🇷' },
+    { code: 'GA', name: 'Gabon', dial: '+241', flag: '🇬🇦' },
+    { code: 'GM', name: 'Gambia', dial: '+220', flag: '🇬🇲' },
+    { code: 'GE', name: 'Georgia', dial: '+995', flag: '🇬🇪' },
+    { code: 'DE', name: 'Germany', dial: '+49', flag: '🇩🇪' },
+    { code: 'GH', name: 'Ghana', dial: '+233', flag: '🇬🇭' },
+    { code: 'GR', name: 'Greece', dial: '+30', flag: '🇬🇷' },
+    { code: 'GD', name: 'Grenada', dial: '+1', flag: '🇬🇩' },
+    { code: 'GT', name: 'Guatemala', dial: '+502', flag: '🇬🇹' },
+    { code: 'GN', name: 'Guinea', dial: '+224', flag: '🇬🇳' },
+    { code: 'GW', name: 'Guinea-Bissau', dial: '+245', flag: '🇬🇼' },
+    { code: 'GY', name: 'Guyana', dial: '+592', flag: '🇬🇾' },
+    { code: 'HT', name: 'Haiti', dial: '+509', flag: '🇭🇹' },
+    { code: 'HN', name: 'Honduras', dial: '+504', flag: '🇭🇳' },
+    { code: 'HK', name: 'Hong Kong', dial: '+852', flag: '🇭🇰' },
+    { code: 'HU', name: 'Hungary', dial: '+36', flag: '🇭🇺' },
+    { code: 'IS', name: 'Iceland', dial: '+354', flag: '🇮🇸' },
+    { code: 'IN', name: 'India', dial: '+91', flag: '🇮🇳' },
+    { code: 'ID', name: 'Indonesia', dial: '+62', flag: '🇮🇩' },
+    { code: 'IR', name: 'Iran', dial: '+98', flag: '🇮🇷' },
+    { code: 'IQ', name: 'Iraq', dial: '+964', flag: '🇮🇶' },
+    { code: 'IE', name: 'Ireland', dial: '+353', flag: '🇮🇪' },
+    { code: 'IL', name: 'Israel', dial: '+972', flag: '🇮🇱' },
+    { code: 'IT', name: 'Italy', dial: '+39', flag: '🇮🇹' },
+    { code: 'JM', name: 'Jamaica', dial: '+1', flag: '🇯🇲' },
+    { code: 'JP', name: 'Japan', dial: '+81', flag: '🇯🇵' },
+    { code: 'JO', name: 'Jordan', dial: '+962', flag: '🇯🇴' },
+    { code: 'KZ', name: 'Kazakhstan', dial: '+7', flag: '🇰🇿' },
+    { code: 'KE', name: 'Kenya', dial: '+254', flag: '🇰🇪' },
+    { code: 'KI', name: 'Kiribati', dial: '+686', flag: '🇰🇮' },
+    { code: 'KW', name: 'Kuwait', dial: '+965', flag: '🇰🇼' },
+    { code: 'KG', name: 'Kyrgyzstan', dial: '+996', flag: '🇰🇬' },
+    { code: 'LA', name: 'Laos', dial: '+856', flag: '🇱🇦' },
+    { code: 'LV', name: 'Latvia', dial: '+371', flag: '🇱🇻' },
+    { code: 'LB', name: 'Lebanon', dial: '+961', flag: '🇱🇧' },
+    { code: 'LS', name: 'Lesotho', dial: '+266', flag: '🇱🇸' },
+    { code: 'LR', name: 'Liberia', dial: '+231', flag: '🇱🇷' },
+    { code: 'LY', name: 'Libya', dial: '+218', flag: '🇱🇾' },
+    { code: 'LI', name: 'Liechtenstein', dial: '+423', flag: '🇱🇮' },
+    { code: 'LT', name: 'Lithuania', dial: '+370', flag: '🇱🇹' },
+    { code: 'LU', name: 'Luxembourg', dial: '+352', flag: '🇱🇺' },
+    { code: 'MO', name: 'Macao', dial: '+853', flag: '🇲🇴' },
+    { code: 'MG', name: 'Madagascar', dial: '+261', flag: '🇲🇬' },
+    { code: 'MW', name: 'Malawi', dial: '+265', flag: '🇲🇼' },
+    { code: 'MY', name: 'Malaysia', dial: '+60', flag: '🇲🇾' },
+    { code: 'MV', name: 'Maldives', dial: '+960', flag: '🇲🇻' },
+    { code: 'ML', name: 'Mali', dial: '+223', flag: '🇲🇱' },
+    { code: 'MT', name: 'Malta', dial: '+356', flag: '🇲🇹' },
+    { code: 'MH', name: 'Marshall Islands', dial: '+692', flag: '🇲🇭' },
+    { code: 'MR', name: 'Mauritania', dial: '+222', flag: '🇲🇷' },
+    { code: 'MU', name: 'Mauritius', dial: '+230', flag: '🇲🇺' },
+    { code: 'MX', name: 'Mexico', dial: '+52', flag: '🇲🇽' },
+    { code: 'FM', name: 'Micronesia', dial: '+691', flag: '🇫🇲' },
+    { code: 'MD', name: 'Moldova', dial: '+373', flag: '🇲🇩' },
+    { code: 'MC', name: 'Monaco', dial: '+377', flag: '🇲🇨' },
+    { code: 'MN', name: 'Mongolia', dial: '+976', flag: '🇲🇳' },
+    { code: 'ME', name: 'Montenegro', dial: '+382', flag: '🇲🇪' },
+    { code: 'MA', name: 'Morocco', dial: '+212', flag: '🇲🇦' },
+    { code: 'MZ', name: 'Mozambique', dial: '+258', flag: '🇲🇿' },
+    { code: 'MM', name: 'Myanmar', dial: '+95', flag: '🇲🇲' },
+    { code: 'NA', name: 'Namibia', dial: '+264', flag: '🇳🇦' },
+    { code: 'NR', name: 'Nauru', dial: '+674', flag: '🇳🇷' },
+    { code: 'NP', name: 'Nepal', dial: '+977', flag: '🇳🇵' },
+    { code: 'NL', name: 'Netherlands', dial: '+31', flag: '🇳🇱' },
+    { code: 'NZ', name: 'New Zealand', dial: '+64', flag: '🇳🇿' },
+    { code: 'NI', name: 'Nicaragua', dial: '+505', flag: '🇳🇮' },
+    { code: 'NE', name: 'Niger', dial: '+227', flag: '🇳🇪' },
+    { code: 'NG', name: 'Nigeria', dial: '+234', flag: '🇳🇬' },
+    { code: 'KP', name: 'North Korea', dial: '+850', flag: '🇰🇵' },
+    { code: 'MK', name: 'North Macedonia', dial: '+389', flag: '🇲🇰' },
+    { code: 'NO', name: 'Norway', dial: '+47', flag: '🇳🇴' },
+    { code: 'OM', name: 'Oman', dial: '+968', flag: '🇴🇲' },
+    { code: 'PK', name: 'Pakistan', dial: '+92', flag: '🇵🇰' },
+    { code: 'PW', name: 'Palau', dial: '+680', flag: '🇵🇼' },
+    { code: 'PS', name: 'Palestine', dial: '+970', flag: '🇵🇸' },
+    { code: 'PA', name: 'Panama', dial: '+507', flag: '🇵🇦' },
+    { code: 'PG', name: 'Papua New Guinea', dial: '+675', flag: '🇵🇬' },
+    { code: 'PY', name: 'Paraguay', dial: '+595', flag: '🇵🇾' },
+    { code: 'PE', name: 'Peru', dial: '+51', flag: '🇵🇪' },
+    { code: 'PH', name: 'Philippines', dial: '+63', flag: '🇵🇭' },
+    { code: 'PL', name: 'Poland', dial: '+48', flag: '🇵🇱' },
+    { code: 'PT', name: 'Portugal', dial: '+351', flag: '🇵🇹' },
+    { code: 'QA', name: 'Qatar', dial: '+974', flag: '🇶🇦' },
+    { code: 'RO', name: 'Romania', dial: '+40', flag: '🇷🇴' },
+    { code: 'RU', name: 'Russia', dial: '+7', flag: '🇷🇺' },
+    { code: 'RW', name: 'Rwanda', dial: '+250', flag: '🇷🇼' },
+    { code: 'KN', name: 'Saint Kitts and Nevis', dial: '+1', flag: '🇰🇳' },
+    { code: 'LC', name: 'Saint Lucia', dial: '+1', flag: '🇱🇨' },
+    { code: 'VC', name: 'Saint Vincent and the Grenadines', dial: '+1', flag: '🇻🇨' },
+    { code: 'WS', name: 'Samoa', dial: '+685', flag: '🇼🇸' },
+    { code: 'SM', name: 'San Marino', dial: '+378', flag: '🇸🇲' },
+    { code: 'ST', name: 'Sao Tome and Principe', dial: '+239', flag: '🇸🇹' },
+    { code: 'SA', name: 'Saudi Arabia', dial: '+966', flag: '🇸🇦' },
+    { code: 'SN', name: 'Senegal', dial: '+221', flag: '🇸🇳' },
+    { code: 'RS', name: 'Serbia', dial: '+381', flag: '🇷🇸' },
+    { code: 'SC', name: 'Seychelles', dial: '+248', flag: '🇸🇨' },
+    { code: 'SL', name: 'Sierra Leone', dial: '+232', flag: '🇸🇱' },
+    { code: 'SG', name: 'Singapore', dial: '+65', flag: '🇸🇬' },
+    { code: 'SK', name: 'Slovakia', dial: '+421', flag: '🇸🇰' },
+    { code: 'SI', name: 'Slovenia', dial: '+386', flag: '🇸🇮' },
+    { code: 'SB', name: 'Solomon Islands', dial: '+677', flag: '🇸🇧' },
+    { code: 'SO', name: 'Somalia', dial: '+252', flag: '🇸🇴' },
+    { code: 'ZA', name: 'South Africa', dial: '+27', flag: '🇿🇦' },
+    { code: 'KR', name: 'South Korea', dial: '+82', flag: '🇰🇷' },
+    { code: 'SS', name: 'South Sudan', dial: '+211', flag: '🇸🇸' },
+    { code: 'ES', name: 'Spain', dial: '+34', flag: '🇪🇸' },
+    { code: 'LK', name: 'Sri Lanka', dial: '+94', flag: '🇱🇰' },
+    { code: 'SD', name: 'Sudan', dial: '+249', flag: '🇸🇩' },
+    { code: 'SR', name: 'Suriname', dial: '+597', flag: '🇸🇷' },
+    { code: 'SE', name: 'Sweden', dial: '+46', flag: '🇸🇪' },
+    { code: 'CH', name: 'Switzerland', dial: '+41', flag: '🇨🇭' },
+    { code: 'SY', name: 'Syria', dial: '+963', flag: '🇸🇾' },
+    { code: 'TW', name: 'Taiwan', dial: '+886', flag: '🇹🇼' },
+    { code: 'TJ', name: 'Tajikistan', dial: '+992', flag: '🇹🇯' },
+    { code: 'TZ', name: 'Tanzania', dial: '+255', flag: '🇹🇿' },
+    { code: 'TH', name: 'Thailand', dial: '+66', flag: '🇹🇭' },
+    { code: 'TL', name: 'Timor-Leste', dial: '+670', flag: '🇹🇱' },
+    { code: 'TG', name: 'Togo', dial: '+228', flag: '🇹🇬' },
+    { code: 'TO', name: 'Tonga', dial: '+676', flag: '🇹🇴' },
+    { code: 'TT', name: 'Trinidad and Tobago', dial: '+1', flag: '🇹🇹' },
+    { code: 'TN', name: 'Tunisia', dial: '+216', flag: '🇹🇳' },
+    { code: 'TR', name: 'Turkiye', dial: '+90', flag: '🇹🇷' },
+    { code: 'TM', name: 'Turkmenistan', dial: '+993', flag: '🇹🇲' },
+    { code: 'TV', name: 'Tuvalu', dial: '+688', flag: '🇹🇻' },
+    { code: 'UG', name: 'Uganda', dial: '+256', flag: '🇺🇬' },
+    { code: 'UA', name: 'Ukraine', dial: '+380', flag: '🇺🇦' },
+    { code: 'AE', name: 'United Arab Emirates', dial: '+971', flag: '🇦🇪' },
+    { code: 'GB', name: 'United Kingdom', dial: '+44', flag: '🇬🇧' },
+    { code: 'US', name: 'United States', dial: '+1', flag: '🇺🇸' },
+    { code: 'UY', name: 'Uruguay', dial: '+598', flag: '🇺🇾' },
+    { code: 'UZ', name: 'Uzbekistan', dial: '+998', flag: '🇺🇿' },
+    { code: 'VU', name: 'Vanuatu', dial: '+678', flag: '🇻🇺' },
+    { code: 'VA', name: 'Vatican City', dial: '+379', flag: '🇻🇦' },
+    { code: 'VE', name: 'Venezuela', dial: '+58', flag: '🇻🇪' },
+    { code: 'VN', name: 'Vietnam', dial: '+84', flag: '🇻🇳' },
+    { code: 'YE', name: 'Yemen', dial: '+967', flag: '🇾🇪' },
+    { code: 'ZM', name: 'Zambia', dial: '+260', flag: '🇿🇲' },
+    { code: 'ZW', name: 'Zimbabwe', dial: '+263', flag: '🇿🇼' }
+  ]);
+
+  const countryEntryLabel = (entry) => `${entry.flag} ${entry.name} (${entry.dial})`;
+  const normalizeCountryCode = (value) => {
+    const digits = String(value || '').replace(/\D+/g, '');
+    return digits ? ('+' + digits) : '+91';
+  };
+
+  const syncCountryOptions = () => {
+    const select = root.querySelector('#customerCountryCode');
+    if (!select) {
+      return;
+    }
+
+    const searchTerm = String(context.countrySearch || '').trim().toLowerCase();
+    const activeCode = normalizeCountryCode(context.countryCode || select.value || '+91');
+    const filtered = COUNTRY_DIAL_OPTIONS.filter((entry) => {
+      if (!searchTerm) {
+        return true;
+      }
+      return entry.name.toLowerCase().includes(searchTerm)
+        || entry.code.toLowerCase().includes(searchTerm)
+        || entry.dial.includes(searchTerm.replace(/\s+/g, ''));
+    });
+
+    const list = filtered.length ? filtered : COUNTRY_DIAL_OPTIONS;
+    select.innerHTML = list.map((entry) => {
+      const selected = entry.dial === activeCode ? ' selected' : '';
+      return `<option value="${entry.dial}" data-country="${entry.code}"${selected}>${countryEntryLabel(entry)}</option>`;
+    }).join('');
+
+    if (!select.value) {
+      select.value = activeCode;
+    }
+    context.countryCode = normalizeCountryCode(select.value);
+  };
+
+  const context = {
+    email: String(root.dataset.prefillEmail || '').trim(),
+    name: String(root.dataset.prefillName || '').trim(),
+    phone: String(root.dataset.prefillPhone || '').trim(),
+    countryCode: '+91',
+    countrySearch: '',
+    otp: '',
+    otpFlow: 'existing',
+    existingUser: null,
+    otpSent: false,
+    cooldownUntil: 0
+  };
+
+  const splitPhoneForContext = (rawPhone) => {
+    const cleaned = String(rawPhone || '').trim();
+    if (!cleaned) {
+      return { countryCode: '+91', localNumber: '' };
+    }
+
+    if (cleaned.startsWith('+')) {
+      const digits = cleaned.replace(/\D+/g, '');
+      const sorted = COUNTRY_DIAL_OPTIONS
+        .map((entry) => entry.dial)
+        .sort((a, b) => b.length - a.length);
+      for (const dial of sorted) {
+        const dialDigits = dial.replace('+', '');
+        if (digits.startsWith(dialDigits) && digits.length > dialDigits.length) {
+          return {
+            countryCode: dial,
+            localNumber: digits.slice(dialDigits.length),
+          };
+        }
+      }
+      return { countryCode: '+91', localNumber: digits };
+    }
+
+    return { countryCode: '+91', localNumber: cleaned.replace(/\D+/g, '') };
+  };
+
+  const initialPhone = splitPhoneForContext(context.phone);
+  context.countryCode = initialPhone.countryCode;
+  context.phone = initialPhone.localNumber;
+
+  const syncPhoneHiddenValue = () => {
+    const hidden = root.querySelector('#customerPhoneE164');
+    if (!hidden) {
+      return;
+    }
+    const normalizeFn = window.__checkoutNormalizePhone || function (countryCode, rawPhone) {
+      const normalizedCountryCode = normalizeCountryCode(countryCode);
+      const localNumber = String(rawPhone || '').replace(/\D+/g, '');
+      return {
+        countryCode: normalizedCountryCode,
+        localNumber,
+        e164: localNumber ? (normalizedCountryCode + localNumber) : '',
+      };
+    };
+    const normalized = normalizeFn(context.countryCode, context.phone);
+    hidden.value = normalized.e164 || '';
+  };
+
+  const escapeHtml = (value) => String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+  let lookupTimer = null;
+  let cooldownTimer = null;
+  let otpVerifying = false;
+  let currentState = (root.dataset.isLoggedIn === '1' || window.otpVerified) ? 'authenticated' : 'email-entry';
+
+  const setBanner = (message) => {
+    if (!detectionBanner) return;
+    detectionBanner.hidden = !message;
+    detectionBanner.textContent = message || '';
+  };
 
   const readCooldownUntil = () => {
-    const value = Number(window.localStorage.getItem(OTP_STORAGE_KEY) || "0");
+    const value = Number(window.localStorage.getItem(OTP_STORAGE_KEY) || '0');
     return Number.isFinite(value) ? value : 0;
   };
 
-  const showOtpStep = () => {
-    if (!otpStepEl) return;
-    otpStepEl.hidden = false;
-    otpStepEl.classList.add("is-visible");
-  };
+  const otpGridMarkup = () => `
+    <div class="otp-grid" id="checkoutOtpGrid" aria-label="OTP input">
+      <input class="otp-cell" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="1" data-otp-slot="0">
+      <input class="otp-cell" type="text" inputmode="numeric" maxlength="1" data-otp-slot="1">
+      <input class="otp-cell" type="text" inputmode="numeric" maxlength="1" data-otp-slot="2">
+      <input class="otp-cell" type="text" inputmode="numeric" maxlength="1" data-otp-slot="3">
+      <input class="otp-cell" type="text" inputmode="numeric" maxlength="1" data-otp-slot="4">
+      <input class="otp-cell" type="text" inputmode="numeric" maxlength="1" data-otp-slot="5">
+    </div>
+    <input type="hidden" id="otpInput" maxlength="6" value="${context.otp}">
+    <p class="otp-note">Paste the code from your email or type it one box at a time.</p>
+  `;
 
-  const hideOtpStep = () => {
-    if (!otpStepEl) return;
-    otpStepEl.hidden = true;
-    otpStepEl.classList.remove("is-visible");
-  };
+  const render = () => {
+    const emailValue = escapeHtml(context.email);
+    const emailReadonly = ['existing-user-otp', 'new-user-details', 'otp-verification', 'authenticated'].includes(currentState) ? 'readonly' : '';
+    const checkingDisabled = currentState === 'checking-email' ? 'disabled' : '';
 
-  const syncOtpValue = () => {
-    if (!otpInput) return;
-    otpInput.value = otpSlots.map((slot) => String(slot.value || '').replace(/\D+/g, '').slice(-1)).join('').slice(0, 6);
-    // Auto-submit when all 6 digits entered
-    if (otpInput.value.length === 6) {
-      const vBtn = document.getElementById('verifyOtpBtn');
-      if (vBtn && !vBtn.disabled) {
-        window.setTimeout(() => vBtn.click(), 300);
+    let body = '';
+    if (currentState === 'email-entry' || currentState === 'checking-email') {
+      body = `
+        <label class="form-control">
+          <span class="form-label">Email Address <span class="form-required">*</span></span>
+          <input id="customerEmail" name="customer_email" type="email" required autocomplete="email" placeholder="you@email.com" value="${emailValue}" ${checkingDisabled} data-autosave="customer_email">
+          <span class="field-error-msg" aria-live="polite"></span>
+        </label>
+        <div class="checkout-inline-banner">We'll check if you already have an account.</div>
+        <button type="button" id="continueEmailBtn" class="btn btn--primary btn--lg btn--block checkout-auth-button" ${checkingDisabled}>${currentState === 'checking-email' ? 'Checking…' : 'Continue'}</button>
+      `;
+      if (stepSummary) {
+        stepSummary.textContent = 'Email-first smart verification';
       }
+    } else if (currentState === 'existing-user-otp' || (currentState === 'otp-verification' && context.otpFlow === 'existing')) {
+      body = `
+        <div class="checkout-inline-banner">Welcome Back 👋</div>
+        <label class="form-control">
+          <span class="form-label">Email Address</span>
+          <input id="customerEmail" name="customer_email" type="email" required autocomplete="email" value="${emailValue}" ${emailReadonly} data-autosave="customer_email">
+          <span class="field-error-msg" aria-live="polite"></span>
+        </label>
+        <div class="checkout-auth-row">
+          <button type="button" id="sendOtpBtn" class="btn btn--primary btn--lg btn--block checkout-auth-button">${context.otpSent ? 'Resend OTP' : 'Send Verification OTP'}</button>
+          <div class="checkout-auth-meta">
+            <span>Enter Verification OTP</span>
+            <span id="otpCooldownHint">Takes a few seconds</span>
+          </div>
+          <div id="otpNotice" class="otp-notice" aria-live="polite"></div>
+        </div>
+        <div id="otpSection" class="checkout-auth-step is-visible">
+          ${otpGridMarkup()}
+        </div>
+      `;
+      if (stepSummary) {
+        stepSummary.textContent = 'Welcome back — verify with OTP to continue';
+      }
+    } else if (currentState === 'new-user-details' || (currentState === 'otp-verification' && context.otpFlow === 'new')) {
+      const otpForNew = currentState === 'otp-verification' && context.otpFlow === 'new';
+      body = `
+        <div class="checkout-inline-banner">Looks like you're new here.</div>
+        <div class="form-row-2">
+          <label class="form-control">
+            <span class="form-label">Full Name <span class="form-required">*</span></span>
+            <input id="customerName" name="customer_name" ${otpForNew ? 'readonly' : ''} required autocomplete="name" placeholder="Priya Sharma" value="${escapeHtml(context.name)}" data-autosave="customer_name">
+            <span class="field-error-msg" aria-live="polite"></span>
+          </label>
+          <label class="form-control">
+            <span class="form-label">Phone Number <span class="form-required">*</span></span>
+            <div class="checkout-phone-group">
+              <div class="checkout-phone-group__country">
+                <input
+                  id="countryCodeSearch"
+                  type="search"
+                  placeholder="Search country"
+                  value="${escapeHtml(context.countrySearch)}"
+                  ${otpForNew ? 'readonly' : ''}
+                >
+                <select id="customerCountryCode" name="customer_country_code" data-autosave="customer_country_code" ${otpForNew ? 'disabled' : ''}></select>
+              </div>
+              <input
+                id="customerPhone"
+                name="customer_phone_local"
+                ${otpForNew ? 'readonly' : ''}
+                type="tel"
+                inputmode="numeric"
+                autocomplete="tel-national"
+                placeholder="9876543210"
+                value="${escapeHtml(context.phone)}"
+                data-autosave="customer_phone_local"
+              >
+            </div>
+            <input type="hidden" id="customerPhoneE164" name="customer_phone_e164" value="">
+            <span class="field-error-msg" aria-live="polite"></span>
+          </label>
+        </div>
+        <label class="form-control">
+          <span class="form-label">Email Address <span class="form-required">*</span></span>
+          <input id="customerEmail" name="customer_email" type="email" required autocomplete="email" value="${emailValue}" readonly data-autosave="customer_email">
+          <span class="field-error-msg" aria-live="polite"></span>
+        </label>
+        <div class="checkout-auth-row">
+          <button type="button" id="sendOtpBtn" class="btn btn--primary btn--lg btn--block checkout-auth-button">${otpForNew ? 'Resend OTP' : 'Send Verification OTP'}</button>
+          <div class="checkout-auth-meta">
+            <span>${otpForNew ? 'Enter Verification OTP' : 'Send OTP to continue'}</span>
+            <span id="otpCooldownHint">Takes a few seconds</span>
+          </div>
+          <div id="otpNotice" class="otp-notice" aria-live="polite"></div>
+        </div>
+        ${otpForNew ? `<div id="otpSection" class="checkout-auth-step is-visible">${otpGridMarkup()}</div>` : ''}
+      `;
+      if (stepSummary) {
+        stepSummary.textContent = 'New customer — complete profile and verify OTP';
+      }
+    } else {
+      body = `
+        <div class="checkout-login-note">✅ Authenticated — contact details are ready for checkout.</div>
+        <label class="form-control">
+          <span class="form-label">Email Address</span>
+          <input id="customerEmail" name="customer_email" type="email" required autocomplete="email" value="${emailValue}" readonly data-autosave="customer_email">
+          <span class="field-error-msg" aria-live="polite"></span>
+        </label>
+      `;
+      if (stepSummary) {
+        stepSummary.textContent = 'Authenticated — continue to checkout';
+      }
+    }
+
+    root.innerHTML = body;
+    syncCountryOptions();
+
+    const countrySearch = root.querySelector('#countryCodeSearch');
+    if (countrySearch && !countrySearch.dataset.bound) {
+      countrySearch.dataset.bound = '1';
+      countrySearch.addEventListener('input', () => {
+        context.countrySearch = String(countrySearch.value || '');
+        syncCountryOptions();
+      });
+    }
+
+    syncPhoneHiddenValue();
+
+    const otpInput = root.querySelector('#otpInput');
+    if (otpInput) {
+      otpInput.value = context.otp;
+      const slots = Array.from(root.querySelectorAll('#checkoutOtpGrid [data-otp-slot]'));
+      context.otp.split('').forEach((digit, idx) => {
+        if (slots[idx]) {
+          slots[idx].value = digit;
+        }
+      });
+    }
+    applyCooldownUi();
+  };
+
+  const setState = (nextState, message) => {
+    currentState = nextState;
+    window.__checkoutAuthState = nextState;
+    if (window.__checkoutSetAuthState && window.__checkoutSetAuthState !== setState) {
+      window.__checkoutSetAuthState(nextState, message || '');
+    }
+    setBanner(message || '');
+    render();
+  };
+  window.__checkoutSetAuthState = setState;
+
+  const applyCooldownUi = () => {
+    const sendBtn = root.querySelector('#sendOtpBtn');
+    const cooldownHint = root.querySelector('#otpCooldownHint');
+    if (!sendBtn) {
+      return;
+    }
+    const now = Date.now();
+    if (context.cooldownUntil <= now) {
+      sendBtn.disabled = false;
+      return;
+    }
+    const remainingSec = Math.ceil((context.cooldownUntil - now) / 1000);
+    sendBtn.disabled = true;
+    sendBtn.textContent = `Resend OTP in ${remainingSec}s`;
+    if (cooldownHint) {
+      cooldownHint.textContent = `Resend OTP in ${remainingSec}s`;
     }
   };
 
-  const clearOtpSlots = () => {
-    otpSlots.forEach((slot) => { slot.value = ''; });
-    syncOtpValue();
-  };
-
-  const focusOtpSlot = (index) => {
-    const slot = otpSlots[index];
-    if (slot) slot.focus();
-  };
-
-  otpSlots.forEach((slot, index) => {
-    slot.addEventListener('input', () => {
-      const digits = String(slot.value || '').replace(/\D+/g, '');
-      if (digits.length > 1) {
-        digits.split('').forEach((digit, digitIndex) => {
-          const target = otpSlots[index + digitIndex];
-          if (target) target.value = digit;
-        });
-        focusOtpSlot(Math.min(index + digits.length, otpSlots.length - 1));
-      } else {
-        slot.value = digits.slice(0, 1);
-        if (slot.value && index < otpSlots.length - 1) {
-          focusOtpSlot(index + 1);
-        }
-      }
-      syncOtpValue();
-    });
-
-    slot.addEventListener('keydown', (event) => {
-      if (event.key === 'Backspace' && !slot.value && index > 0) {
-        otpSlots[index - 1].value = '';
-        focusOtpSlot(index - 1);
-        syncOtpValue();
-      }
-    });
-
-    slot.addEventListener('paste', (event) => {
-      event.preventDefault();
-      const pasted = (event.clipboardData || window.clipboardData)?.getData('text') || '';
-      const digits = pasted.replace(/\D+/g, '').slice(0, 6);
-      if (!digits) return;
-      digits.split('').forEach((digit, digitIndex) => {
-        const target = otpSlots[digitIndex];
-        if (target) target.value = digit;
-      });
-      syncOtpValue();
-      focusOtpSlot(Math.min(digits.length, otpSlots.length - 1));
-    });
-  });
-
-  const startCooldownUi = (untilEpochMs) => {
-    if (!sendBtn) return;
-
-    const tick = () => {
-      const remainingMs = untilEpochMs - Date.now();
-      if (remainingMs <= 0) {
+  const startCooldown = (untilEpochMs) => {
+    context.cooldownUntil = untilEpochMs;
+    window.localStorage.setItem(OTP_STORAGE_KEY, String(untilEpochMs));
+    if (cooldownTimer) {
+      window.clearInterval(cooldownTimer);
+    }
+    applyCooldownUi();
+    cooldownTimer = window.setInterval(() => {
+      if (context.cooldownUntil <= Date.now()) {
         if (cooldownTimer) {
           window.clearInterval(cooldownTimer);
           cooldownTimer = null;
         }
-        sendBtn.disabled = false;
-        sendBtn.textContent = defaultSendText;
-        if (cooldownHint) {
-          cooldownHint.textContent = "You can request a fresh OTP now";
-        }
         window.localStorage.removeItem(OTP_STORAGE_KEY);
-        return;
+        context.cooldownUntil = 0;
       }
-      const remainingSec = Math.ceil(remainingMs / 1000);
-      sendBtn.disabled = true;
-      sendBtn.textContent = `Resend OTP in ${remainingSec}s`;
-      if (cooldownHint) {
-        cooldownHint.textContent = `Resend OTP in ${remainingSec}s`;
-      }
-    };
-
-    if (cooldownTimer) {
-      window.clearInterval(cooldownTimer);
-    }
-    tick();
-    cooldownTimer = window.setInterval(tick, 250);
+      applyCooldownUi();
+    }, 250);
   };
-
-  if (!sendBtn) {
-    console.log("Send OTP button not found ❌");
-    return;
-  }
-
-  const existingCooldownUntil = readCooldownUntil();
-  if (existingCooldownUntil > Date.now()) {
-    startCooldownUi(existingCooldownUntil);
-    showOtpStep();
-    setFeedback(noticeEl, "Cooldown active. Please use the last OTP sent to your email.", "warn");
-  }
-
-  sendBtn.addEventListener("click", async () => {
-    const email = emailInput?.value.trim() || '';
-    const customerName = nameInput?.value.trim() || 'Customer';
-
-    if (!email) {
-      setFeedback(statusEl, "Enter your email before requesting an OTP.", "error");
-      showToast("Enter your email first.", "warn");
-      return;
-    }
-
-    setFeedback(statusEl, "Sending OTP…", "info");
-    setFeedback(noticeEl, "We are sending a 6-digit verification code to your email.", "info");
-    sendBtn.disabled = true;
-    sendBtn.textContent = "Sending...";
-
-    try {
-      const res = await fetch(window.BASE_URL + "/api/send-otp", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-CSRF-Token": window.__csrf
-        },
-        body: JSON.stringify({ email, name: customerName }),
-        credentials: "include"
-      });
-
-      const data = await res.json();
-
-      if (data.success) {
-        const existingCustomer = Boolean(data?.data?.existing_customer);
-        applyExistingCustomerMode(existingCustomer, data?.data?.user || null);
-        emailInput.readOnly = true;
-        showOtpStep();
-        clearOtpSlots();
-        focusOtpSlot(0);
-        setFeedback(
-          statusEl,
-          existingCustomer
-            ? "OTP sent. Existing account detected — verify to load your saved profile and addresses."
-            : "OTP sent successfully to your email.",
-          "success"
-        );
-        setFeedback(noticeEl, "OTP sent successfully to your email.", "success");
-        showToast("OTP sent successfully.", "success");
-
-        const cooldownUntil = Date.now() + OTP_COOLDOWN_MS;
-        window.localStorage.setItem(OTP_STORAGE_KEY, String(cooldownUntil));
-        startCooldownUi(cooldownUntil);
-      } else {
-        const message = String(data.message || "Failed to send OTP");
-        if (res.status === 429 || message.includes("60 seconds before requesting a new OTP")) {
-          const cooldownUntil = Date.now() + OTP_COOLDOWN_MS;
-          window.localStorage.setItem(OTP_STORAGE_KEY, String(cooldownUntil));
-          startCooldownUi(cooldownUntil);
-          showOtpStep();
-          setFeedback(noticeEl, message, "warn");
-          setFeedback(statusEl, message, "warn");
-          showToast(message, "warn");
-          return;
-        }
-        setFeedback(statusEl, message, "error");
-        setFeedback(noticeEl, message, "error");
-        sendBtn.disabled = false;
-        sendBtn.textContent = defaultSendText;
-      }
-
-    } catch (err) {
-      console.error(err);
-      setFeedback(statusEl, "Unable to send OTP right now.", "error");
-      setFeedback(noticeEl, "Unable to send OTP right now.", "error");
-      sendBtn.disabled = false;
-      sendBtn.textContent = defaultSendText;
-    }
-
-  });
-
-  emailInput?.addEventListener("input", () => {
-    window.otpVerified = false;
-    applyExistingCustomerMode(false, null);
-    emailInput.readOnly = false;
-    hideOtpStep();
-    clearOtpSlots();
-    setFeedback(statusEl, '', 'info');
-    setFeedback(noticeEl, '', 'info');
-  });
-});
-</script>
-
-<script>
-document.addEventListener("DOMContentLoaded", function () {
-
-  const verifyBtn = document.getElementById("verifyOtpBtn");
-  const otpInput = document.getElementById("otpInput");
-  const statusEl = document.getElementById("otpStatus");
-  const noticeEl = document.getElementById("otpNotice");
-  const nameInput = document.getElementById("customerName");
-  const phoneInput = document.getElementById("customerPhone");
-  const streetInput = document.getElementById("deliveryStreet");
-  const pincodeInput = document.getElementById("deliveryPincode");
-  const applyExistingCustomerMode = window.__checkoutApplyExistingCustomerMode || function () {};
-  const setFeedback = window.__checkoutSetFeedback || function (element, message) {
-    if (element) element.textContent = message || '';
-  };
-  const showToast = window.__checkoutShowToast || function () {};
 
   const hydrateCheckoutFromAccount = async () => {
+    const streetInput = document.getElementById('deliveryStreet');
+    const pincodeInput = document.getElementById('deliveryPincode');
+
     try {
-      const profileRes = await fetch(window.BASE_URL + '/api/account/profile', {
+      const profileRes = await fetch('/api/account/profile', {
         method: 'GET',
         credentials: 'include',
-        headers: {
-          'Accept': 'application/json'
-        }
+        headers: { 'Accept': 'application/json' }
       });
       const profilePayload = await profileRes.json();
       if (profilePayload?.success && profilePayload?.data?.user) {
         const user = profilePayload.data.user;
-        if (nameInput && !nameInput.value.trim()) {
-          nameInput.value = String(user.full_name || '').trim();
-        }
-        if (phoneInput && !phoneInput.value.trim()) {
-          phoneInput.value = String(user.phone || '').trim();
-        }
-        if (user.phone) {
-          window.__checkoutExistingCustomerPhone = String(user.phone || '').trim();
+        context.name = String(user.full_name || context.name || '').trim();
+        context.phone = String(user.phone || context.phone || '').trim();
+        context.email = String(user.email || context.email || '').trim();
+        if (context.phone) {
+          window.__checkoutExistingCustomerPhone = context.phone;
         }
         applyExistingCustomerMode(true, user);
       }
@@ -2079,19 +2392,14 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     try {
-      const addressesRes = await fetch(window.BASE_URL + '/api/account/addresses', {
+      const addressesRes = await fetch('/api/account/addresses', {
         method: 'GET',
         credentials: 'include',
-        headers: {
-          'Accept': 'application/json'
-        }
+        headers: { 'Accept': 'application/json' }
       });
       const addressesPayload = await addressesRes.json();
       const items = Array.isArray(addressesPayload?.data?.items) ? addressesPayload.data.items : [];
-      if (!items.length) {
-        return;
-      }
-
+      if (!items.length) return;
       const defaultAddress = items.find((item) => Number(item.is_default) === 1) || items[0];
       if (streetInput && !streetInput.value.trim()) {
         const streetParts = [
@@ -2109,82 +2417,294 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   };
 
-  if (!verifyBtn) {
-    console.log("Verify button not found ❌");
-    return;
-  }
-
-  verifyBtn.addEventListener("click", async () => {
-
-    const email = document.getElementById("customerEmail").value.trim();
-    const otp = otpInput.value.trim();
-
-    if (!email) {
-      setFeedback(statusEl, "Enter your email before verifying OTP.", "error");
+  const runOtpVerification = async () => {
+    if (otpVerifying) return;
+    const otpValue = String(context.otp || '').trim();
+    const csrfToken = getCheckoutCsrfToken();
+    if (!context.email) {
+      setFeedback(statusEl, 'Enter your email before verifying OTP.', 'error');
+      return;
+    }
+    if (otpValue.length !== 6) {
+      setFeedback(statusEl, 'Enter the full 6-digit OTP.', 'error');
       return;
     }
 
-    if (otp.length !== 6) {
-      setFeedback(statusEl, "Enter the full 6-digit OTP.", "error");
-      return;
-    }
-
-    verifyBtn.disabled = true;
-    verifyBtn.textContent = "Verifying…";
-    setFeedback(statusEl, "Verifying OTP…", "info");
+    otpVerifying = true;
+    setState('otp-verification', 'Verifying OTP…');
+    setFeedback(statusEl, 'Verifying OTP…', 'info');
 
     try {
-      const res = await fetch(window.BASE_URL + "/api/verify-otp", {
-        method: "POST",
+      const res = await fetch('/api/verify-otp', {
+        method: 'POST',
         headers: {
-          "Content-Type": "application/json",
-          "X-CSRF-Token": window.__csrf
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': csrfToken
         },
         body: JSON.stringify({
-          email,
-          otp,
-          name: document.getElementById("customerName").value.trim()
+          email: context.email,
+          otp: otpValue,
+          name: context.name || 'Customer',
+          phone: context.phone || '',
+          _csrf: csrfToken
         }),
-        credentials: "include"
+        credentials: 'same-origin'
       });
-
       const data = await res.json();
 
-      if (data.success) {
-        window.otpVerified = true;
-        // Fix: stop loading state, show verified text
-        verifyBtn.textContent = "\u2713 OTP Verified";
-        verifyBtn.disabled = true;
-        verifyBtn.style.cssText += ";background:#1d6f42;border-color:#1d6f42;cursor:default;";
-        // Lock OTP cells
-        document.querySelectorAll('#checkoutOtpGrid [data-otp-slot]').forEach(function (cell) {
-          cell.disabled = true;
-          cell.style.cssText += ";background:#eefaf2;border-color:#bfe8c8;color:#1d6f42;";
-        });
-        setFeedback(statusEl, "\u2705 Email verified. Checkout unlocked.", "success");
-        setFeedback(noticeEl, "\u2705 OTP verified. You can now place your order.", "success");
-        showToast("Email verified. Checkout unlocked.", "success");
-        await hydrateCheckoutFromAccount();
-        // Advance to step 2
-        if (window.__checkoutSteps) {
-          window.__checkoutSteps.complete('step-contact', '\u2714 ' + email);
-        }
-        await loadCheckoutSummary();
-      } else {
-        setFeedback(statusEl, data.message || "OTP verification failed.", "error");
-        verifyBtn.disabled = false;
-        verifyBtn.textContent = "Verify & Continue to Checkout";
+      if (!data.success) {
+        otpVerifying = false;
+        setFeedback(statusEl, data.message || 'OTP verification failed.', 'error');
+        setState(context.otpFlow === 'new' ? 'new-user-details' : 'existing-user-otp', 'Verification failed. Enter OTP again.');
+        return;
       }
 
-    } catch (err) {
-      console.error(err);
-      setFeedback(statusEl, "Unable to verify OTP right now.", "error");
-      verifyBtn.disabled = false;
-      verifyBtn.textContent = "Verify & Continue to Checkout";
+      window.otpVerified = true;
+      context.otp = '';
+      setState('authenticated', 'OTP verified. Checkout unlocked.');
+      setFeedback(statusEl, '✅ Email verified. Checkout unlocked.', 'success');
+      showToast('Email verified. Checkout unlocked.', 'success');
+      await hydrateCheckoutFromAccount();
+      if (window.__checkoutSteps) {
+        window.__checkoutSteps.complete('step-contact', '✔ ' + context.email);
+      }
+      await loadCheckoutSummary();
+    } catch (error) {
+      otpVerifying = false;
+      setFeedback(statusEl, 'Unable to verify OTP right now.', 'error');
+      setState(context.otpFlow === 'new' ? 'new-user-details' : 'existing-user-otp', 'Unable to verify OTP right now.');
+    }
+  };
+  window.__checkoutVerifyOtp = runOtpVerification;
+
+  const requestOtp = async () => {
+    const csrfToken = getCheckoutCsrfToken();
+    if (!context.email) {
+      setFeedback(statusEl, 'Enter your email before requesting OTP.', 'error');
+      return;
+    }
+    if (context.otpFlow === 'new') {
+      const nameOk = String(context.name || '').trim().length >= 2;
+      const validator = window.__checkoutValidatePhone || function (countryCode, rawPhone) {
+        const digits = String(rawPhone || '').replace(/\D+/g, '');
+        if (normalizeCountryCode(countryCode) === '+91') {
+          return digits.length === 10;
+        }
+        return digits.length >= 6 && digits.length <= 15;
+      };
+      const phoneOk = validator(context.countryCode, context.phone);
+      if (!nameOk || !phoneOk) {
+        setFeedback(statusEl, 'For new checkout, enter full name and phone before requesting OTP.', 'warn');
+        return;
+      }
     }
 
+    setFeedback(statusEl, 'Sending OTP…', 'info');
+    try {
+      const res = await fetch('/api/send-otp', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': csrfToken
+        },
+        body: JSON.stringify({ email: context.email, name: context.name || 'Customer', _csrf: csrfToken }),
+        credentials: 'same-origin'
+      });
+      const data = await res.json();
+      if (!data.success) {
+        const message = String(data.message || 'Failed to send OTP');
+        if (res.status === 429 || message.includes('60 seconds before requesting a new OTP')) {
+          const cooldownUntil = Date.now() + OTP_COOLDOWN_MS;
+          startCooldown(cooldownUntil);
+          setFeedback(statusEl, message, 'warn');
+          return;
+        }
+        setFeedback(statusEl, message, 'error');
+        return;
+      }
+
+      context.otpSent = true;
+      context.otp = '';
+      const existingCustomer = Boolean(data?.exists ?? data?.data?.exists ?? data?.data?.existing_customer);
+      context.otpFlow = existingCustomer ? 'existing' : context.otpFlow;
+      applyExistingCustomerMode(existingCustomer, data?.data?.user || null);
+      setState('otp-verification', 'OTP sent. Enter the 6-digit code.');
+      setFeedback(statusEl, 'OTP sent successfully. Enter the 6-digit code.', 'success');
+      startCooldown(Date.now() + OTP_COOLDOWN_MS);
+    } catch (error) {
+      setFeedback(statusEl, 'Unable to send OTP right now.', 'error');
+    }
+  };
+
+  const detectEmail = async () => {
+    const email = String(context.email || '').trim();
+    if (!/.+@.+\..+/.test(email)) {
+      return;
+    }
+    const csrfToken = getCheckoutCsrfToken();
+    setState('checking-email', 'Checking account…');
+    try {
+      const response = await fetch('/api/auth/check-user', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': csrfToken
+        },
+        credentials: 'same-origin',
+        body: JSON.stringify({ email, _csrf: csrfToken })
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        console.error('[checkout] check-user failed:', response.status, payload?.message || '');
+        setState('email-entry', 'Something went wrong. Please try again.');
+        return;
+      }
+      const exists = Boolean(payload?.exists ?? payload?.data?.exists ?? payload?.data?.existing_customer);
+      if (exists) {
+        context.otpFlow = 'existing';
+        context.existingUser = payload?.data?.user || null;
+        if (context.existingUser?.full_name) {
+          context.name = String(context.existingUser.full_name).trim();
+        }
+        if (context.existingUser?.phone) {
+          context.phone = String(context.existingUser.phone).trim();
+          window.__checkoutExistingCustomerPhone = context.phone;
+        }
+        applyExistingCustomerMode(true, context.existingUser);
+        setState('existing-user-otp', 'Welcome back! Enter OTP to continue.');
+      } else {
+        context.otpFlow = 'new';
+        applyExistingCustomerMode(false, null);
+        setState('new-user-details', "Looks like you're new here.");
+      }
+    } catch (error) {
+      setState('email-entry', 'Enter your email to continue checkout.');
+    }
+  };
+
+  root.addEventListener('click', async (event) => {
+    const target = event.target instanceof HTMLElement ? event.target.closest('button') : null;
+    if (!target) return;
+
+    if (target.id === 'continueEmailBtn') {
+      await detectEmail();
+      return;
+    }
+    if (target.id === 'sendOtpBtn') {
+      await requestOtp();
+    }
   });
 
+  root.addEventListener('input', (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement)) return;
+
+    if (target.id === 'customerEmail') {
+      context.email = String(target.value || '').trim();
+      if (lookupTimer) {
+        window.clearTimeout(lookupTimer);
+      }
+      if (currentState === 'email-entry' || currentState === 'checking-email') {
+        lookupTimer = window.setTimeout(() => {
+          void detectEmail();
+        }, 500);
+      }
+      return;
+    }
+
+    if (target.id === 'customerName') {
+      context.name = String(target.value || '').trim();
+      return;
+    }
+
+    if (target.id === 'customerPhone') {
+      const digitsOnly = String(target.value || '').replace(/\D+/g, '');
+      target.value = digitsOnly;
+      context.phone = digitsOnly;
+      syncPhoneHiddenValue();
+      return;
+    }
+
+    if (target.hasAttribute('data-otp-slot')) {
+      const slots = Array.from(root.querySelectorAll('#checkoutOtpGrid [data-otp-slot]'));
+      const currentIndex = Number(target.getAttribute('data-otp-slot'));
+      const digits = String(target.value || '').replace(/\D+/g, '');
+      if (digits.length > 1) {
+        digits.split('').forEach((digit, offset) => {
+          const slot = slots[currentIndex + offset];
+          if (slot) slot.value = digit;
+        });
+      } else {
+        target.value = digits.slice(0, 1);
+      }
+      const otp = slots.map((slot) => String(slot.value || '').replace(/\D+/g, '').slice(-1)).join('').slice(0, 6);
+      context.otp = otp;
+      const otpInput = root.querySelector('#otpInput');
+      if (otpInput) {
+        otpInput.value = otp;
+      }
+      if (target.value && currentIndex < 5) {
+        slots[currentIndex + 1]?.focus();
+      }
+      if (otp.length === 6) {
+        window.setTimeout(() => {
+          void runOtpVerification();
+        }, 180);
+      }
+    }
+  });
+
+  root.addEventListener('change', (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLSelectElement)) {
+      return;
+    }
+    if (target.id === 'customerCountryCode') {
+      context.countryCode = normalizeCountryCode(target.value || '+91');
+      syncPhoneHiddenValue();
+    }
+  });
+
+  root.addEventListener('keydown', (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement) || !target.hasAttribute('data-otp-slot')) return;
+    if (event.key !== 'Backspace' || target.value) return;
+    const slots = Array.from(root.querySelectorAll('#checkoutOtpGrid [data-otp-slot]'));
+    const index = Number(target.getAttribute('data-otp-slot'));
+    if (index > 0) {
+      slots[index - 1].value = '';
+      slots[index - 1].focus();
+      context.otp = slots.map((slot) => String(slot.value || '').replace(/\D+/g, '').slice(-1)).join('').slice(0, 6);
+    }
+  });
+
+  root.addEventListener('paste', (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement) || !target.hasAttribute('data-otp-slot')) return;
+    event.preventDefault();
+    const text = (event.clipboardData || window.clipboardData)?.getData('text') || '';
+    const digits = text.replace(/\D+/g, '').slice(0, 6).split('');
+    if (!digits.length) return;
+    const slots = Array.from(root.querySelectorAll('#checkoutOtpGrid [data-otp-slot]'));
+    digits.forEach((digit, index) => {
+      if (slots[index]) slots[index].value = digit;
+    });
+    context.otp = digits.join('');
+    const otpInput = root.querySelector('#otpInput');
+    if (otpInput) otpInput.value = context.otp;
+    if (context.otp.length === 6) {
+      window.setTimeout(() => {
+        void runOtpVerification();
+      }, 180);
+    }
+  });
+
+  context.cooldownUntil = readCooldownUntil();
+  if (context.cooldownUntil > Date.now()) {
+    startCooldown(context.cooldownUntil);
+  }
+
+  setState(currentState, currentState === 'authenticated' ? 'Authenticated. Continue checkout.' : 'Enter your email to continue checkout.');
 });
 </script>
 <script>
@@ -2217,17 +2737,19 @@ document.addEventListener("DOMContentLoaded", () => {
 
     setButtonState(button, true, "Previewing…", button?.textContent || "Preview Total");
     setFeedback(statusEl, "Refreshing delivery fee and total…", "info");
+    const csrfToken = (window.__checkoutGetCsrfToken ? window.__checkoutGetCsrfToken() : String(window.__csrf || '').trim());
 
     try {
       const res = await fetch(window.BASE_URL + "/api/checkout/preview", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-CSRF-Token": window.__csrf
+          "X-CSRF-Token": csrfToken
         },
         body: JSON.stringify({
           postal_code: postalCode,
-          fulfilment_mode: fulfilmentMode
+          fulfilment_mode: fulfilmentMode,
+          _csrf: csrfToken
         }),
         credentials: "include"
       });

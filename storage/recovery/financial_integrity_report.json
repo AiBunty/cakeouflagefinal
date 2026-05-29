@@ -1,0 +1,45 @@
+{
+    "generated_at": "2026-05-29T13:02:01+05:30",
+    "scope": "latest_uat_dataset",
+    "order_ids": [
+        54,
+        55,
+        56,
+        57,
+        58,
+        59
+    ],
+    "checks": {
+        "debits_equal_credits": {
+            "debit_total": 3850,
+            "credit_total": 3850,
+            "pass": true
+        },
+        "sales_ledger_equals_sales_report": {
+            "ledger": 3250,
+            "report": 3250,
+            "pass": true
+        },
+        "receivable_ledger_equals_outstanding_report": {
+            "ledger": 400,
+            "report": 400,
+            "pass": true
+        },
+        "refund_ledger_equals_refund_report": {
+            "ledger": 0,
+            "report": 0,
+            "pass": true
+        },
+        "cash_ledger_equals_cash_report": {
+            "ledger": 500,
+            "report": 500,
+            "pass": true
+        },
+        "bank_ledger_equals_bank_report": {
+            "ledger": 2350,
+            "report": 2350,
+            "pass": true
+        }
+    },
+    "overall_pass": true
+}

@@ -1,4 +1,9 @@
-<?php /* Cakeouflage — FAQ Page */ ?>
+<?php /* Cakeouflage — FAQ Page */
+$faqWhatsapp = (string)($siteConfig['contact']['whatsapp_link'] ?? '');
+if ($faqWhatsapp === '') {
+  $faqWhatsapp = build_whatsapp_link((string)($siteConfig['contact']['whatsapp_number'] ?? ''));
+}
+?>
 
 <section class="page-hero page-hero--soft" aria-label="FAQ hero">
   <div class="container">
@@ -110,7 +115,9 @@
     <div class="faq-cta">
       <p>Didn't find your answer?</p>
       <a href="/contact" class="btn btn--primary">Contact Us</a>
-      <a href="https://wa.me/919999999999" class="btn btn--whatsapp" target="_blank" rel="noopener">💬 WhatsApp Us</a>
+      <?php if ($faqWhatsapp !== ''): ?>
+        <a href="<?= htmlspecialchars($faqWhatsapp, ENT_QUOTES, 'UTF-8') ?>" class="btn btn--whatsapp" target="_blank" rel="noopener">WhatsApp Us</a>
+      <?php endif; ?>
     </div>
 
   </div>

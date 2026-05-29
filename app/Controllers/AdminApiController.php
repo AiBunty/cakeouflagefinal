@@ -9,9 +9,11 @@ use App\Core\Request;
 use App\Core\Response;
 use App\Services\AuthRateLimitService;
 use App\Services\AuthManager;
+use App\Services\CustomerLookupService;
 use App\Services\ExcelService;
 use App\Services\FinancialReconciliationService;
 use App\Services\MediaCapabilityService;
+use App\Services\ProductImportService;
 use App\Services\UnifiedMediaService;
 use App\Services\VariableResolverService;
 use App\Services\WhatsAppDispatchService;
@@ -49,7 +51,7 @@ final class AdminApiController
     public function authSendOtp(): void
     {
         $input = $this->readJsonInput();
-        $email = strtolower(trim((string)($input['email'] ?? '')));
+        $email = CustomerLookupService::normalizeEmail((string)($input['email'] ?? ''));
 
         if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
             Response::json(['success' => false, 'message' => 'Valid admin email is required'], 422);
@@ -57,9 +59,7 @@ final class AdminApiController
         }
 
         $pdo = self::db(); if (!$pdo) return;
-        $stmt = $pdo->prepare('SELECT id, full_name, email FROM admins WHERE email = :email AND is_active = 1 LIMIT 1');
-        $stmt->execute(['email' => $email]);
-        $admin = $stmt->fetch(PDO::FETCH_ASSOC);
+        $admin = CustomerLookupService::findActiveAdminByEmail($pdo, $email);
 
         if (!$admin) {
             Response::json(['success' => false, 'message' => 'No active admin account found for this email.'], 404);
@@ -83,7 +83,7 @@ final class AdminApiController
     public function authVerifyOtp(): void
     {
         $input = $this->readJsonInput();
-        $email = strtolower(trim((string)($input['email'] ?? '')));
+        $email = CustomerLookupService::normalizeEmail((string)($input['email'] ?? ''));
         $otp = preg_replace('/\D+/', '', (string)($input['otp'] ?? '')) ?? '';
 
         if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($otp) !== 6) {
@@ -92,9 +92,7 @@ final class AdminApiController
         }
 
         $pdo = self::db(); if (!$pdo) return;
-        $stmt = $pdo->prepare('SELECT id, full_name, email, role FROM admins WHERE email = :email AND is_active = 1 LIMIT 1');
-        $stmt->execute(['email' => $email]);
-        $admin = $stmt->fetch(PDO::FETCH_ASSOC);
+        $admin = CustomerLookupService::findActiveAdminByEmail($pdo, $email);
 
         if (!$admin) {
             Response::json(['success' => false, 'message' => 'No active admin account found for this email.'], 404);
@@ -197,8 +195,46 @@ final class AdminApiController
         }
         $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
         $stmt->execute();
+        $items = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $productIds = array_values(array_filter(array_map(static fn(array $row): int => (int)($row['id'] ?? 0), $items)));
+        $variantMap = [];
+        if ($productIds !== []) {
+            $placeholders = implode(',', array_fill(0, count($productIds), '?'));
+            $variantStmt = $pdo->prepare(
+                'SELECT product_id, variant_label, variant_name, weight_or_size, price, stock_quantity, is_default, sku
+                   FROM product_variants
+                  WHERE product_id IN (' . $placeholders . ')
+                  ORDER BY product_id ASC, is_default DESC, id ASC'
+            );
+            foreach ($productIds as $index => $productId) {
+                $variantStmt->bindValue($index + 1, $productId, PDO::PARAM_INT);
+            }
+            $variantStmt->execute();
+            while (($variantRow = $variantStmt->fetch(PDO::FETCH_ASSOC)) !== false) {
+                $productId = (int)($variantRow['product_id'] ?? 0);
+                if ($productId <= 0) {
+                    continue;
+                }
 
-        Response::json(['success' => true, 'message' => 'ok', 'data' => ['items' => $stmt->fetchAll(PDO::FETCH_ASSOC)]]);
+                $variantMap[$productId][] = [
+                    'label' => (string)($variantRow['variant_label'] ?? ($variantRow['variant_name'] ?? ($variantRow['weight_or_size'] ?? ''))),
+                    'price' => round((float)($variantRow['price'] ?? 0), 2),
+                    'stock_quantity' => max(0, (int)($variantRow['stock_quantity'] ?? 0)),
+                    'is_default' => (int)($variantRow['is_default'] ?? 0),
+                    'sku' => (string)($variantRow['sku'] ?? ''),
+                ];
+            }
+        }
+
+        foreach ($items as &$item) {
+            $productId = (int)($item['id'] ?? 0);
+            $matrixRows = $variantMap[$productId] ?? [];
+            $item['variants'] = $matrixRows;
+            $item['matrix_json'] = json_encode($matrixRows, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        }
+        unset($item);
+
+        Response::json(['success' => true, 'message' => 'ok', 'data' => ['items' => $items]]);
     }
 
     public function productsCreate(): void
@@ -216,12 +252,24 @@ final class AdminApiController
         $description = trim((string)($input['description'] ?? ($input['long_description'] ?? ($input['short_description'] ?? ''))));
         $shortDescription = trim((string)($input['short_description'] ?? $description));
         $longDescription = trim((string)($input['long_description'] ?? $description));
+        $matrixRows = $this->normalizeMatrixRows($input['matrix_json'] ?? null);
+        $variantRows = $this->matrixRowsToVariants($matrixRows);
+        if ($variantRows === [] && is_array($input['variants'] ?? null)) {
+            $variantRows = array_values(array_filter($input['variants'], static fn($row) => is_array($row)));
+        }
         $startingPrice = (float)($input['starting_price'] ?? 0);
         $basePrice = (float)($input['base_price'] ?? $startingPrice);
+        if (!empty($matrixRows)) {
+            $derivedPrice = $this->matrixDefaultPrice($matrixRows);
+            if ($derivedPrice > 0) {
+                $startingPrice = $derivedPrice;
+                $basePrice = $derivedPrice;
+            }
+        }
         $stock = max(0, (int)($input['stock_quantity'] ?? 0));
         $availability = (string)($input['availability_status'] ?? 'in_stock');
 
-        if ($name === '' || $slug === '' || $sku === '' || $categoryId <= 0 || $description === '' || $startingPrice <= 0) {
+        if ($name === '' || $slug === '' || $sku === '' || $categoryId <= 0 || $description === '' || ($startingPrice <= 0 && $basePrice <= 0 && $variantRows === [])) {
             Response::json(['success' => false, 'message' => 'Missing required product fields'], 422);
             return;
         }
@@ -307,19 +355,19 @@ final class AdminApiController
                 $dietaryTypeStmt->execute(['dietary_type' => $dietaryType, 'id' => $productId]);
             }
 
-            $variants = is_array($input['variants'] ?? null) ? $input['variants'] : [];
-            if (count($variants) === 0) {
-                $variants = [[
+            if ($variantRows === []) {
+                $variantRows = [[
                     'variant_label' => '1 lb',
                     'variant_name' => '1 lb',
                     'weight_or_size' => '1 lb',
                     'unit_type' => 'size',
                     'price' => round($startingPrice, 2),
                     'stock_quantity' => $stock,
+                    'sku' => $sku,
                     'is_default' => 1,
                 ]];
             }
-            $this->replaceProductVariants($pdo, $productId, $variants);
+            $this->replaceProductVariants($pdo, $productId, $variantRows);
 
             $this->logAdminAction($pdo, $adminId, 'create_product', 'products', $productId, ['name' => $name, 'sku' => $sku]);
             $pdo->commit();
@@ -359,6 +407,8 @@ final class AdminApiController
         }
 
         $dietaryType = $this->resolveDietaryType($input, $pdo);
+        $matrixRows = $this->normalizeMatrixRows($input['matrix_json'] ?? null);
+        $variantRows = $this->matrixRowsToVariants($matrixRows);
 
         $payload = [
             'name' => trim((string)($input['name'] ?? '')),
@@ -391,6 +441,22 @@ final class AdminApiController
             'b2b_minimum_quantity' => (int)($input['b2b_minimum_quantity'] ?? 0) > 0 ? (int)$input['b2b_minimum_quantity'] : null,
             'id' => $productId,
         ];
+
+        if (!empty($matrixRows)) {
+            $derivedPrice = $this->matrixDefaultPrice($matrixRows);
+            if ($derivedPrice > 0) {
+                $payload['starting_price'] = $derivedPrice;
+                $payload['base_price'] = $derivedPrice;
+            }
+        }
+
+        if (($payload['starting_price'] <= 0 || $payload['base_price'] <= 0) && !empty($variantRows)) {
+            $fallbackPrice = (float)($variantRows[0]['price'] ?? 0);
+            if ($fallbackPrice > 0) {
+                $payload['starting_price'] = $fallbackPrice;
+                $payload['base_price'] = $fallbackPrice;
+            }
+        }
 
         if ($payload['name'] === '' || $payload['slug'] === '' || $payload['sku'] === '' || $payload['description'] === '' || $payload['collection_category_id'] <= 0 || $payload['starting_price'] <= 0 || $payload['base_price'] <= 0) {
             Response::json(['success' => false, 'message' => 'Missing required product fields'], 422);
@@ -439,7 +505,9 @@ final class AdminApiController
                 $dietaryTypeStmt->execute(['dietary_type' => $dietaryType, 'id' => $productId]);
             }
 
-            if (is_array($input['variants'] ?? null)) {
+            if (!empty($variantRows)) {
+                $this->replaceProductVariants($pdo, $productId, $variantRows);
+            } elseif (is_array($input['variants'] ?? null)) {
                 $this->replaceProductVariants($pdo, $productId, $input['variants']);
             }
 
@@ -475,25 +543,6 @@ final class AdminApiController
 
         $this->logAdminAction($pdo, $adminId, 'delete_product', 'products', $productId, []);
         Response::json(['success' => true, 'message' => 'Product archived']);
-    }
-
-    public function categoriesList(): void
-    {
-        if ($this->requireAdminId() === null) {
-            return;
-        }
-
-        $pdo = self::db(); if (!$pdo) return;
-        $stmt = $pdo->query(
-            'SELECT c.id, c.parent_id, "core" AS category_type, c.name, c.slug, c.description, c.is_active, c.sort_order,
-                    p.name AS parent_name
-             FROM categories c
-             LEFT JOIN categories p ON p.id = c.parent_id
-             WHERE c.deleted_at IS NULL
-             ORDER BY c.sort_order ASC, c.name ASC'
-        );
-
-        Response::json(['success' => true, 'message' => 'ok', 'data' => ['items' => $stmt instanceof \PDOStatement ? $stmt->fetchAll(PDO::FETCH_ASSOC) : []]]);
     }
 
     public function categoriesCreate(): void
@@ -2108,34 +2157,25 @@ final class AdminApiController
             return;
         }
 
+        $sizeLabels = $this->resolveMatrixSizeLabels($pdo);
+        $hasTopperEnabled = $this->tableHasColumn($pdo, 'products', 'topper_enabled');
+        $hasNoteEnabled = $this->tableHasColumn($pdo, 'products', 'note_enabled');
+
         $sql = 'SELECT
+                    p.id,
                     COALESCE(collection.name, \'\') AS category,
                     COALESCE(subcategory.name, \'\') AS subcategory,
                     p.name AS product_name,
-                    p.is_featured,
-                    p.is_bestseller,
+                    COALESCE(NULLIF(p.description, \'\'), \'\') AS description,
+                    COALESCE(NULLIF(p.dietary_type, \'\'), IF(p.is_veg = 1, \'veg\', \'nonveg\')) AS dietary_type,
+                    COALESCE(NULLIF(p.dietary_tag, \'\'), \'regular\') AS dietary_tag,
                     p.is_chef_special,
-                    p.is_b2b_enabled,
-                COALESCE(NULLIF(p.dietary_type, \'\'), IF(p.is_veg = 1, \'veg\', \'nonveg\')) AS dietary_type,
-                    p.dietary_tag,
-                    COALESCE(
-                        GROUP_CONCAT(
-                            CONCAT(
-                                COALESCE(NULLIF(pv.variant_name, \'\'), NULLIF(pv.variant_label, \'\'), pv.weight_or_size),
-                                \'(\', COALESCE(NULLIF(pv.unit_type, \'\'), \'custom\'), \')\',
-                                \':\', FORMAT(pv.price, 2)
-                            )
-                            ORDER BY pv.is_default DESC, pv.id ASC
-                            SEPARATOR \' | \'
-                        ),
-                        \'\'
-                    ) AS variants
+                    ' . ($hasTopperEnabled ? 'p.topper_enabled' : '1') . ' AS topper_enabled,
+                    ' . ($hasNoteEnabled ? 'p.note_enabled' : '1') . ' AS note_enabled
                 FROM products p
                 LEFT JOIN categories collection ON collection.id = p.collection_category_id
                 LEFT JOIN categories subcategory ON subcategory.id = p.subcategory_id
-                LEFT JOIN product_variants pv ON pv.product_id = p.id AND pv.is_active = 1
                 WHERE p.deleted_at IS NULL
-                GROUP BY p.id, collection.name, subcategory.name, p.name, p.is_featured, p.is_bestseller, p.is_chef_special, p.is_b2b_enabled, p.is_veg, p.dietary_type, p.dietary_tag
                 ORDER BY p.created_at DESC
                 LIMIT 10000';
 
@@ -2145,29 +2185,94 @@ final class AdminApiController
             return;
         }
 
-        $headers = ['Category', 'Subcategory', 'Product Name', 'Dietary Type', 'Tags', 'Variants'];
+        $productRows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        $productIds = array_map(static fn(array $row): int => (int)($row['id'] ?? 0), $productRows);
+        $productIds = array_values(array_filter($productIds, static fn(int $id): bool => $id > 0));
+
+        $variantsByProduct = [];
+        if (count($productIds) > 0) {
+            $inClause = implode(',', array_fill(0, count($productIds), '?'));
+            $variantStmt = $pdo->prepare(
+                'SELECT
+                    product_id,
+                    COALESCE(NULLIF(variant_label, \"\"), NULLIF(variant_name, \"\"), weight_or_size) AS size_label,
+                    price
+                 FROM product_variants
+                 WHERE is_active = 1 AND product_id IN (' . $inClause . ')'
+            );
+            $variantStmt->execute($productIds);
+            while (($variant = $variantStmt->fetch(PDO::FETCH_ASSOC)) !== false) {
+                $productId = (int)($variant['product_id'] ?? 0);
+                if ($productId <= 0) {
+                    continue;
+                }
+                $normalizedSize = $this->normalizeMatrixSizeLabel((string)($variant['size_label'] ?? ''));
+                if ($normalizedSize === '') {
+                    continue;
+                }
+                $variantsByProduct[$productId][$normalizedSize] = (float)($variant['price'] ?? 0);
+            }
+        }
+
+        $headers = [
+            'Product Name',
+            'Category',
+            'SubCategory',
+            'Description',
+            'Food Type',
+            'Dietary Tag',
+            "Chef's Special",
+            'Enable Topper Selection',
+            'Enable Note on Cake',
+        ];
+        foreach ($sizeLabels as $sizeLabel) {
+            $headers[] = $sizeLabel;
+        }
+
         $exportRows = [];
-        while (($row = $stmt->fetch(PDO::FETCH_ASSOC)) !== false) {
-            $tags = [];
-            if ((int)($row['is_featured'] ?? 0)) $tags[] = 'featured';
-            if ((int)($row['is_bestseller'] ?? 0)) $tags[] = 'bestseller';
-            if ((int)($row['is_chef_special'] ?? 0)) $tags[] = 'chefs_special';
-            if ((int)($row['is_b2b_enabled'] ?? 0)) $tags[] = 'b2b';
-            if (($row['dietary_tag'] ?? 'regular') === 'eggless') $tags[] = 'eggless';
-            $exportRows[] = [
+        foreach ($productRows as $row) {
+            $foodType = normalizeDietaryType((string)($row['dietary_type'] ?? 'veg'), $pdo);
+            $dietaryTag = strtolower(trim((string)($row['dietary_tag'] ?? 'regular')));
+            if ($dietaryTag === '') {
+                $dietaryTag = 'regular';
+            }
+
+            $base = [
+                (string)($row['product_name'] ?? ''),
                 (string)($row['category'] ?? ''),
                 (string)($row['subcategory'] ?? ''),
-                (string)($row['product_name'] ?? ''),
-                normalizeDietaryType((string)($row['dietary_type'] ?? 'veg'), $pdo),
-                implode('|', $tags),
-                (string)($row['variants'] ?? ''),
+                (string)($row['description'] ?? ''),
+                $foodType,
+                $dietaryTag,
+                ((int)($row['is_chef_special'] ?? 0) === 1) ? 'Yes' : 'No',
+                ((int)($row['topper_enabled'] ?? 1) === 1) ? 'Yes' : 'No',
+                ((int)($row['note_enabled'] ?? 1) === 1) ? 'Yes' : 'No',
             ];
+
+            $productId = (int)($row['id'] ?? 0);
+            $sizePriceMap = $variantsByProduct[$productId] ?? [];
+            foreach ($sizeLabels as $sizeLabel) {
+                $normalized = $this->normalizeMatrixSizeLabel($sizeLabel);
+                if (array_key_exists($normalized, $sizePriceMap) && (float)$sizePriceMap[$normalized] > 0) {
+                    $base[] = number_format((float)$sizePriceMap[$normalized], 2, '.', '');
+                } else {
+                    $base[] = '';
+                }
+            }
+
+            $exportRows[] = $base;
         }
+
+        $columnWidths = [30, 24, 24, 44, 14, 14, 16, 24, 20];
+        for ($i = 0; $i < count($sizeLabels); $i++) {
+            $columnWidths[] = 12;
+        }
+
         ExcelService::export(
             $headers,
             $exportRows,
             'cakeouflage-products-export-' . date('Ymd-His') . '.xlsx',
-            [1 => 22, 2 => 22, 3 => 30, 4 => 14, 5 => 30, 6 => 50]
+            $columnWidths
         );
     }
 
@@ -2213,12 +2318,21 @@ final class AdminApiController
         $strictVariants = $this->toBinaryFlag($_POST['strict_variants'] ?? 1) === 1;
         $abortOnError = $this->toBinaryFlag($_POST['abort_on_error'] ?? 0) === 1;
         $requiredVariantLabels = ['0.5 kg', '1 lb', '1.5 lb', '2 lb', '2.5 lb', '3 lb'];
+        $hasTopperEnabled = $this->tableHasColumn($pdo, 'products', 'topper_enabled');
+        $hasNoteEnabled = $this->tableHasColumn($pdo, 'products', 'note_enabled');
+        $matrixSizeLabels = $this->resolveMatrixSizeLabels($pdo);
 
         $createdCount = 0;
         $updatedCount = 0;
         $failedRows = [];
         $duplicateSkus = [];
         $lineNumber = 1;
+        $newVariantsCount = 0;
+        $removedVariantsCount = 0;
+        $upsertedProductIds = [];
+        $deletedCount = 0;
+        $versionId = null;
+        $runId = null;
 
         // --- Read header + rows (csv or xlsx) into $allImportRows ---
         if ($extension === 'xlsx') {
@@ -2257,11 +2371,31 @@ final class AdminApiController
         }
 
         $headerMap = $this->normalizeHeaderMap($header);
+        $isMatrixFormat = $this->isMatrixImportHeader($headerMap, $matrixSizeLabels);
+        if ($isMatrixFormat) {
+            $strictVariants = false;
+            $requiredVariantLabels = [];
+        }
+
+        $importService = new ProductImportService();
+        if (!$dryRun) {
+            try {
+                $runId = $importService->beginImportRun($safeName, $adminId);
+                $importService->snapshotCurrentCatalog((int)$runId);
+            } catch (\Throwable $e) {
+                Response::json(['success' => false, 'message' => 'Import lifecycle failed: ' . $e->getMessage()], 500);
+                return;
+            }
+        }
 
         // --- Process rows ---
         foreach ($allImportRows as $row) {
             $lineNumber++;
-            $record = $this->mapImportRow(array_values((array)$row), $headerMap);
+            if ($isMatrixFormat) {
+                $record = $this->mapMatrixImportRow(array_values((array)$row), $headerMap, $matrixSizeLabels);
+            } else {
+                $record = $this->mapImportRow(array_values((array)$row), $headerMap);
+            }
             $validation = $this->validateImportRecord($record, $strictVariants, $requiredVariantLabels);
             if ($validation !== null) {
                 $failedRows[] = ['line' => $lineNumber, 'reason' => $validation, 'sku' => (string)($record['sku'] ?? '')];
@@ -2286,7 +2420,7 @@ final class AdminApiController
                 continue;
             }
 
-            $categoryId = $this->findCategoryIdBySlug($pdo, (string)$record['category_slug']);
+            $categoryId = $this->findCategoryIdBySlugOrName($pdo, (string)$record['category_slug']);
             if ($categoryId === null) {
                 $failedRows[] = ['line' => $lineNumber, 'reason' => 'Unknown category_slug', 'sku' => (string)$record['sku']];
                 if ($abortOnError) {
@@ -2295,9 +2429,72 @@ final class AdminApiController
                 continue;
             }
 
-            $existingStmt = $pdo->prepare('SELECT id FROM products WHERE sku = :sku LIMIT 1');
-            $existingStmt->execute(['sku' => (string)$record['sku']]);
-            $existingId = (int)($existingStmt->fetchColumn() ?: 0);
+            $existingId = 0;
+            if ($isMatrixFormat) {
+                $existingByNameStmt = $pdo->prepare(
+                    'SELECT id, sku FROM products
+                     WHERE deleted_at IS NULL
+                       AND collection_category_id = :collection_category_id
+                       AND LOWER(name) = LOWER(:name)
+                     LIMIT 1'
+                );
+                $existingByNameStmt->execute([
+                    'collection_category_id' => $categoryId,
+                    'name' => (string)$record['product_name'],
+                ]);
+                $existingByName = $existingByNameStmt->fetch(PDO::FETCH_ASSOC) ?: null;
+                if (is_array($existingByName)) {
+                    $existingId = (int)($existingByName['id'] ?? 0);
+                    if ($existingId > 0) {
+                        $existingSku = trim((string)($existingByName['sku'] ?? ''));
+                        if ($existingSku !== '') {
+                            $record['sku'] = $existingSku;
+                        }
+                    }
+                }
+            } else {
+                $existingStmt = $pdo->prepare('SELECT id FROM products WHERE sku = :sku LIMIT 1');
+                $existingStmt->execute(['sku' => (string)$record['sku']]);
+                $existingId = (int)($existingStmt->fetchColumn() ?: 0);
+            }
+
+            if ((string)($record['sku'] ?? '') === '') {
+                $record['sku'] = $this->buildMatrixFallbackSku((string)$record['product_name'], (string)$record['category_slug']);
+            }
+
+            $existingVariantLabelSet = [];
+            if ($existingId > 0) {
+                $existingVariantStmt = $pdo->prepare(
+                    'SELECT COALESCE(NULLIF(variant_label, ""), NULLIF(variant_name, ""), weight_or_size) AS variant_label
+                     FROM product_variants
+                     WHERE product_id = :product_id AND is_active = 1'
+                );
+                $existingVariantStmt->execute(['product_id' => $existingId]);
+                while (($existingVariantRow = $existingVariantStmt->fetch(PDO::FETCH_ASSOC)) !== false) {
+                    $existingVariantLabel = strtolower(trim((string)($existingVariantRow['variant_label'] ?? '')));
+                    if ($existingVariantLabel !== '') {
+                        $existingVariantLabelSet[$existingVariantLabel] = true;
+                    }
+                }
+            }
+
+            $incomingVariantLabelSet = [];
+            foreach ($parsedVariants as $parsedVariant) {
+                $incomingLabel = strtolower(trim((string)($parsedVariant['variant_label'] ?? '')));
+                if ($incomingLabel !== '') {
+                    $incomingVariantLabelSet[$incomingLabel] = true;
+                }
+            }
+            if (!empty($incomingVariantLabelSet)) {
+                $newVariantsCount += count(array_diff_key($incomingVariantLabelSet, $existingVariantLabelSet));
+            }
+            if (!empty($existingVariantLabelSet)) {
+                $removedVariantsCount += count(array_diff_key($existingVariantLabelSet, $incomingVariantLabelSet));
+            }
+
+            if ($existingId > 0) {
+                $upsertedProductIds[] = $existingId;
+            }
 
             if ($existingId > 0) {
                 $duplicateSkus[] = (string)$record['sku'];
@@ -2370,6 +2567,20 @@ final class AdminApiController
                         $dietaryTypeStmt = $pdo->prepare('UPDATE products SET dietary_type = :dietary_type WHERE id = :id');
                         $dietaryTypeStmt->execute(['dietary_type' => $recordDietaryType, 'id' => $existingId]);
                     }
+                    if ($hasTopperEnabled) {
+                        $topperStmt = $pdo->prepare('UPDATE products SET topper_enabled = :topper_enabled WHERE id = :id');
+                        $topperStmt->execute([
+                            'topper_enabled' => (int)($record['topper_enabled'] ?? 1) === 1 ? 1 : 0,
+                            'id' => $existingId,
+                        ]);
+                    }
+                    if ($hasNoteEnabled) {
+                        $noteStmt = $pdo->prepare('UPDATE products SET note_enabled = :note_enabled WHERE id = :id');
+                        $noteStmt->execute([
+                            'note_enabled' => (int)($record['note_enabled'] ?? 1) === 1 ? 1 : 0,
+                            'id' => $existingId,
+                        ]);
+                    }
                     $this->replaceProductVariants($pdo, $existingId, $parsedVariants);
                 } else {
                     $insertStmt = $pdo->prepare(
@@ -2407,9 +2618,24 @@ final class AdminApiController
                         'is_b2b_enabled' => str_contains((string)$record['tags'], 'b2b') ? 1 : 0,
                     ]);
                     $productId = (int)$pdo->lastInsertId();
+                    $upsertedProductIds[] = $productId;
                     if ($this->tableHasColumn($pdo, 'products', 'dietary_type')) {
                         $dietaryTypeStmt = $pdo->prepare('UPDATE products SET dietary_type = :dietary_type WHERE id = :id');
                         $dietaryTypeStmt->execute(['dietary_type' => $recordDietaryType, 'id' => $productId]);
+                    }
+                    if ($hasTopperEnabled) {
+                        $topperStmt = $pdo->prepare('UPDATE products SET topper_enabled = :topper_enabled WHERE id = :id');
+                        $topperStmt->execute([
+                            'topper_enabled' => (int)($record['topper_enabled'] ?? 1) === 1 ? 1 : 0,
+                            'id' => $productId,
+                        ]);
+                    }
+                    if ($hasNoteEnabled) {
+                        $noteStmt = $pdo->prepare('UPDATE products SET note_enabled = :note_enabled WHERE id = :id');
+                        $noteStmt->execute([
+                            'note_enabled' => (int)($record['note_enabled'] ?? 1) === 1 ? 1 : 0,
+                            'id' => $productId,
+                        ]);
                     }
                     $this->replaceProductVariants($pdo, $productId, $parsedVariants);
                 }
@@ -2426,6 +2652,55 @@ final class AdminApiController
             }
         }
 
+        $uniqueUpsertedProductIds = array_values(array_unique(array_filter($upsertedProductIds, static fn($id): bool => (int)$id > 0)));
+        $archivedEstimate = $this->estimateArchiveCount($pdo, $uniqueUpsertedProductIds);
+
+        if (!$dryRun && $runId !== null) {
+            try {
+                $deletedCount = $importService->softDeleteMissingProducts($uniqueUpsertedProductIds);
+                $importService->completeImportRun(
+                    (int)$runId,
+                    $createdCount,
+                    $updatedCount,
+                    $deletedCount,
+                    count($allImportRows),
+                    count($failedRows)
+                );
+
+                $versionName = 'Import ' . date('Y-m-d H:i:s');
+                $versionId = $importService->registerImportVersion(
+                    $versionName,
+                    $adminId,
+                    $backupPath,
+                    (int)$runId,
+                    [
+                        'created_count' => $createdCount,
+                        'updated_count' => $updatedCount,
+                        'archived_count' => $deletedCount,
+                        'failed_count' => count($failedRows),
+                        'new_variants_count' => $newVariantsCount,
+                        'removed_variants_count' => $removedVariantsCount,
+                        'is_matrix_format' => $isMatrixFormat,
+                    ]
+                );
+
+                $importService->cleanupOldVersions(ProductImportService::MAX_RETAINED_VERSIONS);
+            } catch (\Throwable $e) {
+                $importService->failImportRun((int)$runId, $e->getMessage());
+                Response::json(['success' => false, 'message' => 'Import finalize failed: ' . $e->getMessage()], 500);
+                return;
+            }
+        }
+
+        $previewSummary = [
+            'new_products' => $createdCount,
+            'updated_products' => $updatedCount,
+            'invalid_rows' => count($failedRows),
+            'new_variants' => $newVariantsCount,
+            'removed_variants' => $removedVariantsCount,
+            'archived_products' => $dryRun ? $archivedEstimate : $deletedCount,
+        ];
+
         $logDirectory = $this->ensureDirectory($this->storagePath('import-logs'));
         $logFile = $logDirectory . '/import-' . date('Ymd-His') . '-' . bin2hex(random_bytes(3)) . '.json';
         $logPayload = [
@@ -2436,6 +2711,7 @@ final class AdminApiController
             'updated_count' => $updatedCount,
             'duplicate_skus' => array_values(array_unique($duplicateSkus)),
             'failed_rows' => $failedRows,
+            'preview_summary' => $previewSummary,
             'generated_at' => date(DATE_ATOM),
         ];
         file_put_contents($logFile, json_encode($logPayload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
@@ -2483,6 +2759,9 @@ final class AdminApiController
             'failed_count' => count($failedRows),
             'log_file' => basename($logFile),
             'failed_rows_csv' => $failedRowsCsvRelative,
+            'preview_summary' => $previewSummary,
+            'version_id' => $versionId,
+            'run_id' => $runId,
         ]);
 
         Response::json([
@@ -2497,11 +2776,436 @@ final class AdminApiController
                 'duplicate_skus' => array_values(array_unique($duplicateSkus)),
                 'failed_count' => count($failedRows),
                 'failed_rows' => $failedRows,
+                'preview_summary' => $previewSummary,
                 'log_file' => basename($logFile),
                 'failed_rows_csv' => $failedRowsCsvRelative,
                 'failed_rows_csv_url' => $failedRowsCsvRelative !== null ? '/api/admin/import/logs/' . rawurlencode(basename($logFile)) . '/failed-rows' : null,
+                'version_id' => $versionId,
+                'run_id' => $runId,
             ],
         ]);
+    }
+
+    public function bulkImportProductsPreview(): void
+    {
+        $adminId = $this->requireAdminId();
+        if ($adminId === null) {
+            return;
+        }
+
+        if (!isset($_FILES['file']) || !is_array($_FILES['file'])) {
+            Response::json(['success' => false, 'message' => 'A CSV or Excel (.xlsx) file is required under field "file"'], 422);
+            return;
+        }
+
+        $file = $_FILES['file'];
+        $tmpName = (string)($file['tmp_name'] ?? '');
+        $error = (int)($file['error'] ?? UPLOAD_ERR_NO_FILE);
+        $name = (string)($file['name'] ?? 'upload.csv');
+        if ($error !== UPLOAD_ERR_OK || $tmpName === '' || !is_uploaded_file($tmpName)) {
+            Response::json(['success' => false, 'message' => 'Upload failed'], 422);
+            return;
+        }
+
+        $extension = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+        if (!in_array($extension, ['csv', 'xlsx'], true)) {
+            Response::json(['success' => false, 'message' => 'Only CSV and Excel (.xlsx) uploads are supported'], 422);
+            return;
+        }
+
+        $pdo = self::db();
+        if (!$pdo) {
+            return;
+        }
+
+        try {
+            [$header, $allImportRows] = $this->readImportRowsFromUpload($tmpName, $extension);
+        } catch (\Throwable $e) {
+            Response::json(['success' => false, 'message' => 'Could not read uploaded file: ' . $e->getMessage()], 422);
+            return;
+        }
+
+        $strictVariants = $this->toBinaryFlag($_POST['strict_variants'] ?? 1) === 1;
+        $abortOnError = $this->toBinaryFlag($_POST['abort_on_error'] ?? 0) === 1;
+        $requiredVariantLabels = ['0.5 kg', '1 lb', '1.5 lb', '2 lb', '2.5 lb', '3 lb'];
+        $matrixSizeLabels = $this->resolveMatrixSizeLabels($pdo);
+
+        $headerMap = $this->normalizeHeaderMap($header);
+        $isMatrixFormat = $this->isMatrixImportHeader($headerMap, $matrixSizeLabels);
+        if ($isMatrixFormat) {
+            $strictVariants = false;
+            $requiredVariantLabels = [];
+        }
+
+        $createdCount = 0;
+        $updatedCount = 0;
+        $failedRows = [];
+        $newVariantsCount = 0;
+        $removedVariantsCount = 0;
+        $upsertedProductIds = [];
+        $lineNumber = 1;
+
+        foreach ($allImportRows as $row) {
+            $lineNumber++;
+            $rowValues = array_values((array)$row);
+            $record = $isMatrixFormat
+                ? $this->mapMatrixImportRow($rowValues, $headerMap, $matrixSizeLabels)
+                : $this->mapImportRow($rowValues, $headerMap);
+
+            $validation = $this->validateImportRecord($record, $strictVariants, $requiredVariantLabels);
+            if ($validation !== null) {
+                $failedRows[] = ['line' => $lineNumber, 'reason' => $validation, 'sku' => (string)($record['sku'] ?? '')];
+                if ($abortOnError) {
+                    break;
+                }
+                continue;
+            }
+
+            $parsedVariants = $this->parseImportVariants(
+                (string)$record['variant_info'],
+                (float)$record['price'],
+                max(0, (int)$record['stock']),
+                $strictVariants
+            );
+
+            if ($strictVariants && count($parsedVariants) === 0) {
+                $failedRows[] = ['line' => $lineNumber, 'reason' => 'variant_info could not be parsed with strict mode', 'sku' => (string)$record['sku']];
+                if ($abortOnError) {
+                    break;
+                }
+                continue;
+            }
+
+            $categoryId = $this->findCategoryIdBySlugOrName($pdo, (string)$record['category_slug']);
+            if ($categoryId === null) {
+                $failedRows[] = ['line' => $lineNumber, 'reason' => 'Unknown category_slug', 'sku' => (string)$record['sku']];
+                if ($abortOnError) {
+                    break;
+                }
+                continue;
+            }
+
+            $existingId = 0;
+            if ($isMatrixFormat) {
+                $existingByNameStmt = $pdo->prepare(
+                    'SELECT id, sku FROM products
+                     WHERE deleted_at IS NULL
+                       AND collection_category_id = :collection_category_id
+                       AND LOWER(name) = LOWER(:name)
+                     LIMIT 1'
+                );
+                $existingByNameStmt->execute([
+                    'collection_category_id' => $categoryId,
+                    'name' => (string)$record['product_name'],
+                ]);
+                $existingByName = $existingByNameStmt->fetch(PDO::FETCH_ASSOC) ?: null;
+                if (is_array($existingByName)) {
+                    $existingId = (int)($existingByName['id'] ?? 0);
+                    if ($existingId > 0) {
+                        $existingSku = trim((string)($existingByName['sku'] ?? ''));
+                        if ($existingSku !== '') {
+                            $record['sku'] = $existingSku;
+                        }
+                    }
+                }
+            } else {
+                $existingStmt = $pdo->prepare('SELECT id FROM products WHERE sku = :sku LIMIT 1');
+                $existingStmt->execute(['sku' => (string)$record['sku']]);
+                $existingId = (int)($existingStmt->fetchColumn() ?: 0);
+            }
+
+            $existingVariantLabelSet = [];
+            if ($existingId > 0) {
+                $existingVariantStmt = $pdo->prepare(
+                    'SELECT COALESCE(NULLIF(variant_label, ""), NULLIF(variant_name, ""), weight_or_size) AS variant_label
+                     FROM product_variants
+                     WHERE product_id = :product_id AND is_active = 1'
+                );
+                $existingVariantStmt->execute(['product_id' => $existingId]);
+                while (($existingVariantRow = $existingVariantStmt->fetch(PDO::FETCH_ASSOC)) !== false) {
+                    $existingVariantLabel = strtolower(trim((string)($existingVariantRow['variant_label'] ?? '')));
+                    if ($existingVariantLabel !== '') {
+                        $existingVariantLabelSet[$existingVariantLabel] = true;
+                    }
+                }
+            }
+
+            $incomingVariantLabelSet = [];
+            foreach ($parsedVariants as $parsedVariant) {
+                $incomingLabel = strtolower(trim((string)($parsedVariant['variant_label'] ?? '')));
+                if ($incomingLabel !== '') {
+                    $incomingVariantLabelSet[$incomingLabel] = true;
+                }
+            }
+            if (!empty($incomingVariantLabelSet)) {
+                $newVariantsCount += count(array_diff_key($incomingVariantLabelSet, $existingVariantLabelSet));
+            }
+            if (!empty($existingVariantLabelSet)) {
+                $removedVariantsCount += count(array_diff_key($existingVariantLabelSet, $incomingVariantLabelSet));
+            }
+
+            if ($existingId > 0) {
+                $updatedCount++;
+                $upsertedProductIds[] = $existingId;
+            } else {
+                $createdCount++;
+            }
+        }
+
+        $uniqueUpsertedProductIds = array_values(array_unique(array_filter($upsertedProductIds, static fn($id): bool => (int)$id > 0)));
+        $archivedEstimate = $this->estimateArchiveCount($pdo, $uniqueUpsertedProductIds);
+
+        Response::json([
+            'success' => true,
+            'message' => 'Preview generated',
+            'data' => [
+                'is_matrix_format' => $isMatrixFormat,
+                'preview_summary' => [
+                    'new_products' => $createdCount,
+                    'updated_products' => $updatedCount,
+                    'invalid_rows' => count($failedRows),
+                    'new_variants' => $newVariantsCount,
+                    'removed_variants' => $removedVariantsCount,
+                    'archived_products' => $archivedEstimate,
+                ],
+                'failed_rows' => array_slice($failedRows, 0, 100),
+            ],
+        ]);
+    }
+
+    public function importVersionsList(): void
+    {
+        if ($this->requireAdminId() === null) {
+            return;
+        }
+
+        $limit = min(100, max(5, (int)($_GET['limit'] ?? 30)));
+        $service = new ProductImportService();
+        $items = $service->listImportVersions($limit);
+
+        Response::json(['success' => true, 'message' => 'ok', 'data' => ['items' => $items]]);
+    }
+
+    public function importVersionRestore(string $versionId): void
+    {
+        $adminId = $this->requireAdminId();
+        if ($adminId === null) {
+            return;
+        }
+
+        $versionPk = (int)$versionId;
+        if ($versionPk <= 0) {
+            Response::json(['success' => false, 'message' => 'Invalid version id'], 422);
+            return;
+        }
+
+        $service = new ProductImportService();
+        $version = $service->getImportVersion($versionPk);
+        if (!is_array($version)) {
+            Response::json(['success' => false, 'message' => 'Version not found'], 404);
+            return;
+        }
+        if ((int)($version['is_restorable'] ?? 0) !== 1) {
+            Response::json(['success' => false, 'message' => 'Version is no longer restorable'], 409);
+            return;
+        }
+
+        $targetRunId = $service->resolveSnapshotRunIdFromVersion($versionPk);
+        if ($targetRunId === null || !$service->hasSnapshot($targetRunId)) {
+            $service->markVersionNotRestorable($versionPk);
+            Response::json(['success' => false, 'message' => 'Snapshot not found for selected version'], 404);
+            return;
+        }
+
+        $restoreRunId = null;
+        try {
+            $restoreRunId = $service->beginRestoreRun($targetRunId, $adminId);
+            $service->snapshotCurrentCatalog((int)$restoreRunId);
+
+            $restoredResult = $service->restoreImportVersion($targetRunId);
+            $service->completeImportRun(
+                (int)$restoreRunId,
+                0,
+                (int)($restoredResult['restored'] ?? 0),
+                (int)($restoredResult['archived'] ?? 0),
+                (int)($restoredResult['restored'] ?? 0) + (int)($restoredResult['archived'] ?? 0),
+                0
+            );
+
+            $service->registerImportVersion(
+                'Restore from Version #' . $versionPk,
+                $adminId,
+                null,
+                (int)$restoreRunId,
+                [
+                    'mode' => 'restore',
+                    'restored_from_version_id' => $versionPk,
+                    'restored_from_snapshot_run_id' => $targetRunId,
+                    'restored_products' => (int)($restoredResult['restored'] ?? 0),
+                    'archived_products' => (int)($restoredResult['archived'] ?? 0),
+                ]
+            );
+
+            $service->cleanupOldVersions(ProductImportService::MAX_RETAINED_VERSIONS);
+
+            Response::json([
+                'success' => true,
+                'message' => 'Version restored successfully',
+                'data' => [
+                    'version_id' => $versionPk,
+                    'restore_run_id' => $restoreRunId,
+                    'restored_products' => (int)($restoredResult['restored'] ?? 0),
+                    'archived_products' => (int)($restoredResult['archived'] ?? 0),
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            if ($restoreRunId !== null) {
+                $service->failImportRun((int)$restoreRunId, $e->getMessage());
+            }
+            Response::json(['success' => false, 'message' => 'Restore failed: ' . $e->getMessage()], 500);
+        }
+    }
+
+    public function productSizeMasterList(): void
+    {
+        if ($this->requireAdminId() === null) {
+            return;
+        }
+
+        $pdo = self::db();
+        if (!$pdo) {
+            return;
+        }
+
+        $this->ensureProductSizeMasterTable($pdo);
+        $stmt = $pdo->query('SELECT id, label, sort_order, is_active FROM product_size_master ORDER BY sort_order ASC, id ASC');
+        $items = $stmt ? ($stmt->fetchAll(PDO::FETCH_ASSOC) ?: []) : [];
+
+        Response::json(['success' => true, 'message' => 'ok', 'data' => ['items' => $items]]);
+    }
+
+    public function productSizeMasterCreate(): void
+    {
+        if ($this->requireAdminId() === null) {
+            return;
+        }
+
+        $pdo = self::db();
+        if (!$pdo) {
+            return;
+        }
+
+        $this->ensureProductSizeMasterTable($pdo);
+        $input = $this->readJsonInput();
+        $label = trim((string)($input['label'] ?? ''));
+        if ($label === '') {
+            Response::json(['success' => false, 'message' => 'Label is required'], 422);
+            return;
+        }
+
+        $existsStmt = $pdo->prepare('SELECT id FROM product_size_master WHERE LOWER(label) = LOWER(:label) LIMIT 1');
+        $existsStmt->execute(['label' => $label]);
+        if ((int)($existsStmt->fetchColumn() ?: 0) > 0) {
+            Response::json(['success' => false, 'message' => 'Size label already exists'], 409);
+            return;
+        }
+
+        $maxSort = (int)($pdo->query('SELECT COALESCE(MAX(sort_order), 0) FROM product_size_master')->fetchColumn() ?: 0);
+        $insert = $pdo->prepare('INSERT INTO product_size_master (label, sort_order, is_active) VALUES (:label, :sort_order, 1)');
+        $insert->execute(['label' => $label, 'sort_order' => $maxSort + 10]);
+
+        Response::json(['success' => true, 'message' => 'Size label created']);
+    }
+
+    public function productSizeMasterUpdate(string $sizeId): void
+    {
+        if ($this->requireAdminId() === null) {
+            return;
+        }
+
+        $pdo = self::db();
+        if (!$pdo) {
+            return;
+        }
+
+        $this->ensureProductSizeMasterTable($pdo);
+        $id = (int)$sizeId;
+        if ($id <= 0) {
+            Response::json(['success' => false, 'message' => 'Invalid size id'], 422);
+            return;
+        }
+
+        $input = $this->readJsonInput();
+        $label = isset($input['label']) ? trim((string)$input['label']) : null;
+        $isActive = isset($input['is_active']) ? ((int)$input['is_active'] === 1 ? 1 : 0) : null;
+        $sortOrder = isset($input['sort_order']) ? (int)$input['sort_order'] : null;
+
+        $assignments = [];
+        $params = ['id' => $id];
+        if ($label !== null && $label !== '') {
+            $assignments[] = 'label = :label';
+            $params['label'] = $label;
+        }
+        if ($isActive !== null) {
+            $assignments[] = 'is_active = :is_active';
+            $params['is_active'] = $isActive;
+        }
+        if ($sortOrder !== null) {
+            $assignments[] = 'sort_order = :sort_order';
+            $params['sort_order'] = $sortOrder;
+        }
+
+        if (count($assignments) === 0) {
+            Response::json(['success' => false, 'message' => 'No fields to update'], 422);
+            return;
+        }
+
+        $stmt = $pdo->prepare('UPDATE product_size_master SET ' . implode(', ', $assignments) . ' WHERE id = :id');
+        $stmt->execute($params);
+        Response::json(['success' => true, 'message' => 'Size label updated']);
+    }
+
+    public function productSizeMasterReorder(): void
+    {
+        if ($this->requireAdminId() === null) {
+            return;
+        }
+
+        $pdo = self::db();
+        if (!$pdo) {
+            return;
+        }
+
+        $this->ensureProductSizeMasterTable($pdo);
+        $input = $this->readJsonInput();
+        $ids = isset($input['ids']) && is_array($input['ids']) ? array_values($input['ids']) : [];
+        if (count($ids) === 0) {
+            Response::json(['success' => false, 'message' => 'ids array is required'], 422);
+            return;
+        }
+
+        $update = $pdo->prepare('UPDATE product_size_master SET sort_order = :sort_order WHERE id = :id');
+        $pdo->beginTransaction();
+        try {
+            $sortOrder = 10;
+            foreach ($ids as $rawId) {
+                $id = (int)$rawId;
+                if ($id <= 0) {
+                    continue;
+                }
+                $update->execute(['sort_order' => $sortOrder, 'id' => $id]);
+                $sortOrder += 10;
+            }
+            $pdo->commit();
+        } catch (\Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            Response::json(['success' => false, 'message' => 'Reorder failed: ' . $e->getMessage()], 500);
+            return;
+        }
+
+        Response::json(['success' => true, 'message' => 'Size master reordered']);
     }
 
     public function bulkImportLogs(): void
@@ -5475,6 +6179,46 @@ final class AdminApiController
         return $cache[$cacheKey];
     }
 
+    /** @return array<int, string> */
+    private function resolveMatrixSizeLabels(PDO $pdo): array
+    {
+        $fallback = ['Per Pcs', '0.5 kg', '1 kg', '1.5 kg', '2 kg', '2.5 kg', '3 kg', '3.5 kg', '4 kg'];
+
+        if (!$this->tableHasColumn($pdo, 'product_size_master', 'label')) {
+            return $fallback;
+        }
+
+        try {
+            $stmt = $pdo->query('SELECT label FROM product_size_master WHERE is_active = 1 ORDER BY sort_order ASC, id ASC');
+            $labels = $stmt ? $stmt->fetchAll(PDO::FETCH_COLUMN) : [];
+            $labels = array_values(array_filter(array_map(static fn($v): string => trim((string)$v), is_array($labels) ? $labels : []), static fn(string $v): bool => $v !== ''));
+            if (count($labels) > 0) {
+                return $labels;
+            }
+        } catch (\Throwable $e) {
+            return $fallback;
+        }
+
+        return $fallback;
+    }
+
+    private function normalizeMatrixSizeLabel(string $label): string
+    {
+        $normalized = strtolower(trim($label));
+        if ($normalized === '') {
+            return '';
+        }
+
+        $normalized = str_replace(['kgs', 'kg.', 'kilogram', 'kilograms'], 'kg', $normalized);
+        $normalized = preg_replace('/\s+/', ' ', $normalized) ?? $normalized;
+
+        if ($normalized === 'per piece' || $normalized === 'per pcs' || $normalized === 'pcs' || $normalized === 'piece') {
+            return 'per pcs';
+        }
+
+        return $normalized;
+    }
+
     private function stripDeveloperFooterFragments(string $html): string
     {
         $original = trim($html);
@@ -5635,6 +6379,8 @@ final class AdminApiController
         $map = [];
         foreach ($header as $index => $cell) {
             $key = strtolower(trim((string)$cell));
+            $key = str_replace(["\u{2019}", "\u{2018}"], "'", $key);
+            $key = str_replace(["'", '"'], '', $key);
             $key = str_replace([' ', '-'], '_', $key);
             if ($key !== '') {
                 $map[$key] = (int)$index;
@@ -5642,6 +6388,28 @@ final class AdminApiController
         }
 
         return $map;
+    }
+
+    /** @param array<string,int> $headerMap
+     *  @param array<int,string> $sizeLabels
+     */
+    private function isMatrixImportHeader(array $headerMap, array $sizeLabels): bool
+    {
+        $hasProductName = isset($headerMap['product_name']);
+        $hasCategory = isset($headerMap['category']);
+        if (!$hasProductName || !$hasCategory) {
+            return false;
+        }
+
+        foreach ($sizeLabels as $sizeLabel) {
+            $normalized = strtolower(trim($sizeLabel));
+            $normalized = str_replace([' ', '-'], '_', $normalized);
+            if (isset($headerMap[$normalized])) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** @param array<int, string> $row
@@ -5674,70 +6442,171 @@ final class AdminApiController
         ];
     }
 
-    /**
-     * @param array<string,string> $record
-     * @param array<int,string> $requiredVariantLabels
+    /** @param array<int, string> $row
+     *  @param array<string, int> $headerMap
+     *  @param array<int, string> $sizeLabels
+     *  @return array<string, string>
      */
-    private function validateImportRecord(array $record, bool $strictVariants, array $requiredVariantLabels): ?string
+    private function mapMatrixImportRow(array $row, array $headerMap, array $sizeLabels): array
     {
-        if ($record['product_name'] === '') {
-            return 'product_name is required';
-        }
-        if ($record['category_slug'] === '') {
-            return 'category_slug is required';
-        }
-        if ($record['sku'] === '') {
-            return 'sku is required';
-        }
-        if (!is_numeric($record['price']) || (float)$record['price'] <= 0) {
-            return 'price must be a positive number';
-        }
-        if ($record['stock'] !== '' && !is_numeric($record['stock'])) {
-            return 'stock must be numeric';
-        }
-        if ($record['discount_price'] !== '' && (!is_numeric($record['discount_price']) || (float)$record['discount_price'] < 0)) {
-            return 'discount_price must be numeric and non-negative';
-        }
-        if ($record['dietary_type'] !== '' && !in_array($record['dietary_type'], ['veg', 'nonveg'], true)) {
-            return 'dietary_type must be veg or nonveg';
-        }
-
-        if ($strictVariants) {
-            if ($record['variant_info'] === '') {
-                return 'variant_info is required in strict mode';
+        $valueFor = static function (string $name) use ($row, $headerMap): string {
+            if (!array_key_exists($name, $headerMap)) {
+                return '';
             }
+            $index = $headerMap[$name];
+            return isset($row[$index]) ? trim((string)$row[$index]) : '';
+        };
 
-            $presentLabels = [];
-            $chunks = array_filter(array_map('trim', explode('|', (string)$record['variant_info'])));
-            foreach ($chunks as $chunk) {
-                $parts = array_map('trim', explode(':', $chunk));
-                if (count($parts) < 2 || $parts[0] === '' || !is_numeric($parts[1]) || (float)$parts[1] <= 0) {
-                    return 'variant_info contains invalid pair. Expected label:price';
-                }
-                $presentLabels[] = strtolower($parts[0]);
-            }
-
-            $presentLabels = array_values(array_unique($presentLabels));
-            $missing = [];
-            foreach ($requiredVariantLabels as $requiredLabel) {
-                if (!in_array(strtolower($requiredLabel), $presentLabels, true)) {
-                    $missing[] = $requiredLabel;
+        $valueForAny = static function (array $names) use ($valueFor): string {
+            foreach ($names as $name) {
+                $value = $valueFor((string)$name);
+                if ($value !== '') {
+                    return $value;
                 }
             }
-            if (count($missing) > 0) {
-                return 'variant_info missing required labels: ' . implode(', ', $missing);
+            return '';
+        };
+
+        $variantPairs = [];
+        $basePrice = null;
+        foreach ($sizeLabels as $sizeLabel) {
+            $headerKey = strtolower(trim($sizeLabel));
+            $headerKey = str_replace([' ', '-'], '_', $headerKey);
+            $value = $valueFor($headerKey);
+            if ($value === '' || !is_numeric($value)) {
+                continue;
+            }
+            $price = (float)$value;
+            if ($price <= 0) {
+                continue;
+            }
+            $variantPairs[] = $sizeLabel . ':' . number_format($price, 2, '.', '');
+            if ($basePrice === null || $price < $basePrice) {
+                $basePrice = $price;
             }
         }
 
-        return null;
+        $foodTypeRaw = strtolower($valueForAny(['food_type', 'dietary_type']));
+        if (!in_array($foodTypeRaw, ['veg', 'nonveg'], true)) {
+            $foodTypeRaw = 'veg';
+        }
+
+        $dietaryTagRaw = strtolower($valueForAny(['dietary_tag', 'dietarytag']));
+        if ($dietaryTagRaw === '') {
+            $dietaryTagRaw = 'regular';
+        }
+
+        $chefSpecial = $this->parseYesNoFlag($valueForAny(['chefs_special', 'chef_special'])) ? 'chefs_special' : '';
+
+        return [
+            'product_name' => $valueFor('product_name'),
+            'category_slug' => $valueForAny(['category', 'category_slug']),
+            'description' => $valueFor('description'),
+            'price' => $basePrice !== null ? number_format((float)$basePrice, 2, '.', '') : '0',
+            'discount_price' => '',
+            'sku' => $valueFor('sku'),
+            'stock' => is_numeric($valueFor('stock')) ? $valueFor('stock') : '100',
+            'tags' => $chefSpecial,
+            'variant_info' => implode('|', $variantPairs),
+            'image_url' => $valueForAny(['image_url', 'image', 'featured_image']),
+            'dietary_type' => $foodTypeRaw,
+            'is_veg' => $foodTypeRaw === 'veg' ? '1' : '0',
+            'topper_enabled' => $this->parseYesNoFlag($valueForAny(['enable_topper_selection', 'topper_enabled'])) ? '1' : '0',
+            'note_enabled' => $this->parseYesNoFlag($valueForAny(['enable_note_on_cake', 'note_enabled'])) ? '1' : '0',
+            'subcategory_name' => $valueForAny(['subcategory', 'sub_category']),
+        ];
     }
 
-    private function findCategoryIdBySlug(PDO $pdo, string $slug): ?int
+    private function parseYesNoFlag(string $value): bool
     {
-        $stmt = $pdo->prepare('SELECT id FROM categories WHERE slug = :slug AND deleted_at IS NULL LIMIT 1');
-        $stmt->execute(['slug' => $slug]);
-        $id = (int)($stmt->fetchColumn() ?: 0);
-        return $id > 0 ? $id : null;
+        $normalized = strtolower(trim($value));
+        if ($normalized === '') {
+            return true;
+        }
+
+        return in_array($normalized, ['yes', 'y', '1', 'true', 'enabled'], true);
+    }
+
+    /**
+        }
+
+        $stmt = $pdo->prepare('SELECT id FROM categories WHERE LOWER(name) = LOWER(:name) AND deleted_at IS NULL LIMIT 1');
+        $stmt->execute(['name' => $value]);
+        $nameId = (int)($stmt->fetchColumn() ?: 0);
+        return $nameId > 0 ? $nameId : null;
+    }
+
+    private function buildMatrixFallbackSku(string $productName, string $categoryLabel): string
+    {
+        $seed = strtolower(trim($categoryLabel . '|' . $productName));
+        $prefix = strtoupper(substr(preg_replace('/[^a-z0-9]/i', '', $this->slugify($productName)) ?: 'SKU', 0, 8));
+        $hash = strtoupper(substr(md5($seed), 0, 8));
+        return $prefix . '-' . $hash;
+    }
+
+    /**
+     * @return array{0: array<int,mixed>, 1: array<int, array<int,mixed>>}
+     */
+    private function readImportRowsFromUpload(string $tmpName, string $extension): array
+    {
+        if ($extension === 'xlsx') {
+            $allImportRows = ExcelService::readUploadedXlsx($tmpName);
+            if (count($allImportRows) === 0) {
+                throw new \RuntimeException('Excel file appears to be empty');
+            }
+            $header = array_shift($allImportRows);
+            if (!is_array($header) || count($header) === 0) {
+                throw new \RuntimeException('Excel header row is required');
+            }
+            return [$header, array_values($allImportRows)];
+        }
+
+        $handle = fopen($tmpName, 'rb');
+        if ($handle === false) {
+            throw new \RuntimeException('Cannot read uploaded CSV file');
+        }
+        $header = fgetcsv($handle);
+        if (!is_array($header) || count($header) === 0) {
+            fclose($handle);
+            throw new \RuntimeException('CSV header row is required');
+        }
+        $rows = [];
+        while (($csvRow = fgetcsv($handle)) !== false) {
+            $rows[] = $csvRow;
+        }
+        fclose($handle);
+
+        return [$header, $rows];
+    }
+
+    /** @param array<int,int> $upsertedProductIds */
+    private function estimateArchiveCount(PDO $pdo, array $upsertedProductIds): int
+    {
+        if (count($upsertedProductIds) === 0) {
+            return (int)($pdo->query('SELECT COUNT(*) FROM products WHERE deleted_at IS NULL')->fetchColumn() ?: 0);
+        }
+
+        $placeholders = implode(',', array_fill(0, count($upsertedProductIds), '?'));
+        $stmt = $pdo->prepare('SELECT COUNT(*) FROM products WHERE deleted_at IS NULL AND id NOT IN (' . $placeholders . ')');
+        $stmt->execute($upsertedProductIds);
+        return (int)($stmt->fetchColumn() ?: 0);
+    }
+
+    private function ensureProductSizeMasterTable(PDO $pdo): void
+    {
+        $pdo->exec(
+            'CREATE TABLE IF NOT EXISTS product_size_master (
+                id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                label VARCHAR(80) NOT NULL,
+                sort_order INT NOT NULL DEFAULT 0,
+                is_active TINYINT(1) NOT NULL DEFAULT 1,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                UNIQUE KEY uq_product_size_master_label (label),
+                KEY idx_product_size_master_active_order (is_active, sort_order)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
+        );
     }
 
     /** @return array<int, array<string, mixed>> */
@@ -5801,6 +6670,82 @@ final class AdminApiController
         } catch (\Throwable $e) {
             error_log('[logAdminAction] ' . $e->getMessage());
         }
+    }
+
+    /** @return array<int,array<string,mixed>> */
+    private function normalizeMatrixRows(mixed $matrixInput): array
+    {
+        if (is_string($matrixInput)) {
+            $decoded = json_decode($matrixInput, true);
+            $matrixInput = is_array($decoded) ? $decoded : [];
+        }
+
+        if (!is_array($matrixInput)) {
+            return [];
+        }
+
+        $rows = [];
+        foreach ($matrixInput as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+
+            $label = trim((string)($row['label'] ?? ($row['variant_label'] ?? ($row['variant_name'] ?? ($row['weight_or_size'] ?? '')))));
+            $price = round((float)($row['price'] ?? 0), 2);
+            if ($label === '') {
+                continue;
+            }
+
+            $rows[] = [
+                'label' => $label,
+                'price' => $price,
+                'stock_quantity' => max(0, (int)($row['stock_quantity'] ?? 0)),
+                'sku' => trim((string)($row['sku'] ?? '')),
+                'is_default' => (int)($row['is_default'] ?? 0) === 1 ? 1 : 0,
+                'size_id' => (int)($row['size_id'] ?? 0),
+            ];
+        }
+
+        return $rows;
+    }
+
+    /** @param array<int,array<string,mixed>> $matrixRows */
+    private function matrixRowsToVariants(array $matrixRows): array
+    {
+        $variants = [];
+        foreach ($matrixRows as $index => $row) {
+            $label = trim((string)($row['label'] ?? ''));
+            $price = round((float)($row['price'] ?? 0), 2);
+            if ($label === '' || $price <= 0) {
+                continue;
+            }
+
+            $variants[] = [
+                'variant_label' => $label,
+                'variant_name' => $label,
+                'weight_or_size' => $label,
+                'unit_type' => 'custom',
+                'price' => $price,
+                'stock_quantity' => max(0, (int)($row['stock_quantity'] ?? 0)),
+                'sku' => trim((string)($row['sku'] ?? '')),
+                'is_default' => (int)($row['is_default'] ?? 0) === 1 ? 1 : ($index === 0 ? 1 : 0),
+            ];
+        }
+
+        return $variants;
+    }
+
+    /** @param array<int,array<string,mixed>> $matrixRows */
+    private function matrixDefaultPrice(array $matrixRows): float
+    {
+        foreach ($matrixRows as $row) {
+            $price = (float)($row['price'] ?? 0);
+            if ($price > 0) {
+                return round($price, 2);
+            }
+        }
+
+        return 0.0;
     }
 
     private function projectRoot(): string

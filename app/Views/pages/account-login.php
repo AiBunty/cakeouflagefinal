@@ -61,11 +61,6 @@ $heroImage = '/client/assets/images/showcase/wedding.jpg';
           <input id="customerRememberDevice" type="checkbox" name="remember_device" value="1" />
           <span>Remember this device</span>
         </label>
-
-        <button class="customer-btn customer-btn--primary customer-login__submit" id="customerVerifyBtn" type="submit" hidden style="display:none!important">
-          <span class="customer-btn__label">Verify &amp; Continue</span>
-          <span class="customer-btn__spinner" aria-hidden="true"></span>
-        </button>
         <p id="customerLoginStatus" class="customer-login__status" aria-live="polite"></p>
       </form>
 

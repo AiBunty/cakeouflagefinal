@@ -28,8 +28,12 @@ final class OrderStateManager
         'awaiting_confirmation'=> ['confirmed', 'cancelled', 'rejected'],
 
         // Post-payment lifecycle
-        'confirmed'            => ['preparing', 'ready_for_pickup', 'out_for_delivery', 'delivered', 'partially_refunded', 'fully_refunded'],
-        'preparing'            => ['ready_for_pickup', 'out_for_delivery', 'delivered', 'partially_refunded', 'fully_refunded'],
+        'confirmed'            => ['preparing', 'ready_for_pickup', 'out_for_delivery', 'delivered', 'partially_refunded', 'fully_refunded', 'revision_pending'],
+        'preparing'            => ['ready_for_pickup', 'out_for_delivery', 'delivered', 'partially_refunded', 'fully_refunded', 'revision_pending'],
+
+        // Revision states (managed by OrderRevisionService)
+        'revision_pending'     => ['revision_confirmed', 'confirmed', 'preparing'],
+        'revision_confirmed'   => ['confirmed', 'preparing'],
         'ready_for_pickup'     => ['delivered', 'completed', 'partially_refunded', 'fully_refunded'],
         'out_for_delivery'     => ['delivered', 'completed', 'partially_refunded', 'fully_refunded'],
         'delivered'            => ['completed', 'partially_refunded', 'fully_refunded'],
@@ -167,7 +171,7 @@ final class OrderStateManager
             }
 
             // Payment decision hard gate: do not allow confirmation until payment is settled.
-            if ($newStatus === 'confirmed' && !in_array($currentPayment, ['paid', 'credit'], true)) {
+            if ($newStatus === 'confirmed' && !in_array($currentPayment, ['paid', 'credit', 'part_paid'], true)) {
                 $pdo->rollBack();
                 return [
                     'success'         => false,
@@ -300,7 +304,7 @@ final class OrderStateManager
             || in_array($paymentStatus, ['pending', 'under_review', 'rejected', 'failed'], true);
 
         $isPostPayment = in_array($orderStatus, ['confirmed', 'preparing', 'ready_for_pickup', 'out_for_delivery', 'delivered', 'completed'], true)
-            || in_array($paymentStatus, ['paid', 'credit', 'refund_pending', 'partially_refunded', 'refunded'], true);
+            || in_array($paymentStatus, ['paid', 'part_paid', 'credit', 'refund_pending', 'partially_refunded', 'refunded'], true);
 
         $canCancel = $isUnpaid && !$refundFinal && in_array('cancelled', $this->getAllowedTransitions($orderStatus), true);
 
@@ -408,7 +412,7 @@ final class OrderStateManager
 
     private function isPaidState(string $paymentStatus, string $orderStatus): bool
     {
-        return in_array($paymentStatus, ['paid', 'credit', 'refund_pending', 'partially_refunded', 'refunded'], true)
+        return in_array($paymentStatus, ['paid', 'part_paid', 'credit', 'refund_pending', 'partially_refunded', 'refunded'], true)
             || in_array($orderStatus, ['confirmed', 'preparing', 'ready_for_pickup', 'out_for_delivery', 'delivered', 'completed'], true);
     }
 
@@ -433,6 +437,9 @@ final class OrderStateManager
         }
         if ($paymentStatus === 'paid') {
             return 'Paid';
+        }
+        if ($paymentStatus === 'part_paid') {
+            return 'Part Paid';
         }
         if ($paymentStatus === 'refund_pending') {
             return 'Partial Refund';

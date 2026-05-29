@@ -556,6 +556,57 @@ $stickyRefund = ($isRefundEligible && $canOrderRefund)
         </div>
       </article>
 
+      <?php if (
+        $canConfirmPayment &&
+        (string)($order['payment_status'] ?? '') === 'pending' &&
+        (string)($order['payment_method'] ?? '') === 'upi_manual'
+      ): ?>
+      <article class="od-card" id="verify-payment-card" style="border:2px solid #f59e0b;background:#fffbeb;">
+        <h2 class="od-card-title" style="color:#92400e;">⚠ UPI Payment Awaiting Verification</h2>
+        <?php $proofUrl = (string)($order['payment_proof_url'] ?? ''); ?>
+        <?php if ($proofUrl !== ''): ?>
+          <?php $proofDisplay = (strncmp($proofUrl, 'http', 4) === 0) ? $proofUrl : '/' . ltrim($proofUrl, '/'); ?>
+          <div style="text-align:center;margin:.75rem 0">
+            <a href="<?php echo od_h($proofDisplay); ?>" target="_blank" rel="noopener">
+              <img src="<?php echo od_h($proofDisplay); ?>"
+                   alt="Payment proof"
+                   style="max-width:100%;max-height:220px;object-fit:contain;border-radius:.5rem;border:1px solid #fcd34d;cursor:pointer;">
+            </a>
+            <div style="margin-top:.35rem;font-size:.78rem;color:#78716c;">Click to open full size</div>
+          </div>
+        <?php else: ?>
+          <p style="font-size:.85rem;color:#9ca3af;font-style:italic;">No payment screenshot uploaded yet.</p>
+        <?php endif; ?>
+
+        <div style="display:flex;gap:.75rem;margin-top:1rem;flex-wrap:wrap;">
+          <!-- Approve -->
+          <form method="post" action="verify_payment.php"
+                onsubmit="return confirm('Approve payment for order <?php echo od_h((string)$order['order_number']); ?>?\nThis will post to the GL and mark the order as paid.')">
+            <input type="hidden" name="csrf_token" value="<?php echo od_h(\App\Core\Csrf::token()); ?>">
+            <input type="hidden" name="action"   value="approve">
+            <input type="hidden" name="order_id" value="<?php echo (int)$orderId; ?>">
+            <button type="submit"
+                    style="background:#059669;color:#fff;border:none;border-radius:.45rem;padding:.55rem 1.25rem;font-size:.88rem;font-weight:600;cursor:pointer;">
+              ✓ Approve Payment
+            </button>
+          </form>
+
+          <!-- Reject -->
+          <form method="post" action="verify_payment.php"
+                onsubmit="return confirm('Reject payment for order <?php echo od_h((string)$order['order_number']); ?>?\nThis will mark the order as cancelled.')">
+            <input type="hidden" name="csrf_token"      value="<?php echo od_h(\App\Core\Csrf::token()); ?>">
+            <input type="hidden" name="action"          value="reject">
+            <input type="hidden" name="order_id"        value="<?php echo (int)$orderId; ?>">
+            <input type="hidden" name="rejection_note"  value="">
+            <button type="submit"
+                    style="background:#dc2626;color:#fff;border:none;border-radius:.45rem;padding:.55rem 1.25rem;font-size:.88rem;font-weight:600;cursor:pointer;">
+              ✕ Reject Payment
+            </button>
+          </form>
+        </div>
+      </article>
+      <?php endif; ?>
+
       <article class="od-card order-timeline-card is-collapsible open">
         <button type="button" class="od-accordion-toggle" data-od-accordion="1" aria-expanded="true">
           <span>Order Timeline</span>

@@ -56,7 +56,7 @@ function admin_bootstrap_support_tables($conn)
     // Credit + payment state expansion — expand ENUMs (safe to run repeatedly in MySQL 8)
     $conn->query("ALTER TABLE orders MODIFY COLUMN payment_method ENUM('upi_manual','cod','gateway','credit') NOT NULL DEFAULT 'upi_manual'");
     // Updated ENUM matches 2026-05-27-order-state-machine.sql migration
-    $conn->query("ALTER TABLE orders MODIFY COLUMN payment_status ENUM('pending','under_review','paid','credit','refund_pending','partially_refunded','refunded','failed','rejected') NOT NULL DEFAULT 'pending'");
+    $conn->query("ALTER TABLE orders MODIFY COLUMN payment_status ENUM('pending','under_review','paid','part_paid','credit','refund_pending','partially_refunded','refunded','failed','rejected') NOT NULL DEFAULT 'pending'");
 
     // Add phone_e164 to users if missing
     $users_cols = [];
@@ -426,6 +426,7 @@ function admin_navigation_items()
         array('title' => 'Import Products', 'href' => 'import-products.php', 'page' => 'Import Products', 'permission' => 'import_products'),
         array('title' => 'Cake Toppers', 'href' => 'toppers.php', 'page' => 'Cake Toppers', 'permission' => 'products'),
         array('title' => 'Orders', 'href' => 'orders.php', 'page' => 'Orders', 'permission' => 'orders'),
+        array('title' => 'Verify Payments', 'href' => 'payment_verification.php', 'page' => 'Payment Verification', 'permission' => 'order_edit'),
         array('title' => 'Refunds', 'href' => 'refunds.php', 'page' => 'Refunds', 'permission' => 'can_approve_refund'),
         array('title' => 'Payment Verification', 'href' => 'bank-alerts.php', 'page' => 'Payment Verification', 'permission' => 'payment_verification'),
         array('title' => 'Manual Order Punch', 'href' => 'manual_order.php', 'page' => 'Manual Order Punch', 'permission' => 'manual_orders'),
@@ -449,7 +450,14 @@ function admin_navigation_items()
         array('title' => 'Maintenance', 'href' => 'maintenance.php', 'page' => 'System Maintenance', 'permission' => 'maintenance'),
         array('title' => 'Form Test Harness', 'href' => 'form-test-harness-report.php', 'page' => 'Form Test Harness', 'permission' => 'maintenance'),
         array('title' => 'Sub Users', 'href' => 'admin_users.php', 'page' => 'Sub Users', 'permission' => 'sub_users'),
-        array('title' => 'Change Password', 'href' => 'change-password.php', 'page' => 'Change Password', 'permission' => 'change_password')
+        array('title' => 'Change Password', 'href' => 'change-password.php', 'page' => 'Change Password', 'permission' => 'change_password'),
+        // ── Accounting ────────────────────────────────────────────────
+        array('title' => 'Daily Close',          'href' => 'accounting_close.php',       'page' => 'Daily Close',          'permission' => 'revenue_report'),
+        array('title' => 'GL Register',          'href' => 'gl_register.php',            'page' => 'GL Register',          'permission' => 'revenue_report'),
+        array('title' => 'Customer Ledger',      'href' => 'customer_ledger.php',        'page' => 'Customer Ledger',      'permission' => 'revenue_report'),
+        array('title' => 'Chart of Accounts',   'href' => 'coa.php',                    'page' => 'Chart of Accounts',   'permission' => 'revenue_report'),
+        array('title' => 'Revise Order',         'href' => 'order_revision.php',         'page' => 'Revise Order',         'permission' => 'orders'),
+        array('title' => 'Revision History',     'href' => 'order_revision_history.php', 'page' => 'Revision History',     'permission' => 'orders')
     );
 }
 

@@ -42,6 +42,7 @@ final class FinanceReportService
         'exceptions',
         'all',
         'paid',
+        'part_paid',
         'pending',
         'credit',
         'under_review',
@@ -141,6 +142,9 @@ final class FinanceReportService
             'payment_status' => $paymentScope,
             'order_status' => $orderStatus,
             'payment_method' => $paymentMethod,
+            'source_channel' => in_array(trim((string)($input['source_channel'] ?? '')), ['online', 'admin'], true)
+                ? trim((string)($input['source_channel'] ?? ''))
+                : '',
         ];
     }
 
@@ -628,12 +632,41 @@ final class FinanceReportService
             $conditions[] = 'payment_method IN ("upi_manual", "gateway")';
         }
 
+        $sc = $filters['source_channel'] ?? '';
+        if ($sc === 'online') {
+            $conditions[] = 'source_channel = \'online\'';
+        } elseif ($sc === 'admin') {
+            $conditions[] = 'source_channel = \'admin\'';
+        }
+
         $orderBy = 'COALESCE(' . $dateColumn . ', created_at) DESC, id DESC';
         return [implode(' AND ', $conditions), $params, $orderBy];
     }
 
     private function baseDatasetSql(): string
     {
+        // Effective total: use revised amount when an order revision exists
+        $eff = 'COALESCE(o.revised_grand_total, o.grand_total)';
+        $paidFullStatuses = "'paid', 'partially_refunded', 'refunded'";
+        $refundedOrClosedExpr = "o.payment_status IN ('refunded', 'partially_refunded') OR o.order_status IN ('cancelled', 'rejected', 'fully_refunded', 'partially_refunded')";
+        $collectedBeforeRefundsExpr = "LEAST(
+                    CASE
+                        WHEN o.payment_status IN ({$paidFullStatuses}) THEN {$eff}
+                        WHEN o.payment_status = 'part_paid' THEN GREATEST(COALESCE(inv.verified_paid_amount, 0), COALESCE(o.advance_amount, 0))
+                        WHEN COALESCE(o.advance_amount, 0) > 0 THEN COALESCE(o.advance_amount, 0)
+                        ELSE 0
+                    END,
+                    {$eff}
+                )";
+        $netCollectedExpr = "GREATEST({$collectedBeforeRefundsExpr} - COALESCE(refunds.refund_amount, COALESCE(o.total_refunded, 0), 0), 0)";
+        $balanceDueExpr = "GREATEST(
+                    CASE
+                        WHEN {$refundedOrClosedExpr} THEN 0
+                        ELSE {$eff} - {$collectedBeforeRefundsExpr}
+                    END,
+                    0
+                )";
+
         return "
             SELECT
                 o.id,
@@ -656,6 +689,8 @@ final class FinanceReportService
                 o.tax_total,
                 o.delivery_fee,
                 o.grand_total,
+                o.revised_grand_total,
+                {$eff} AS effective_grand_total,
                 COALESCE(o.advance_amount, 0) AS advance_amount,
                 COALESCE(o.followup_status, 'no_reminder') AS followup_status,
                 o.last_followup_at,
@@ -675,224 +710,65 @@ final class FinanceReportService
                 CASE
                     WHEN o.order_status IN ('cancelled', 'rejected', 'refunded', 'partially_refunded', 'fully_refunded')
                         OR o.payment_status IN ('refunded', 'partially_refunded') THEN 0
-                    ELSE o.grand_total
+                    ELSE {$eff}
                 END AS gross_amount,
-                LEAST(
-                    CASE
-                        WHEN o.payment_status IN ('paid', 'partially_refunded', 'refunded') THEN o.grand_total
-                        WHEN COALESCE(o.advance_amount, 0) > 0 THEN COALESCE(o.advance_amount, 0)
-                        ELSE 0
-                    END,
-                    o.grand_total
-                ) AS collected_before_refunds,
+                {$collectedBeforeRefundsExpr} AS collected_before_refunds,
                 CASE
                     WHEN o.order_status IN ('cancelled', 'rejected', 'refunded', 'partially_refunded', 'fully_refunded')
                         OR o.payment_status IN ('refunded', 'partially_refunded') THEN 0
-                    WHEN o.payment_status IN ('paid', 'partially_refunded', 'refunded') THEN o.grand_total
-                    ELSE 0
+                    ELSE {$collectedBeforeRefundsExpr}
                 END AS realized_gross_amount,
                 CASE
                     WHEN o.order_status IN ('cancelled', 'rejected', 'refunded', 'partially_refunded', 'fully_refunded')
                         OR o.payment_status IN ('refunded', 'partially_refunded') THEN 0
-                    ELSE GREATEST(
-                        LEAST(
-                            CASE
-                                WHEN o.payment_status IN ('paid', 'partially_refunded', 'refunded') THEN o.grand_total
-                                WHEN COALESCE(o.advance_amount, 0) > 0 THEN COALESCE(o.advance_amount, 0)
-                                ELSE 0
-                            END,
-                            o.grand_total
-                        ) - COALESCE(refunds.refund_amount, COALESCE(o.total_refunded, 0), 0),
-                        0
-                    )
+                    ELSE {$netCollectedExpr}
                 END AS net_collected_amount,
                 CASE
                     WHEN o.order_status IN ('cancelled', 'rejected', 'refunded', 'partially_refunded', 'fully_refunded')
                         OR o.payment_status IN ('refunded', 'partially_refunded') THEN 0
-                    ELSE GREATEST(
-                        LEAST(
-                            CASE
-                                WHEN o.payment_status IN ('paid', 'partially_refunded', 'refunded') THEN o.grand_total
-                                WHEN COALESCE(o.advance_amount, 0) > 0 THEN COALESCE(o.advance_amount, 0)
-                                ELSE 0
-                            END,
-                            o.grand_total
-                        ) - COALESCE(refunds.refund_amount, COALESCE(o.total_refunded, 0), 0),
-                        0
-                    )
+                    ELSE {$netCollectedExpr}
                 END AS net_realized_amount,
                 CASE
-                    WHEN COALESCE(o.advance_amount, 0) > 0 THEN LEAST(COALESCE(o.advance_amount, 0), o.grand_total)
+                    WHEN COALESCE(o.advance_amount, 0) > 0 THEN LEAST(COALESCE(o.advance_amount, 0), {$eff})
                     ELSE 0
                 END AS advance_collected_amount,
-                GREATEST(
-                    CASE
-                        WHEN o.payment_status IN ('refunded', 'partially_refunded') OR o.order_status IN ('cancelled', 'rejected', 'fully_refunded', 'partially_refunded') THEN 0
-                        ELSE o.grand_total - LEAST(
-                            CASE
-                                WHEN o.payment_status IN ('paid', 'partially_refunded', 'refunded') THEN o.grand_total
-                                WHEN COALESCE(o.advance_amount, 0) > 0 THEN COALESCE(o.advance_amount, 0)
-                                ELSE 0
-                            END,
-                            o.grand_total
-                        )
-                    END,
-                    0
-                ) AS balance_due_amount,
+                {$balanceDueExpr} AS balance_due_amount,
                 CASE
                     WHEN o.payment_status IN ('refunded', 'partially_refunded') OR o.order_status IN ('fully_refunded', 'partially_refunded') THEN 'Refunded'
-                    WHEN GREATEST(
-                        CASE
-                            WHEN o.payment_status IN ('refunded', 'partially_refunded') OR o.order_status IN ('cancelled', 'rejected', 'fully_refunded', 'partially_refunded') THEN 0
-                            ELSE o.grand_total - LEAST(
-                                CASE
-                                    WHEN o.payment_status IN ('paid', 'partially_refunded', 'refunded') THEN o.grand_total
-                                    WHEN COALESCE(o.advance_amount, 0) > 0 THEN COALESCE(o.advance_amount, 0)
-                                    ELSE 0
-                                END,
-                                o.grand_total
-                            )
-                        END,
-                        0
-                    ) > 0 AND DATE(COALESCE(o.scheduled_slot, o.created_at)) < CURDATE() THEN 'Overdue'
-                    WHEN GREATEST(
-                        CASE
-                            WHEN o.payment_status IN ('refunded', 'partially_refunded') OR o.order_status IN ('cancelled', 'rejected', 'fully_refunded', 'partially_refunded') THEN 0
-                            ELSE o.grand_total - LEAST(
-                                CASE
-                                    WHEN o.payment_status IN ('paid', 'partially_refunded', 'refunded') THEN o.grand_total
-                                    WHEN COALESCE(o.advance_amount, 0) > 0 THEN COALESCE(o.advance_amount, 0)
-                                    ELSE 0
-                                END,
-                                o.grand_total
-                            )
-                        END,
-                        0
-                    ) > 0 AND LEAST(COALESCE(o.advance_amount, 0), o.grand_total) > 0 THEN 'Advance Paid'
-                    WHEN GREATEST(
-                        CASE
-                            WHEN o.payment_status IN ('refunded', 'partially_refunded') OR o.order_status IN ('cancelled', 'rejected', 'fully_refunded', 'partially_refunded') THEN 0
-                            ELSE o.grand_total - LEAST(
-                                CASE
-                                    WHEN o.payment_status IN ('paid', 'partially_refunded', 'refunded') THEN o.grand_total
-                                    WHEN COALESCE(o.advance_amount, 0) > 0 THEN COALESCE(o.advance_amount, 0)
-                                    ELSE 0
-                                END,
-                                o.grand_total
-                            )
-                        END,
-                        0
-                    ) > 0 THEN 'Payment Pending'
+                    WHEN {$balanceDueExpr} > 0 AND DATE(COALESCE(o.scheduled_slot, o.created_at)) < CURDATE() THEN 'Overdue'
+                    WHEN {$balanceDueExpr} > 0 AND LEAST(COALESCE(o.advance_amount, 0), {$eff}) > 0 THEN 'Advance Paid'
+                    WHEN {$balanceDueExpr} > 0 THEN 'Payment Pending'
                     ELSE 'Fully Paid'
                 END AS collection_status_label,
                 CASE
                     WHEN o.order_status IN ('cancelled', 'rejected', 'refunded', 'partially_refunded', 'fully_refunded')
                         OR o.payment_status IN ('refunded', 'partially_refunded') THEN 0
-                    WHEN o.payment_method = 'cod' THEN GREATEST(
-                        LEAST(
-                            CASE
-                                WHEN o.payment_status IN ('paid', 'partially_refunded', 'refunded') THEN o.grand_total
-                                WHEN COALESCE(o.advance_amount, 0) > 0 THEN COALESCE(o.advance_amount, 0)
-                                ELSE 0
-                            END,
-                            o.grand_total
-                        ) - COALESCE(refunds.refund_amount, COALESCE(o.total_refunded, 0), 0),
-                        0
-                    )
+                    WHEN COALESCE(paytx.verified_total, 0) > 0 THEN LEAST({$netCollectedExpr}, COALESCE(paytx.cash_verified, 0))
+                    WHEN o.payment_method = 'cod' THEN GREATEST({$netCollectedExpr}, 0)
                     ELSE 0
                 END AS cash_net_amount,
                 CASE
                     WHEN o.order_status IN ('cancelled', 'rejected', 'refunded', 'partially_refunded', 'fully_refunded')
                         OR o.payment_status IN ('refunded', 'partially_refunded') THEN 0
-                    WHEN o.payment_method IN ('upi_manual', 'gateway') THEN GREATEST(
-                        LEAST(
-                            CASE
-                                WHEN o.payment_status IN ('paid', 'partially_refunded', 'refunded') THEN o.grand_total
-                                WHEN COALESCE(o.advance_amount, 0) > 0 THEN COALESCE(o.advance_amount, 0)
-                                ELSE 0
-                            END,
-                            o.grand_total
-                        ) - COALESCE(refunds.refund_amount, COALESCE(o.total_refunded, 0), 0),
-                        0
+                    WHEN COALESCE(paytx.verified_total, 0) > 0 THEN LEAST(
+                        GREATEST({$netCollectedExpr} - LEAST({$netCollectedExpr}, COALESCE(paytx.cash_verified, 0)), 0),
+                        COALESCE(paytx.bank_verified, 0)
                     )
+                    WHEN o.payment_method IN ('upi_manual', 'gateway') THEN GREATEST({$netCollectedExpr}, 0)
                     ELSE 0
                 END AS bank_net_amount,
                 CASE
-                    WHEN GREATEST(
-                        CASE
-                            WHEN o.payment_status IN ('refunded', 'partially_refunded') OR o.order_status IN ('cancelled', 'rejected', 'fully_refunded', 'partially_refunded') THEN 0
-                            ELSE o.grand_total - LEAST(
-                                CASE
-                                    WHEN o.payment_status IN ('paid', 'partially_refunded', 'refunded') THEN o.grand_total
-                                    WHEN COALESCE(o.advance_amount, 0) > 0 THEN COALESCE(o.advance_amount, 0)
-                                    ELSE 0
-                                END,
-                                o.grand_total
-                            )
-                        END,
-                        0
-                    ) > 0 THEN GREATEST(
-                        CASE
-                            WHEN o.payment_status IN ('refunded', 'partially_refunded') OR o.order_status IN ('cancelled', 'rejected', 'fully_refunded', 'partially_refunded') THEN 0
-                            ELSE o.grand_total - LEAST(
-                                CASE
-                                    WHEN o.payment_status IN ('paid', 'partially_refunded', 'refunded') THEN o.grand_total
-                                    WHEN COALESCE(o.advance_amount, 0) > 0 THEN COALESCE(o.advance_amount, 0)
-                                    ELSE 0
-                                END,
-                                o.grand_total
-                            )
-                        END,
-                        0
-                    )
+                    WHEN {$balanceDueExpr} > 0 THEN {$balanceDueExpr}
                     ELSE 0
                 END AS credit_outstanding_amount,
                 CASE
                     WHEN o.payment_status IN ('refunded', 'partially_refunded') OR o.order_status IN ('fully_refunded', 'partially_refunded') THEN 'Refunded'
-                    WHEN GREATEST(
-                        CASE
-                            WHEN o.payment_status IN ('refunded', 'partially_refunded') OR o.order_status IN ('cancelled', 'rejected', 'fully_refunded', 'partially_refunded') THEN 0
-                            ELSE o.grand_total - LEAST(
-                                CASE
-                                    WHEN o.payment_status IN ('paid', 'partially_refunded', 'refunded') THEN o.grand_total
-                                    WHEN COALESCE(o.advance_amount, 0) > 0 THEN COALESCE(o.advance_amount, 0)
-                                    ELSE 0
-                                END,
-                                o.grand_total
-                            )
-                        END,
-                        0
-                    ) > 0 AND DATE(COALESCE(o.scheduled_slot, o.created_at)) < CURDATE() THEN 'Overdue'
-                    WHEN GREATEST(
-                        CASE
-                            WHEN o.payment_status IN ('refunded', 'partially_refunded') OR o.order_status IN ('cancelled', 'rejected', 'fully_refunded', 'partially_refunded') THEN 0
-                            ELSE o.grand_total - LEAST(
-                                CASE
-                                    WHEN o.payment_status IN ('paid', 'partially_refunded', 'refunded') THEN o.grand_total
-                                    WHEN COALESCE(o.advance_amount, 0) > 0 THEN COALESCE(o.advance_amount, 0)
-                                    ELSE 0
-                                END,
-                                o.grand_total
-                            )
-                        END,
-                        0
-                    ) > 0 AND LEAST(COALESCE(o.advance_amount, 0), o.grand_total) > 0 THEN 'Advance Paid'
-                    WHEN GREATEST(
-                        CASE
-                            WHEN o.payment_status IN ('refunded', 'partially_refunded') OR o.order_status IN ('cancelled', 'rejected', 'fully_refunded', 'partially_refunded') THEN 0
-                            ELSE o.grand_total - LEAST(
-                                CASE
-                                    WHEN o.payment_status IN ('paid', 'partially_refunded', 'refunded') THEN o.grand_total
-                                    WHEN COALESCE(o.advance_amount, 0) > 0 THEN COALESCE(o.advance_amount, 0)
-                                    ELSE 0
-                                END,
-                                o.grand_total
-                            )
-                        END,
-                        0
-                    ) > 0 THEN 'Payment Pending'
+                    WHEN {$balanceDueExpr} > 0 AND DATE(COALESCE(o.scheduled_slot, o.created_at)) < CURDATE() THEN 'Overdue'
+                    WHEN {$balanceDueExpr} > 0 AND LEAST(COALESCE(o.advance_amount, 0), {$eff}) > 0 THEN 'Advance Paid'
+                    WHEN {$balanceDueExpr} > 0 THEN 'Payment Pending'
                     ELSE 'Fully Paid'
-                END AS finance_status_label
+                END AS finance_status_label,
+                CASE WHEN o.user_id IS NOT NULL THEN 'online' ELSE 'admin' END AS source_channel
             FROM orders o
             LEFT JOIN (
                 SELECT
@@ -913,6 +789,15 @@ final class FinanceReportService
                 FROM order_items oi
                 GROUP BY oi.order_id
             ) items ON items.order_id = o.id
+            LEFT JOIN (
+                SELECT
+                    pt.order_id,
+                    COALESCE(SUM(CASE WHEN pt.status = 'verified' AND pt.payment_method = 'cash' THEN pt.amount ELSE 0 END), 0) AS cash_verified,
+                    COALESCE(SUM(CASE WHEN pt.status = 'verified' AND pt.payment_method IN ('upi', 'bank_transfer', 'pos_card', 'payment_link') THEN pt.amount ELSE 0 END), 0) AS bank_verified,
+                    COALESCE(SUM(CASE WHEN pt.status = 'verified' THEN pt.amount ELSE 0 END), 0) AS verified_total
+                FROM payment_transactions pt
+                GROUP BY pt.order_id
+            ) paytx ON paytx.order_id = o.id
             LEFT JOIN (
                 SELECT
                     rt.order_id,
@@ -1019,12 +904,18 @@ final class FinanceReportService
         $whereSql = implode(' AND ', $conditions);
         $row = $this->db->fetchOne(
             "SELECT
-                COALESCE(SUM(CASE WHEN g.account_code = 'CASH_ON_HAND' THEN g.debit_amount - g.credit_amount ELSE 0 END), 0) AS cash_total,
-                COALESCE(SUM(CASE WHEN g.account_code = 'BANK_CLEARING' THEN g.debit_amount - g.credit_amount ELSE 0 END), 0) AS bank_total,
-                COALESCE(SUM(CASE WHEN g.account_code = 'SALES_REFUNDS' THEN g.debit_amount - g.credit_amount ELSE 0 END), 0) AS refunded_total,
-                COALESCE(SUM(CASE WHEN g.account_code = 'CUSTOMER_ADVANCES' THEN g.credit_amount - g.debit_amount ELSE 0 END), 0) AS advance_collected,
-                COALESCE(SUM(CASE WHEN g.account_code = 'SALES_REVENUE' THEN g.credit_amount - g.debit_amount ELSE 0 END), 0)
-                  - COALESCE(SUM(CASE WHEN g.account_code = 'SALES_REFUNDS' THEN g.debit_amount - g.credit_amount ELSE 0 END), 0) AS net_revenue
+                COALESCE(SUM(CASE WHEN g.account_code = 'CASH_ON_HAND'              THEN g.debit_amount  - g.credit_amount ELSE 0 END), 0) AS cash_total,
+                COALESCE(SUM(CASE WHEN g.account_code = 'BANK_CLEARING'             THEN g.debit_amount  - g.credit_amount ELSE 0 END), 0) AS bank_total,
+                COALESCE(SUM(CASE WHEN g.account_code = 'SALES_REFUNDS'             THEN g.debit_amount  - g.credit_amount ELSE 0 END), 0) AS refunded_total,
+                COALESCE(SUM(CASE WHEN g.account_code = 'CUSTOMER_ADVANCES'         THEN g.credit_amount - g.debit_amount  ELSE 0 END), 0) AS advance_collected,
+                COALESCE(SUM(CASE WHEN g.account_code = 'SALES_DISCOUNT_CONTRA'     THEN g.credit_amount - g.debit_amount  ELSE 0 END), 0) AS discount_total,
+                COALESCE(SUM(CASE WHEN g.account_code = 'BAD_DEBT_EXPENSE'          THEN g.debit_amount  - g.credit_amount ELSE 0 END), 0) AS bad_debt_total,
+                COALESCE(SUM(CASE WHEN g.account_code = 'SALES_ADJUSTMENT_REVENUE'  THEN g.credit_amount - g.debit_amount  ELSE 0 END), 0) AS upgrade_revenue,
+                COALESCE(SUM(CASE WHEN g.account_code = 'SALES_ADJUSTMENT_EXPENSE'  THEN g.debit_amount  - g.credit_amount ELSE 0 END), 0) AS downgrade_adjustments,
+                COALESCE(SUM(CASE WHEN g.account_code = 'SALES_REVENUE'             THEN g.credit_amount - g.debit_amount  ELSE 0 END), 0)
+                  + COALESCE(SUM(CASE WHEN g.account_code = 'SALES_ADJUSTMENT_REVENUE' THEN g.credit_amount - g.debit_amount ELSE 0 END), 0)
+                  - COALESCE(SUM(CASE WHEN g.account_code = 'SALES_REFUNDS'          THEN g.debit_amount  - g.credit_amount ELSE 0 END), 0)
+                  - COALESCE(SUM(CASE WHEN g.account_code = 'SALES_ADJUSTMENT_EXPENSE' THEN g.debit_amount - g.credit_amount ELSE 0 END), 0) AS net_revenue
              FROM general_ledger_entries g
              WHERE {$whereSql}",
             $params
@@ -1034,12 +925,16 @@ final class FinanceReportService
         $bankTotal = (float)($row['bank_total'] ?? 0);
 
         return [
-            'cash_total' => $cashTotal,
-            'bank_total' => $bankTotal,
-            'overall_total' => $cashTotal + $bankTotal,
-            'refunded_total' => (float)($row['refunded_total'] ?? 0),
-            'advance_collected' => (float)($row['advance_collected'] ?? 0),
-            'net_revenue' => (float)($row['net_revenue'] ?? 0),
+            'cash_total'            => $cashTotal,
+            'bank_total'            => $bankTotal,
+            'overall_total'         => $cashTotal + $bankTotal,
+            'refunded_total'        => (float)($row['refunded_total']        ?? 0),
+            'advance_collected'     => (float)($row['advance_collected']     ?? 0),
+            'discount_total'        => (float)($row['discount_total']        ?? 0),
+            'bad_debt_total'        => (float)($row['bad_debt_total']        ?? 0),
+            'upgrade_revenue'       => (float)($row['upgrade_revenue']       ?? 0),
+            'downgrade_adjustments' => (float)($row['downgrade_adjustments'] ?? 0),
+            'net_revenue'           => (float)($row['net_revenue']           ?? 0),
         ];
     }
 
@@ -1057,5 +952,166 @@ final class FinanceReportService
         return $debitNormal
             ? round($totalDebit - $totalCredit, 2)
             : round($totalCredit - $totalDebit, 2);
+    }
+
+    /**
+     * C2 — Revenue broken down by GL source_channel for a date range.
+     *
+     * Queries SALES_REVENUE + SALES_ADJUSTMENT_REVENUE entries joined to
+     * financial_transactions to read source_channel.
+     *
+     * @return list<array{channel:string,revenue:float,adjustment_revenue:float,total:float}>
+     */
+    public function getChannelWiseRevenue(string $fromDate, string $toDate): array
+    {
+        $conditions = ['1=1'];
+        $params     = [];
+
+        if ($this->isValidDate($fromDate)) {
+            $conditions[] = 'DATE(ft.business_date) >= :from_date';
+            $params['from_date'] = $fromDate;
+        }
+        if ($this->isValidDate($toDate)) {
+            $conditions[] = 'DATE(ft.business_date) <= :to_date';
+            $params['to_date'] = $toDate;
+        }
+
+        $whereSql = implode(' AND ', $conditions);
+        $rows = $this->db->fetchAll(
+            "SELECT
+                COALESCE(ft.source_channel, 'unknown') AS channel,
+                COALESCE(SUM(CASE WHEN g.account_code = 'SALES_REVENUE'            THEN g.credit_amount - g.debit_amount ELSE 0 END), 0) AS revenue,
+                COALESCE(SUM(CASE WHEN g.account_code = 'SALES_ADJUSTMENT_REVENUE' THEN g.credit_amount - g.debit_amount ELSE 0 END), 0) AS adjustment_revenue
+             FROM general_ledger_entries g
+             INNER JOIN financial_transactions ft ON ft.id = g.financial_transaction_id
+             WHERE g.account_code IN ('SALES_REVENUE', 'SALES_ADJUSTMENT_REVENUE')
+               AND {$whereSql}
+             GROUP BY COALESCE(ft.source_channel, 'unknown')
+             ORDER BY revenue DESC",
+            $params
+        );
+
+        return array_map(static function (array $row): array {
+            $revenue    = round((float)$row['revenue'],            2);
+            $adjustment = round((float)$row['adjustment_revenue'], 2);
+            return [
+                'channel'            => (string)$row['channel'],
+                'revenue'            => $revenue,
+                'adjustment_revenue' => $adjustment,
+                'total'              => round($revenue + $adjustment, 2),
+            ];
+        }, $rows ?: []);
+    }
+
+    /**
+    * C3 — Compare GL-posted revenue to order realized totals for variance detection.
+     *
+     * A discrepancy flag is raised when |variance| exceeds ₹100.
+     *
+     * @return array{gl_total:float,orders_total:float,variance:float,has_discrepancy:bool}
+     */
+    public function getGLvsOrdersVariance(string $fromDate, string $toDate): array
+    {
+        $glConditions     = ['1=1'];
+        $orderConditions  = ["o.payment_status IN ('paid', 'partially_refunded', 'refunded', 'part_paid')"];
+        $glParams         = [];
+        $orderParams      = [];
+
+        if ($this->isValidDate($fromDate)) {
+            $glConditions[]    = 'DATE(g.created_at) >= :gl_from';
+            $orderConditions[] = 'DATE(o.created_at) >= :o_from';
+            $glParams['gl_from']   = $fromDate;
+            $orderParams['o_from'] = $fromDate;
+        }
+        if ($this->isValidDate($toDate)) {
+            $glConditions[]    = 'DATE(g.created_at) <= :gl_to';
+            $orderConditions[] = 'DATE(o.created_at) <= :o_to';
+            $glParams['gl_to']   = $toDate;
+            $orderParams['o_to'] = $toDate;
+        }
+
+        $glTotal = (float)($this->db->fetchScalar(
+            'SELECT COALESCE(SUM(credit_amount - debit_amount), 0)
+               FROM general_ledger_entries g
+              WHERE account_code IN (\'SALES_REVENUE\', \'SALES_ADJUSTMENT_REVENUE\')
+                AND ' . implode(' AND ', $glConditions),
+            $glParams
+        ) ?? 0.0);
+
+        $ordersTotal = (float)($this->db->fetchScalar(
+            "SELECT COALESCE(SUM(
+                LEAST(
+                    CASE
+                        WHEN o.payment_status IN ('paid', 'partially_refunded', 'refunded') THEN COALESCE(o.revised_grand_total, o.grand_total)
+                        WHEN o.payment_status = 'part_paid' THEN GREATEST(COALESCE(inv.verified_paid_amount, 0), COALESCE(o.advance_amount, 0))
+                        WHEN COALESCE(o.advance_amount, 0) > 0 THEN COALESCE(o.advance_amount, 0)
+                        ELSE 0
+                    END,
+                    COALESCE(o.revised_grand_total, o.grand_total)
+                )
+            ), 0)
+               FROM orders o
+               LEFT JOIN (
+                    SELECT
+                        i.order_id,
+                        COALESCE(SUM(CASE WHEN p.payment_status = 'verified' THEN p.amount ELSE 0 END), 0) AS verified_paid_amount
+                    FROM invoices i
+                    LEFT JOIN payments p ON p.invoice_id = i.id
+                    GROUP BY i.order_id
+               ) inv ON inv.order_id = o.id
+              WHERE " . implode(' AND ', $orderConditions),
+            $orderParams
+        ) ?? 0.0);
+
+        $variance = round($glTotal - $ordersTotal, 2);
+        return [
+            'gl_total'         => round($glTotal, 2),
+            'orders_total'     => round($ordersTotal, 2),
+            'variance'         => $variance,
+            'has_discrepancy'  => abs($variance) > 100.0,
+        ];
+    }
+
+    /**
+     * C4 — Summarise confirmed order revisions within a date range.
+     *
+     * @return array{original_sales:float,revised_sales:float,upgrade_revenue:float,downgrade_adjustments:float,net_revision_impact:float}
+     */
+    public function getRevisionSummary(string $fromDate, string $toDate): array
+    {
+        $conditions = ["r.revision_status = 'confirmed'"];
+        $params     = [];
+
+        if ($this->isValidDate($fromDate)) {
+            $conditions[] = 'DATE(r.created_at) >= :from_date';
+            $params['from_date'] = $fromDate;
+        }
+        if ($this->isValidDate($toDate)) {
+            $conditions[] = 'DATE(r.created_at) <= :to_date';
+            $params['to_date'] = $toDate;
+        }
+
+        $whereSql = implode(' AND ', $conditions);
+        $row = $this->db->fetchOne(
+            "SELECT
+                COALESCE(SUM(r.old_grand_total),  0) AS original_sales,
+                COALESCE(SUM(r.new_grand_total),  0) AS revised_sales,
+                COALESCE(SUM(CASE WHEN r.difference_amount > 0 THEN  r.difference_amount ELSE 0 END), 0) AS upgrade_revenue,
+                COALESCE(SUM(CASE WHEN r.difference_amount < 0 THEN -r.difference_amount ELSE 0 END), 0) AS downgrade_adjustments
+             FROM order_revisions r
+             WHERE {$whereSql}",
+            $params
+        ) ?: [];
+
+        $upgradeRevenue       = round((float)($row['upgrade_revenue']       ?? 0), 2);
+        $downgradeAdjustments = round((float)($row['downgrade_adjustments'] ?? 0), 2);
+
+        return [
+            'original_sales'       => round((float)($row['original_sales'] ?? 0), 2),
+            'revised_sales'        => round((float)($row['revised_sales']  ?? 0), 2),
+            'upgrade_revenue'      => $upgradeRevenue,
+            'downgrade_adjustments'=> $downgradeAdjustments,
+            'net_revision_impact'  => round($upgradeRevenue - $downgradeAdjustments, 2),
+        ];
     }
 }

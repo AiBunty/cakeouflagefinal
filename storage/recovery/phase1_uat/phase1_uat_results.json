@@ -1,0 +1,198 @@
+{
+    "run_at": "2026-05-29T13:01:33+05:30",
+    "scope_note": "Business UAT executed on isolated UAT-* records in live local DB.",
+    "dataset": {
+        "online_order": {
+            "id": 54,
+            "order_number": "UAT-ONLINE-20260529130133-A9E5",
+            "amount": 1250
+        },
+        "byoc_order": {
+            "id": 55,
+            "order_number": "UAT-BYOC-20260529130133-B1DA",
+            "amount": 1499
+        },
+        "manual_order": {
+            "id": 56,
+            "order_number": "UAT-MANUAL-20260529130133-460D",
+            "amount": 890
+        },
+        "credit_order": {
+            "id": 57,
+            "order_number": "UAT-CREDIT-20260529130133-F830",
+            "amount": 1000
+        },
+        "cash_order": {
+            "id": 58,
+            "order_number": "UAT-CASH-20260529130133-7D1B",
+            "amount": 1000
+        },
+        "bank_upi_order": {
+            "id": 59,
+            "order_number": "UAT-BANK-20260529130133-9DD5",
+            "amount": 1000
+        }
+    },
+    "scenarios": [
+        {
+            "id": "step02_online_payment_verification",
+            "title": "Online Order Payment Verification",
+            "expected": "Payment transaction, sales posting, customer ledger event, and order status confirmation",
+            "actual": "split=ok, verified_tx=1, sales_credit=1250, status=confirmed",
+            "pass": true,
+            "screenshot_path": "storage/recovery/phase1_uat/screenshots/step02_online_payment_verification.png",
+            "ledger_verification": {
+                "payment_transactions_verified": 1,
+                "sales_revenue_credit": 1250,
+                "customer_statement_events": 2,
+                "order_payment_status": "paid",
+                "order_status": "confirmed"
+            }
+        },
+        {
+            "id": "step03_credit_order",
+            "title": "Credit Order Test",
+            "expected": "Receivable should be 1000 and collections/outstanding should reflect 1000",
+            "actual": "credit_confirm=ok, ar=1000, outstanding=1000.00",
+            "pass": true,
+            "screenshot_path": "storage/recovery/phase1_uat/screenshots/step03_credit_order.png",
+            "ledger_verification": {
+                "accounts_receivable_debit": 1000,
+                "outstanding_amount": 1000,
+                "collection_status": "payment_pending"
+            }
+        },
+        {
+            "id": "step04_partial_collection",
+            "title": "Partial Collection Test",
+            "expected": "Collect 600 from credit order and leave 400 outstanding with report sync",
+            "actual": "collect=ok, outstanding=400.00, collected=600.00",
+            "pass": true,
+            "screenshot_path": "storage/recovery/phase1_uat/screenshots/step04_partial_collection.png",
+            "ledger_verification": {
+                "balance_due_after_collection": 400,
+                "net_collected_amount": 600,
+                "customer_statement_outstanding": 400,
+                "collections_status": "advance_paid"
+            }
+        },
+        {
+            "id": "step05_split_payment",
+            "title": "Split Payment Test",
+            "expected": "1000 order should post 500 cash + 500 bank and 1000 sales",
+            "actual": "split=ok, cash=500, bank=500, sales=1000",
+            "pass": true,
+            "screenshot_path": "storage/recovery/phase1_uat/screenshots/step05_split_payment.png",
+            "ledger_verification": {
+                "cash_ledger_debit": 500,
+                "bank_ledger_debit": 500,
+                "sales_revenue_credit": 1000
+            }
+        },
+        {
+            "id": "step06_revision_upgrade",
+            "title": "Order Revision Upgrade Test",
+            "expected": "Upgrade 1000 to 1400, create revision, add 400 outstanding, and post adjustment ledger",
+            "actual": "submit=PASS, confirm=PASS, outstanding=400.00, adj=400",
+            "pass": true,
+            "screenshot_path": "storage/recovery/phase1_uat/screenshots/step06_revision_upgrade.png",
+            "ledger_verification": {
+                "revision_id": 5,
+                "outstanding_after_upgrade": 400,
+                "sales_adjustment_revenue_credit": 400,
+                "revision_no": 1
+            }
+        },
+        {
+            "id": "step07_revision_downgrade",
+            "title": "Order Revision Downgrade Test",
+            "expected": "Downgrade 1400 to 1200 with store credit/refund posting and report updates",
+            "actual": "collect400=PASS, submit=PASS, confirm=PASS, wallet=200",
+            "pass": true,
+            "screenshot_path": "storage/recovery/phase1_uat/screenshots/step07_revision_downgrade.png",
+            "ledger_verification": {
+                "store_credit_wallet_credit": 200,
+                "sales_adjustment_expense_debit": 200,
+                "revision_id": 6
+            }
+        },
+        {
+            "id": "step08_refund",
+            "title": "Refund Test",
+            "expected": "Process 200 refund and ensure refund ledger + customer ledger + sales impact update",
+            "actual": "submit=PASS, approve=PASS, refund_ledger=200",
+            "pass": true,
+            "screenshot_path": "storage/recovery/phase1_uat/screenshots/step08_refund.png",
+            "ledger_verification": {
+                "refund_transaction_id": 18,
+                "sales_refunds_debit": 200,
+                "order_total_refunded": 200,
+                "customer_statement_events": 3
+            }
+        },
+        {
+            "id": "step09_reject_before_payment",
+            "title": "Reject Order Test",
+            "expected": "Reject before payment confirmation and ensure no sales/ledger posting",
+            "actual": "status=rejected, payment=rejected, ledger_tx=0",
+            "pass": true,
+            "screenshot_path": "storage/recovery/phase1_uat/screenshots/step09_reject_before_payment.png",
+            "ledger_verification": {
+                "financial_tx_count": 0,
+                "order_status": "rejected",
+                "payment_status": "rejected"
+            }
+        },
+        {
+            "id": "step10_accounting_lock",
+            "title": "Accounting Lock Test",
+            "expected": "Refund, revision, split payment, and collection must fail with ACCOUNTING_PERIOD_LOCKED",
+            "actual": "refund=Refund request blocked by anti-fraud check: ACCOUNTING_PERIOD_LOCKED; revision=Order is locked for accounting period and cannot be revised; split=Order is locked for accounting period and cannot accept split payment; collection=Order is locked for accounting period and cannot accept split payment",
+            "pass": true,
+            "screenshot_path": "storage/recovery/phase1_uat/screenshots/step10_accounting_lock.png",
+            "ledger_verification": {
+                "refund_attempt": "Refund request blocked by anti-fraud check: ACCOUNTING_PERIOD_LOCKED",
+                "revision_attempt": "Order is locked for accounting period and cannot be revised",
+                "split_attempt": "Order is locked for accounting period and cannot accept split payment",
+                "collection_attempt": "Order is locked for accounting period and cannot accept split payment"
+            }
+        }
+    ],
+    "double_entry": {
+        "query_used": "SELECT COALESCE(SUM(debit_amount),0) AS total_debit, COALESCE(SUM(credit_amount),0) AS total_credit FROM general_ledger_entries",
+        "total_debit": 33529.3,
+        "total_credit": 33529.3,
+        "pass": true
+    },
+    "reconciliation": {
+        "sales_report_vs_sales_ledger": {
+            "report": 5550,
+            "ledger": 5550,
+            "pass": true
+        },
+        "collections_report_vs_payment_transactions": {
+            "report": 5150,
+            "ledger": 5150,
+            "pass": true
+        },
+        "outstanding_report_vs_receivable_ledger": {
+            "report": 400,
+            "ledger": 400,
+            "pass": true
+        },
+        "refund_report_vs_refund_ledger": {
+            "report": 200,
+            "ledger": 200,
+            "pass": true
+        }
+    },
+    "dashboard_validation": {
+        "sales_figure": 5550,
+        "bank_ledger": 4650,
+        "cash_ledger": 500,
+        "receivable_ledger": 400,
+        "pass": true,
+        "note": "Dashboard card values validated through ledger-backed proxies on UAT dataset."
+    },
+    "errors": []
+}

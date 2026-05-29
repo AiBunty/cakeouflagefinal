@@ -2,10 +2,11 @@
 $contactPhone = trim((string)($siteConfig['contact']['phone'] ?? ''));
 $contactEmail = trim((string)($siteConfig['contact']['email'] ?? ''));
 $contactCity = trim((string)($siteConfig['contact']['city'] ?? 'Nashik'));
-$contactWhatsapp = trim((string)($siteConfig['contact']['whatsapp'] ?? $contactPhone));
+$contactWhatsapp = trim((string)($siteConfig['contact']['whatsapp_number'] ?? $siteConfig['contact']['whatsapp'] ?? $contactPhone));
 $contactWebsite = trim((string)($siteConfig['contact']['website'] ?? ''));
 $businessHours = trim((string)($siteConfig['contact']['business_hours'] ?? ''));
 $mapEmbedUrl = trim((string)($siteConfig['contact']['map_embed_url'] ?? ''));
+$googleMapsUrl = trim((string)($siteConfig['contact']['google_maps_url'] ?? ''));
 $contactFormEmbedUrl = trim((string)($siteConfig['contact']['form_embed_url'] ?? ''));
 
 $addressParts = array_filter([
@@ -22,7 +23,8 @@ if ($businessHours === '') {
 }
 
 if ($mapEmbedUrl === '') {
-  $mapEmbedUrl = 'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3749.4992232394516!2d73.76781790000001!3d19.9875517!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3bdd955a6817e2e5%3A0xe45effc441329228!2sCakeouflage!5e0!3m2!1sen!2sin!4v1776274709500!5m2!1sen!2sin';
+  $query = $businessAddress !== '' ? $businessAddress : $contactCity;
+  $mapEmbedUrl = 'https://www.google.com/maps?q=' . rawurlencode($query) . '&output=embed';
 }
 
 if ($contactFormEmbedUrl === '' || !preg_match('#^https?://#i', $contactFormEmbedUrl)) {
@@ -31,9 +33,13 @@ if ($contactFormEmbedUrl === '' || !preg_match('#^https?://#i', $contactFormEmbe
 
 $phoneDigits = preg_replace('/\D+/', '', $contactPhone);
 $whatsappDigits = preg_replace('/\D+/', '', $contactWhatsapp);
-$phoneHref = $phoneDigits !== '' ? ('tel:+' . $phoneDigits) : '';
+$phoneHref = (string)($siteConfig['contact']['phone_href'] ?? ($phoneDigits !== '' ? ('tel:+' . $phoneDigits) : ''));
 $emailHref = $contactEmail !== '' ? ('mailto:' . $contactEmail) : '';
 $whatsappHref = $whatsappDigits !== '' ? ('https://wa.me/' . $whatsappDigits) : '';
+
+if ($googleMapsUrl === '' && $businessAddress !== '') {
+  $googleMapsUrl = 'https://www.google.com/maps/search/?api=1&query=' . rawurlencode($businessAddress);
+}
 
 $websiteHref = $contactWebsite;
 if ($websiteHref !== '' && !preg_match('#^https?://#i', $websiteHref)) {
@@ -135,7 +141,9 @@ if ($websiteHref !== '' && !preg_match('#^https?://#i', $websiteHref)) {
               <div>
                 <h3 class="contact-card__title">Visit Our Bakery</h3>
                 <p class="contact-card__text"><?= htmlspecialchars($businessAddress, ENT_QUOTES, 'UTF-8') ?></p>
-              
+                <?php if ($googleMapsUrl !== ''): ?>
+                  <a href="<?= htmlspecialchars($googleMapsUrl, ENT_QUOTES, 'UTF-8') ?>" class="contact-card__link" target="_blank" rel="noopener">Open in Google Maps</a>
+                <?php endif; ?>
               </div>
             </article>
 

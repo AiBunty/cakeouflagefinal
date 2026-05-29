@@ -1,6 +1,7 @@
 <?php
 
 require_once dirname(__DIR__, 2) . '/app/Support/dietary-mode.php';
+require_once dirname(__DIR__, 2) . '/app/Support/business-contact-links.php';
 
 function get_business_setting(mysqli $conn, string $key, string $default = ''): string
 {
@@ -26,8 +27,13 @@ function get_business_settings(mysqli $conn): array
         'business_state' => get_business_setting($conn, 'business_state'),
         'business_postal_code' => get_business_setting($conn, 'business_postal_code'),
         'business_phone' => get_business_setting($conn, 'business_phone'),
+        'contact_phone' => get_business_setting($conn, 'contact_phone'),
         'business_email' => get_business_setting($conn, 'business_email'),
         'business_website' => get_business_setting($conn, 'business_website', 'https://www.cakeouflage.com'),
+        'whatsapp_number' => normalize_whatsapp_number(get_business_setting($conn, 'whatsapp_number')),
+        'facebook_url' => normalize_business_url(get_business_setting($conn, 'facebook_url')),
+        'instagram_url' => normalize_business_url(get_business_setting($conn, 'instagram_url')),
+        'google_maps_url' => normalize_business_url(get_business_setting($conn, 'google_maps_url')),
         'business_gst_number' => get_business_setting($conn, 'business_gst_number'),
         'business_pan_number' => get_business_setting($conn, 'business_pan_number'),
         'business_logo' => get_business_setting($conn, 'business_logo'),

@@ -126,6 +126,7 @@ spl_autoload_register(static function (string $class): void {
 });
 
 require_once __DIR__ . '/Support/dietary-mode.php';
+require_once __DIR__ . '/Support/business-contact-links.php';
 
 if (!function_exists('is_https_request')) {
     function is_https_request(): bool

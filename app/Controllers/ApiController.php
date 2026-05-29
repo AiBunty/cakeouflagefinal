@@ -10,6 +10,7 @@ use App\Core\Response;
 use App\Services\AuthRateLimitService;
 use App\Services\AuthManager;
 use App\Services\ByocQuoteExpiryService;
+use App\Services\CustomerLookupService;
 use App\Services\OrderAutomationService;
 use App\Services\PasswordResetService;
 use App\Services\ProductImageService;
@@ -939,6 +940,50 @@ final class ApiController
         ], 410);
     }
 
+    public function authCheckUser(): void
+    {
+        $input = $this->readJsonInput();
+        if ($input === [] && $_POST !== []) {
+            /** @var array<string, mixed> $input */
+            $input = $_POST;
+        }
+
+        $email = CustomerLookupService::normalizeEmail((string)($input['email'] ?? ''));
+        if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            Response::json([
+                'success' => false,
+                'message' => 'Valid email required',
+            ], 422);
+            return;
+        }
+
+        $pdo = self::db();
+        if (!$pdo) {
+            return;
+        }
+
+        $user = CustomerLookupService::findCustomerByEmail($pdo, $email);
+
+        $exists = $user !== null;
+
+        Response::json([
+            'success' => true,
+            'message' => 'ok',
+            'exists' => $exists,
+            'data' => [
+                'exists' => $exists,
+                'existing_customer' => $exists,
+                'user' => $exists ? [
+                    'id' => (int)($user['id'] ?? 0),
+                    'full_name' => trim((string)($user['full_name'] ?? '')),
+                    'email' => trim((string)($user['email'] ?? '')),
+                    'phone' => trim((string)($user['phone'] ?? '')),
+                    'phone_e164' => trim((string)($user['phone_e164'] ?? '')),
+                ] : null,
+            ],
+        ]);
+    }
+
     public function authForgotPassword(): void
     {
         Response::json([
@@ -1021,7 +1066,7 @@ final class ApiController
 
     public function authLogout(): void
     {
-        AuthManager::logoutCustomer();
+        AuthManager::logoutCustomer(true);
 
         if (session_status() === PHP_SESSION_ACTIVE) {
             session_destroy();
@@ -5323,7 +5368,7 @@ $deliveryFee = (float)$slab['delivery_fee'];
         /** @var array<string, mixed> $input */
         $input = $_POST;
     }
-    $email = strtolower(trim((string)($input['email'] ?? '')));
+    $email = CustomerLookupService::normalizeEmail((string)($input['email'] ?? ''));
     $customerName = trim((string)($input['name'] ?? 'Customer'));
 
     if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
@@ -5339,11 +5384,7 @@ $deliveryFee = (float)$slab['delivery_fee'];
         return;
     }
 
-    $existingUserStmt = $pdo->prepare(
-        'SELECT id, full_name, phone FROM users WHERE email = :email AND role = "customer" LIMIT 1'
-    );
-    $existingUserStmt->execute(['email' => $email]);
-    $existingUser = $existingUserStmt->fetch(PDO::FETCH_ASSOC) ?: null;
+    $existingUser = CustomerLookupService::findCustomerByEmail($pdo, $email);
 
     try {
         AuthManager::sendOtp($pdo, $email, $customerName);
@@ -5361,10 +5402,12 @@ $deliveryFee = (float)$slab['delivery_fee'];
         'message' => 'OTP sent to email',
         'data' => [
             'existing_customer' => $existingUser !== null,
+            'exists' => $existingUser !== null,
             'user' => $existingUser !== null ? [
                 'id' => (int)($existingUser['id'] ?? 0),
                 'full_name' => trim((string)($existingUser['full_name'] ?? '')),
                 'phone' => trim((string)($existingUser['phone'] ?? '')),
+                'phone_e164' => trim((string)($existingUser['phone_e164'] ?? '')),
             ] : null,
         ],
     ]);
@@ -5379,7 +5422,7 @@ public function verifyOtp(): void
         $input = $_POST;
     }
 
-    $email = strtolower(trim((string)($input['email'] ?? '')));
+    $email = CustomerLookupService::normalizeEmail((string)($input['email'] ?? ''));
     $otp = preg_replace('/\D+/', '', (string)($input['otp'] ?? '')) ?? '';
     $name = trim((string)($input['name'] ?? ''));
     $phone = trim((string)($input['phone'] ?? ''));

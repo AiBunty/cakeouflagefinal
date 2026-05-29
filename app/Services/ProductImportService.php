@@ -50,6 +50,8 @@ class ProductImportService
 {
     private PDO $pdo;
     public const MAX_RETAINED_VERSIONS = 5;
+    /** @var array<string, bool> */
+    private array $tableExistsCache = [];
 
     public function __construct()
     {
@@ -434,7 +436,150 @@ class ProductImportService
             "DELETE FROM product_import_runs WHERE id IN ($placeholders)"
         );
         $del->execute($oldIds);
+
+        if ($this->tableExists('product_import_versions')) {
+            $versionUpdate = $this->pdo->prepare(
+                "UPDATE product_import_versions
+                 SET is_restorable = 0
+                 WHERE snapshot_reference IN ($placeholders)"
+            );
+            $versionUpdate->execute($oldIds);
+        }
+
         return $del->rowCount();
+    }
+
+    /**
+     * Register an import version record linked to a snapshot run ID.
+     *
+     * @param array<string,mixed> $metadata
+     */
+    public function registerImportVersion(
+        string $versionName,
+        ?int $adminId,
+        ?string $filePath,
+        int $snapshotRunId,
+        array $metadata = []
+    ): ?int {
+        if (!$this->tableExists('product_import_versions')) {
+            return null;
+        }
+
+        $stmt = $this->pdo->prepare(
+            'INSERT INTO product_import_versions
+                (version_name, uploaded_by, uploaded_at, file_path, snapshot_reference, is_restorable, metadata_json)
+             VALUES
+                (:version_name, :uploaded_by, NOW(), :file_path, :snapshot_reference, 1, :metadata_json)'
+        );
+        $stmt->execute([
+            'version_name' => $versionName,
+            'uploaded_by' => $adminId,
+            'file_path' => $filePath,
+            'snapshot_reference' => (string)$snapshotRunId,
+            'metadata_json' => json_encode($metadata, JSON_UNESCAPED_SLASHES),
+        ]);
+
+        return (int)$this->pdo->lastInsertId();
+    }
+
+    /**
+     * Mark a version row as not restorable.
+     */
+    public function markVersionNotRestorable(int $versionId): void
+    {
+        if (!$this->tableExists('product_import_versions')) {
+            return;
+        }
+
+        $stmt = $this->pdo->prepare('UPDATE product_import_versions SET is_restorable = 0 WHERE id = ?');
+        $stmt->execute([$versionId]);
+    }
+
+    /** @return array<int,array<string,mixed>> */
+    public function listImportVersions(int $limit = 20): array
+    {
+        if (!$this->tableExists('product_import_versions')) {
+            return [];
+        }
+
+        $stmt = $this->pdo->prepare(
+            'SELECT
+                v.id,
+                v.version_name,
+                v.uploaded_by,
+                v.uploaded_at,
+                v.file_path,
+                v.snapshot_reference,
+                v.is_restorable,
+                v.metadata_json,
+                a.full_name AS uploaded_by_name
+             FROM product_import_versions v
+             LEFT JOIN admins a ON a.id = v.uploaded_by
+             ORDER BY v.uploaded_at DESC, v.id DESC
+             LIMIT ?'
+        );
+        $stmt->execute([$limit]);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+        foreach ($rows as &$row) {
+            $metadataRaw = (string)($row['metadata_json'] ?? '');
+            $metadata = json_decode($metadataRaw, true);
+            $row['metadata'] = is_array($metadata) ? $metadata : [];
+        }
+        unset($row);
+
+        return $rows;
+    }
+
+    /** @return array<string,mixed>|null */
+    public function getImportVersion(int $versionId): ?array
+    {
+        if (!$this->tableExists('product_import_versions')) {
+            return null;
+        }
+
+        $stmt = $this->pdo->prepare(
+            'SELECT
+                v.id,
+                v.version_name,
+                v.uploaded_by,
+                v.uploaded_at,
+                v.file_path,
+                v.snapshot_reference,
+                v.is_restorable,
+                v.metadata_json,
+                a.full_name AS uploaded_by_name
+             FROM product_import_versions v
+             LEFT JOIN admins a ON a.id = v.uploaded_by
+             WHERE v.id = ?
+             LIMIT 1'
+        );
+        $stmt->execute([$versionId]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+        if ($row === null) {
+            return null;
+        }
+
+        $metadataRaw = (string)($row['metadata_json'] ?? '');
+        $metadata = json_decode($metadataRaw, true);
+        $row['metadata'] = is_array($metadata) ? $metadata : [];
+        return $row;
+    }
+
+    public function resolveSnapshotRunIdFromVersion(int $versionId): ?int
+    {
+        $row = $this->getImportVersion($versionId);
+        if (!is_array($row)) {
+            return null;
+        }
+
+        $snapshotReference = trim((string)($row['snapshot_reference'] ?? ''));
+        if ($snapshotReference === '' || !ctype_digit($snapshotReference)) {
+            return null;
+        }
+
+        $runId = (int)$snapshotReference;
+        return $runId > 0 ? $runId : null;
     }
 
     // -------------------------------------------------------------------------
@@ -482,6 +627,31 @@ class ProductImportService
         );
         $stmt->execute([$runId]);
         return (int)$stmt->fetchColumn() > 0;
+    }
+
+    private function tableExists(string $table): bool
+    {
+        $table = trim($table);
+        if ($table === '') {
+            return false;
+        }
+
+        if (array_key_exists($table, $this->tableExistsCache)) {
+            return $this->tableExistsCache[$table];
+        }
+
+        try {
+            $stmt = $this->pdo->prepare(
+                'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?'
+            );
+            $stmt->execute([$table]);
+            $exists = ((int)$stmt->fetchColumn()) > 0;
+            $this->tableExistsCache[$table] = $exists;
+            return $exists;
+        } catch (\Throwable $e) {
+            $this->tableExistsCache[$table] = false;
+            return false;
+        }
     }
 }
 

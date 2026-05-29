@@ -85,6 +85,290 @@ function prod_column_exists(mysqli $conn, string $table, string $column): bool {
   return (int)($row['c'] ?? 0) > 0;
 }
 
+function prod_size_master_rows(mysqli $conn): array {
+  if (!prod_column_exists($conn, 'product_size_master', 'label')) {
+    return [
+      ['id' => 0, 'label' => 'Per Pcs', 'sort_order' => 10, 'is_active' => 1],
+      ['id' => 0, 'label' => '0.5 kg', 'sort_order' => 20, 'is_active' => 1],
+      ['id' => 0, 'label' => '1 kg', 'sort_order' => 30, 'is_active' => 1],
+      ['id' => 0, 'label' => '1.5 kg', 'sort_order' => 40, 'is_active' => 1],
+      ['id' => 0, 'label' => '2 kg', 'sort_order' => 50, 'is_active' => 1],
+    ];
+  }
+
+  $rows = [];
+  $result = $conn->query('SELECT id, label, sort_order, is_active FROM product_size_master ORDER BY sort_order ASC, id ASC');
+  if ($result) {
+    while ($row = $result->fetch_assoc()) {
+      $rows[] = $row;
+    }
+  }
+
+  return $rows;
+}
+
+function prod_normalize_size_label(string $label): string {
+  $value = strtolower(trim($label));
+  $value = preg_replace('/\s+/', ' ', $value) ?? $value;
+  return $value;
+}
+
+function prod_build_matrix_variant_rows(array $sizeRows, array $variantRows = []): array {
+  $variantMap = [];
+  foreach ($variantRows as $variantRow) {
+    $label = prod_normalize_size_label((string)($variantRow['variant_label'] ?? ($variantRow['variant_name'] ?? ($variantRow['weight_or_size'] ?? ''))));
+    if ($label !== '') {
+      $variantMap[$label] = $variantRow;
+    }
+  }
+
+  $rows = [];
+  foreach ($sizeRows as $sizeRow) {
+    $label = (string)($sizeRow['label'] ?? '');
+    $normalized = prod_normalize_size_label($label);
+    $matched = $variantMap[$normalized] ?? null;
+    $rows[] = [
+      'size_id' => (int)($sizeRow['id'] ?? 0),
+      'label' => $label,
+      'is_active' => (int)($sizeRow['is_active'] ?? 1),
+      'price' => $matched ? (float)($matched['price'] ?? 0) : 0,
+      'stock_quantity' => $matched ? (int)($matched['stock_quantity'] ?? 0) : 0,
+      'is_default' => $matched ? (int)($matched['is_default'] ?? 0) : 0,
+      'variant_id' => $matched ? (int)($matched['id'] ?? 0) : 0,
+      'sku' => $matched ? (string)($matched['sku'] ?? '') : '',
+    ];
+  }
+
+  return $rows;
+}
+
+function prod_matrix_default_price(array $matrixRows): float {
+  foreach ($matrixRows as $row) {
+    $price = (float)($row['price'] ?? 0);
+    if ($price > 0) {
+      return round($price, 2);
+    }
+  }
+
+  return 0.0;
+}
+
+function prod_parse_matrix_payload(string $raw): array {
+  $json = json_decode($raw, true);
+  if (!is_array($json)) {
+    return [];
+  }
+
+  $rows = [];
+  foreach ($json as $row) {
+    if (!is_array($row)) {
+      continue;
+    }
+
+    $label = trim((string)($row['label'] ?? ''));
+    $price = round((float)($row['price'] ?? 0), 2);
+    if ($label === '') {
+      continue;
+    }
+
+    $rows[] = [
+      'label' => $label,
+      'price' => $price,
+      'stock_quantity' => max(0, (int)($row['stock_quantity'] ?? 0)),
+      'sku' => trim((string)($row['sku'] ?? '')),
+      'is_default' => (int)($row['is_default'] ?? 0) === 1 ? 1 : 0,
+      'size_id' => (int)($row['size_id'] ?? 0),
+    ];
+  }
+
+  return $rows;
+}
+
+function prod_upsert_variant_matrix(mysqli $conn, int $productId, array $matrixRows): void {
+  $existingRows = [];
+  $existingStmt = safePrepare(
+    $conn,
+    'SELECT id, COALESCE(NULLIF(variant_label, ""), NULLIF(variant_name, ""), weight_or_size) AS variant_key, variant_label, variant_name, weight_or_size FROM product_variants WHERE product_id = ?'
+  );
+  $existingStmt->bind_param('i', $productId);
+  $existingStmt->execute();
+  $existingRes = $existingStmt->get_result();
+  if ($existingRes) {
+    while ($row = $existingRes->fetch_assoc()) {
+      $key = prod_normalize_size_label((string)($row['variant_key'] ?? ''));
+      if ($key !== '') {
+        $existingRows[$key] = $row;
+      }
+    }
+  }
+
+  $seen = [];
+  foreach ($matrixRows as $index => $row) {
+    $label = trim((string)($row['label'] ?? ''));
+    $normalized = prod_normalize_size_label($label);
+    if ($normalized === '') {
+      continue;
+    }
+
+    $price = round((float)($row['price'] ?? 0), 2);
+    if ($price <= 0) {
+      continue;
+    }
+
+    $stockQuantity = max(0, (int)($row['stock_quantity'] ?? 0));
+    $sku = trim((string)($row['sku'] ?? ''));
+    $isDefault = (int)($row['is_default'] ?? 0) === 1 ? 1 : ($index === 0 ? 1 : 0);
+    $existing = $existingRows[$normalized] ?? null;
+    $seen[$normalized] = true;
+
+    if (is_array($existing)) {
+      $variantId = (int)($existing['id'] ?? 0);
+      if ($variantId <= 0) {
+        continue;
+      }
+
+      $assignments = [];
+      $types = '';
+      $values = [];
+      if (prod_column_exists($conn, 'product_variants', 'variant_label')) {
+        $assignments[] = 'variant_label = ?';
+        $types .= 's';
+        $values[] = $label;
+      }
+      if (prod_column_exists($conn, 'product_variants', 'variant_name')) {
+        $assignments[] = 'variant_name = ?';
+        $types .= 's';
+        $values[] = $label;
+      }
+      if (prod_column_exists($conn, 'product_variants', 'weight_or_size')) {
+        $assignments[] = 'weight_or_size = ?';
+        $types .= 's';
+        $values[] = $label;
+      }
+      if (prod_column_exists($conn, 'product_variants', 'stock_quantity')) {
+        $assignments[] = 'stock_quantity = ?';
+        $types .= 'i';
+        $values[] = $stockQuantity;
+      }
+      if (prod_column_exists($conn, 'product_variants', 'sku')) {
+        $assignments[] = 'sku = ?';
+        $types .= 's';
+        $values[] = $sku;
+      }
+      if (prod_column_exists($conn, 'product_variants', 'sku_suffix')) {
+        $assignments[] = 'sku_suffix = ?';
+        $types .= 's';
+        $values[] = $sku;
+      }
+      $assignments[] = 'price = ?';
+      $types .= 'd';
+      $values[] = $price;
+      if (prod_column_exists($conn, 'product_variants', 'is_active')) {
+        $assignments[] = 'is_active = 1';
+      }
+
+      $assignments[] = 'is_default = ?';
+      $types .= 'i';
+      $values[] = $isDefault;
+
+      $types .= 'i';
+      $values[] = $variantId;
+
+      $sql = 'UPDATE product_variants SET ' . implode(', ', $assignments) . ' WHERE id = ? LIMIT 1';
+      $stmt = safePrepare($conn, $sql);
+      $stmt->bind_param($types, ...$values);
+      $stmt->execute();
+      $stmt->close();
+      continue;
+    }
+
+    $insertFields = ['product_id', 'price', 'is_default'];
+    $insertValues = ['?', '?', '?'];
+    $types = 'idi';
+    $params = [$productId, $price, $isDefault];
+
+    if (prod_column_exists($conn, 'product_variants', 'variant_label')) {
+      $insertFields[] = 'variant_label';
+      $insertValues[] = '?';
+      $types .= 's';
+      $params[] = $label;
+    }
+    if (prod_column_exists($conn, 'product_variants', 'variant_name')) {
+      $insertFields[] = 'variant_name';
+      $insertValues[] = '?';
+      $types .= 's';
+      $params[] = $label;
+    }
+    if (prod_column_exists($conn, 'product_variants', 'weight_or_size')) {
+      $insertFields[] = 'weight_or_size';
+      $insertValues[] = '?';
+      $types .= 's';
+      $params[] = $label;
+    }
+    if (prod_column_exists($conn, 'product_variants', 'stock_quantity')) {
+      $insertFields[] = 'stock_quantity';
+      $insertValues[] = '?';
+      $types .= 'i';
+      $params[] = $stockQuantity;
+    }
+    if (prod_column_exists($conn, 'product_variants', 'sku')) {
+      $insertFields[] = 'sku';
+      $insertValues[] = '?';
+      $types .= 's';
+      $params[] = $sku;
+    }
+    if (prod_column_exists($conn, 'product_variants', 'sku_suffix')) {
+      $insertFields[] = 'sku_suffix';
+      $insertValues[] = '?';
+      $types .= 's';
+      $params[] = $sku;
+    }
+    if (prod_column_exists($conn, 'product_variants', 'is_active')) {
+      $insertFields[] = 'is_active';
+      $insertValues[] = '1';
+    }
+
+    $sql = 'INSERT INTO product_variants (' . implode(', ', $insertFields) . ') VALUES (' . implode(', ', $insertValues) . ')';
+    $stmt = safePrepare($conn, $sql);
+    $stmt->bind_param($types, ...$params);
+    $stmt->execute();
+    $stmt->close();
+  }
+
+  foreach ($existingRows as $normalized => $existing) {
+    if (isset($seen[$normalized])) {
+      continue;
+    }
+
+    $variantId = (int)($existing['id'] ?? 0);
+    if ($variantId <= 0) {
+      continue;
+    }
+
+    $assignments = [];
+    $types = 'i';
+    $values = [$variantId];
+    if (prod_column_exists($conn, 'product_variants', 'is_active')) {
+      $assignments[] = 'is_active = 0';
+    }
+    if (prod_column_exists($conn, 'product_variants', 'stock_quantity')) {
+      $assignments[] = 'stock_quantity = 0';
+    }
+    if (prod_column_exists($conn, 'product_variants', 'is_default')) {
+      $assignments[] = 'is_default = 0';
+    }
+
+    if ($assignments === []) {
+      continue;
+    }
+
+    $stmt = safePrepare($conn, 'UPDATE product_variants SET ' . implode(', ', $assignments) . ' WHERE id = ? LIMIT 1');
+    $stmt->bind_param($types, ...$values);
+    $stmt->execute();
+    $stmt->close();
+  }
+}
+
 function prod_sync_gallery_slot(mysqli $conn, int $productId, int $sortOrder, ?string $imageUrl): void {
   $deleteStmt = safePrepare($conn, 'DELETE FROM product_images WHERE product_id = ? AND sort_order = ?');
   $deleteStmt->bind_param('ii', $productId, $sortOrder);
@@ -231,7 +515,12 @@ function prod_resolve_optional_image_url(string $path): string {
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string)($_POST['action'] ?? '') === 'update_product_inline') {
   $id = (int)($_POST['id'] ?? 0);
   $name = trim((string)($_POST['name'] ?? ''));
-  $basePrice = (float)($_POST['base_price'] ?? 0);
+  $postedBasePrice = (float)($_POST['base_price'] ?? 0);
+  $matrixRows = prod_parse_matrix_payload((string)($_POST['matrix_json'] ?? ''));
+  $basePrice = !empty($matrixRows) ? prod_matrix_default_price($matrixRows) : $postedBasePrice;
+  if ($basePrice <= 0) {
+    $basePrice = $postedBasePrice;
+  }
   $categoryId = (int)($_POST['category_id'] ?? 0);
   $description = trim((string)($_POST['description'] ?? ''));
   $availabilityStatus = trim((string)($_POST['availability_status'] ?? 'in_stock'));
@@ -386,6 +675,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string)($_POST['action'] ?? '') ==
     $variantStmt->execute();
     $variantStmt->close();
 
+    if (!empty($matrixRows)) {
+      prod_upsert_variant_matrix($conn, $id, $matrixRows);
+    }
+
     prod_enforce_two_image_slots($conn, $id, $newImagePath, $newImage2Path);
 
     $conn->commit();
@@ -416,7 +709,54 @@ SELECT
   p.*, 
   c1.name AS collection,
   c2.name AS subcategory,
-  (SELECT image_url FROM product_images WHERE product_id = p.id AND sort_order = 1 ORDER BY id ASC LIMIT 1) AS image2_url
+  (SELECT image_url FROM product_images WHERE product_id = p.id AND sort_order = 1 ORDER BY id ASC LIMIT 1) AS image2_url,
+  COALESCE(pv_agg.min_variant_price, p.starting_price) AS min_variant_price,
+  COALESCE(pv_agg.max_variant_price, p.starting_price) AS max_variant_price,
+  COALESCE(pv_agg.active_sizes, '') AS active_sizes,
+  COALESCE(pv_agg.variant_summary, '') AS variant_summary
+FROM products p
+LEFT JOIN categories c1 ON p.collection_category_id = c1.id
+LEFT JOIN categories c2 ON p.subcategory_id = c2.id
+LEFT JOIN (
+  SELECT
+    pv.product_id,
+    MIN(pv.price) AS min_variant_price,
+    MAX(pv.price) AS max_variant_price,
+    GROUP_CONCAT(
+      DISTINCT COALESCE(NULLIF(pv.variant_label, ''), NULLIF(pv.variant_name, ''), pv.weight_or_size)
+      ORDER BY pv.is_default DESC, pv.id ASC SEPARATOR ' | '
+    ) AS active_sizes,
+    GROUP_CONCAT(
+      DISTINCT CONCAT(
+        COALESCE(NULLIF(pv.variant_label, ''), NULLIF(pv.variant_name, ''), pv.weight_or_size),
+        ':',
+        FORMAT(pv.price, 2)
+      )
+      ORDER BY pv.is_default DESC, pv.id ASC SEPARATOR ' | '
+    ) AS variant_summary
+  FROM product_variants pv
+  WHERE pv.is_active = 1
+  GROUP BY pv.product_id
+) pv_agg ON pv_agg.product_id = p.id
+WHERE p.deleted_at IS NULL
+ORDER BY p.id DESC
+";
+
+$result = $conn->query($query);
+
+if ($result === false) {
+  error_log('[products.php] primary list query failed: ' . $conn->error);
+
+  $fallbackQuery = "
+SELECT
+  p.*,
+  c1.name AS collection,
+  c2.name AS subcategory,
+  (SELECT image_url FROM product_images WHERE product_id = p.id AND sort_order = 1 ORDER BY id ASC LIMIT 1) AS image2_url,
+  p.starting_price AS min_variant_price,
+  p.starting_price AS max_variant_price,
+  '' AS active_sizes,
+  '' AS variant_summary
 FROM products p
 LEFT JOIN categories c1 ON p.collection_category_id = c1.id
 LEFT JOIN categories c2 ON p.subcategory_id = c2.id
@@ -424,11 +764,45 @@ WHERE p.deleted_at IS NULL
 ORDER BY p.id DESC
 ";
 
-$result = $conn->query($query);
+  $result = $conn->query($fallbackQuery);
+  if ($result === false) {
+    error_log('[products.php] fallback list query failed: ' . $conn->error);
+  }
+}
 
 $products = [];
-while ($row = $result->fetch_assoc()) {
-    $products[] = $row;
+if ($result) {
+  while ($row = $result->fetch_assoc()) {
+      $products[] = $row;
+  }
+}
+
+$productVariantMap = [];
+$productIds = array_values(array_filter(array_map(static fn(array $row): int => (int)($row['id'] ?? 0), $products)));
+if (!empty($productIds)) {
+  $placeholders = implode(',', array_fill(0, count($productIds), '?'));
+  $variantSql = '
+    SELECT id, product_id, variant_label, variant_name, weight_or_size, price, stock_quantity, is_default, sku
+    FROM product_variants
+    WHERE product_id IN (' . $placeholders . ')
+    ORDER BY product_id ASC, is_default DESC, id ASC
+  ';
+  $variantStmt = safePrepare($conn, $variantSql);
+  $variantTypes = str_repeat('i', count($productIds));
+  $variantStmt->bind_param($variantTypes, ...$productIds);
+  $variantStmt->execute();
+  $variantRes = $variantStmt->get_result();
+  while ($variantRes && ($variantRow = $variantRes->fetch_assoc())) {
+    $productId = (int)($variantRow['product_id'] ?? 0);
+    if ($productId <= 0) {
+      continue;
+    }
+    if (!isset($productVariantMap[$productId])) {
+      $productVariantMap[$productId] = [];
+    }
+    $productVariantMap[$productId][] = $variantRow;
+  }
+  $variantStmt->close();
 }
 
 $collections = [];
@@ -445,6 +819,8 @@ foreach ($products as $p) {
 }
 ksort($collections);
 ksort($subcategories);
+
+$sizeMasterRows = prod_size_master_rows($conn);
 
 $pageTitle = "Products";
 require_once __DIR__ . '/layout.php';
@@ -999,6 +1375,84 @@ require_once __DIR__ . '/layout.php';
     background: #f8d8de;
   }
 
+  .prod-matrix {
+    display: grid;
+    gap: 10px;
+  }
+
+  .prod-matrix-row {
+    display: grid;
+    grid-template-columns: minmax(120px, 1.4fr) repeat(3, minmax(0, 1fr)) auto;
+    gap: 10px;
+    padding: 12px;
+    border: 1px solid rgba(128, 0, 31, 0.11);
+    border-radius: 14px;
+    background: linear-gradient(180deg, #fff, #fff9fb);
+    align-items: end;
+  }
+
+  .prod-matrix-row__label {
+    display: grid;
+    gap: 4px;
+    align-content: start;
+  }
+
+  .prod-matrix-row__label strong {
+    color: #2d1f25;
+    font-size: 0.94rem;
+  }
+
+  .prod-matrix-row__label span {
+    color: #8a7480;
+    font-size: 0.72rem;
+  }
+
+  .prod-matrix-row__field {
+    display: grid;
+    gap: 6px;
+  }
+
+  .prod-matrix-row__field label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #7b1a39;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  .prod-matrix-row__field input {
+    width: 100%;
+    border: 1px solid rgba(128, 0, 31, 0.18);
+    border-radius: 10px;
+    padding: 9px 10px;
+    font-size: 0.92rem;
+    color: #2d1f25;
+    background: #fff;
+  }
+
+  .prod-matrix-row__field--default {
+    align-self: center;
+    padding-bottom: 4px;
+  }
+
+  .prod-matrix-row__field--default label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: #5f3b46;
+    font-size: 0.8rem;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+
+  .products-price__meta,
+  .product-card__meta--variants {
+    margin-top: 4px;
+    font-size: 0.71rem;
+    color: #8a7480;
+    line-height: 1.45;
+  }
+
   .prod-editor-row td {
     background: #fff8fb;
     padding: 10px;
@@ -1126,6 +1580,15 @@ require_once __DIR__ . '/layout.php';
     .prod-editor-grid {
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
+
+    .prod-matrix-row {
+      grid-template-columns: minmax(120px, 1fr) repeat(2, minmax(0, 1fr));
+    }
+
+    .prod-matrix-row__field--sku,
+    .prod-matrix-row__field--default {
+      grid-column: span 2;
+    }
   }
 
   @media (max-width: 960px) {
@@ -1154,6 +1617,16 @@ require_once __DIR__ . '/layout.php';
 
     .prod-editor-grid {
       grid-template-columns: 1fr;
+    }
+
+    .prod-matrix-row {
+      grid-template-columns: 1fr;
+      align-items: stretch;
+    }
+
+    .prod-matrix-row__field--sku,
+    .prod-matrix-row__field--default {
+      grid-column: auto;
     }
 
     .prod-feature-grid {
@@ -1282,7 +1755,9 @@ require_once __DIR__ . '/layout.php';
               }
               $collection = (string)($row['collection'] ?? '');
               $subcategory = (string)($row['subcategory'] ?? '');
-              $price = $row['discount_price'] ?: $row['starting_price'];
+              $minPrice = (float)($row['min_variant_price'] ?? ($row['discount_price'] ?: $row['starting_price']));
+              $maxPrice = (float)($row['max_variant_price'] ?? ($row['discount_price'] ?: $row['starting_price']));
+              $variantSummary = trim((string)($row['variant_summary'] ?? ''));
             ?>
             <tr class="product-row" data-name="<?php echo htmlspecialchars(strtolower((string)$row['name'])); ?>" data-collection="<?php echo htmlspecialchars(strtolower($collection)); ?>" data-subcategory="<?php echo htmlspecialchars(strtolower($subcategory)); ?>">
               <td><img class="products-table__thumb" src="<?php echo prod_h(prod_resolve_image_url((string)($row['featured_image'] ?? ''))); ?>" alt="<?php echo htmlspecialchars((string)$row['name']); ?>" onerror="this.onerror=null;this.src='<?php echo prod_h(prod_placeholder_image()); ?>';"></td>
@@ -1293,13 +1768,23 @@ require_once __DIR__ . '/layout.php';
               <td><?php echo $collection !== '' ? $collection : '—'; ?></td>
               <td><?php echo $subcategory !== '' ? $subcategory : '—'; ?></td>
               <td><span class="status-badge status-badge--<?php echo htmlspecialchars($status); ?>"><?php echo ucfirst($status); ?></span></td>
-              <td><span class="products-price">₹<?php echo $price; ?></span></td>
+              <td>
+                <span class="products-price">₹<?php echo number_format($minPrice, 2); ?><?php echo $maxPrice > $minPrice ? ' - ₹' . number_format($maxPrice, 2) : ''; ?></span>
+                <?php if ($variantSummary !== ''): ?>
+                  <div class="products-price__meta"><?php echo prod_h($variantSummary); ?></div>
+                <?php endif; ?>
+              </td>
               <td>
                 <div class="products-actions">
                   <button type="button" class="product-action product-action--edit js-prod-edit" title="Edit product"
                     data-id="<?php echo (int)$row['id']; ?>"
                     data-name="<?php echo prod_h((string)$row['name']); ?>"
-                    data-base-price="<?php echo (float)($row['starting_price'] ?? 0); ?>"
+                    data-base-price="<?php echo number_format($minPrice, 2, '.', ''); ?>"
+                    data-min-price="<?php echo number_format($minPrice, 2, '.', ''); ?>"
+                    data-max-price="<?php echo number_format($maxPrice, 2, '.', ''); ?>"
+                    data-variant-summary="<?php echo prod_h($variantSummary); ?>"
+                    data-active-sizes="<?php echo prod_h((string)($row['active_sizes'] ?? '')); ?>"
+                    data-variant-matrix="<?php echo prod_h(json_encode(prod_build_matrix_variant_rows($sizeMasterRows, $productVariantMap[(int)$row['id']] ?? []), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)); ?>"
                     data-category-id="<?php echo (int)($row['collection_category_id'] ?? 0); ?>"
                     data-description="<?php echo prod_h((string)($row['description'] ?? ($row['short_description'] ?? ($row['long_description'] ?? '')))); ?>"
                     data-current-image="<?php echo prod_h((string)($row['featured_image'] ?? '')); ?>"
@@ -1331,7 +1816,9 @@ require_once __DIR__ . '/layout.php';
           }
           $collection = (string)($row['collection'] ?? '');
           $subcategory = (string)($row['subcategory'] ?? '');
-          $price = $row['discount_price'] ?: $row['starting_price'];
+          $minPrice = (float)($row['min_variant_price'] ?? ($row['discount_price'] ?: $row['starting_price']));
+          $maxPrice = (float)($row['max_variant_price'] ?? ($row['discount_price'] ?: $row['starting_price']));
+          $variantSummary = trim((string)($row['variant_summary'] ?? ''));
         ?>
         <article class="product-card product-row" data-name="<?php echo htmlspecialchars(strtolower((string)$row['name'])); ?>" data-collection="<?php echo htmlspecialchars(strtolower($collection)); ?>" data-subcategory="<?php echo htmlspecialchars(strtolower($subcategory)); ?>">
           <div class="product-card__media">
@@ -1341,12 +1828,20 @@ require_once __DIR__ . '/layout.php';
             <h3><?php echo $row['name']; ?></h3>
             <div class="product-card__meta"><?php echo $collection !== '' ? $collection : '—'; ?> / <?php echo $subcategory !== '' ? $subcategory : '—'; ?></div>
             <div class="product-card__status"><span class="status-badge status-badge--<?php echo htmlspecialchars($status); ?>"><?php echo ucfirst($status); ?></span></div>
-            <div class="product-card__price">₹<?php echo $price; ?></div>
+            <div class="product-card__price">₹<?php echo number_format($minPrice, 2); ?><?php echo $maxPrice > $minPrice ? ' - ₹' . number_format($maxPrice, 2) : ''; ?></div>
+            <?php if ($variantSummary !== ''): ?>
+              <div class="product-card__meta product-card__meta--variants"><?php echo prod_h($variantSummary); ?></div>
+            <?php endif; ?>
             <div class="product-card__actions">
               <button type="button" class="product-action product-action--edit js-prod-edit"
                 data-id="<?php echo (int)$row['id']; ?>"
                 data-name="<?php echo prod_h((string)$row['name']); ?>"
-                data-base-price="<?php echo (float)($row['starting_price'] ?? 0); ?>"
+                data-base-price="<?php echo number_format($minPrice, 2, '.', ''); ?>"
+                data-min-price="<?php echo number_format($minPrice, 2, '.', ''); ?>"
+                data-max-price="<?php echo number_format($maxPrice, 2, '.', ''); ?>"
+                data-variant-summary="<?php echo prod_h($variantSummary); ?>"
+                data-active-sizes="<?php echo prod_h((string)($row['active_sizes'] ?? '')); ?>"
+                data-variant-matrix="<?php echo prod_h(json_encode(prod_build_matrix_variant_rows($sizeMasterRows, $productVariantMap[(int)$row['id']] ?? []), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)); ?>"
                 data-category-id="<?php echo (int)($row['collection_category_id'] ?? 0); ?>"
                 data-description="<?php echo prod_h((string)($row['description'] ?? ($row['short_description'] ?? ($row['long_description'] ?? '')))); ?>"
                 data-current-image="<?php echo prod_h((string)($row['featured_image'] ?? '')); ?>"
@@ -1384,19 +1879,16 @@ require_once __DIR__ . '/layout.php';
         <input type="hidden" name="action" value="update_product_inline">
         <input type="hidden" name="id" id="prodEditId" value="0">
         <input type="hidden" name="current_image" id="prodEditCurrentImage" value="">
+        <input type="hidden" name="base_price" id="prodEditBasePrice" value="0">
+        <input type="hidden" name="matrix_json" id="prodEditMatrixJson" value="[]">
 
         <div class="prod-editor-section">
           <h4 class="prod-editor-section__title">Basic Product Info</h4>
-          <p class="prod-editor-section__hint">Update name, pricing, category, stock state, and dietary type.</p>
+          <p class="prod-editor-section__hint">Update name, category, stock state, dietary type, and size-based pricing.</p>
           <div class="prod-editor-grid">
             <div class="prod-editor-field">
               <label for="prodEditName">Product Name</label>
               <input id="prodEditName" name="name" type="text" required>
-            </div>
-
-            <div class="prod-editor-field">
-              <label for="prodEditPrice">Base Price</label>
-              <input id="prodEditPrice" name="base_price" type="number" step="0.01" min="0.01" required>
             </div>
 
             <div class="prod-editor-field">
@@ -1438,6 +1930,43 @@ require_once __DIR__ . '/layout.php';
                 <option value="healthy">Healthy</option>
               </select>
             </div>
+          </div>
+        </div>
+
+        <div class="prod-editor-section">
+          <h4 class="prod-editor-section__title">Pricing Matrix</h4>
+          <p class="prod-editor-section__hint">Every active size from product_size_master is editable here. The first priced row becomes the compatibility base price for legacy flows.</p>
+          <div class="prod-matrix" id="prodEditMatrix">
+            <?php foreach ($sizeMasterRows as $index => $sizeRow): ?>
+              <?php
+                $sizeLabel = (string)($sizeRow['label'] ?? '');
+                $rowId = 'prodEditMatrixRow' . $index;
+              ?>
+              <div class="prod-matrix-row" data-size-id="<?php echo (int)($sizeRow['id'] ?? 0); ?>" data-size-label="<?php echo prod_h($sizeLabel); ?>" data-matrix-row>
+                <div class="prod-matrix-row__label">
+                  <strong><?php echo prod_h($sizeLabel); ?></strong>
+                  <span><?php echo (int)($sizeRow['is_active'] ?? 1) === 1 ? 'Active size' : 'Disabled size'; ?></span>
+                </div>
+                <div class="prod-matrix-row__field">
+                  <label for="<?php echo $rowId; ?>Price">Price</label>
+                  <input id="<?php echo $rowId; ?>Price" type="number" step="0.01" min="0" value="0" data-matrix-price>
+                </div>
+                <div class="prod-matrix-row__field">
+                  <label for="<?php echo $rowId; ?>Stock">Stock</label>
+                  <input id="<?php echo $rowId; ?>Stock" type="number" step="1" min="0" value="0" data-matrix-stock>
+                </div>
+                <div class="prod-matrix-row__field prod-matrix-row__field--sku">
+                  <label for="<?php echo $rowId; ?>Sku">SKU</label>
+                  <input id="<?php echo $rowId; ?>Sku" type="text" value="" placeholder="Auto from product" data-matrix-sku>
+                </div>
+                <div class="prod-matrix-row__field prod-matrix-row__field--default">
+                  <label>
+                    <input type="radio" name="matrix_default_row" value="<?php echo (int)$index; ?>" <?php echo $index === 0 ? 'checked' : ''; ?> data-matrix-default>
+                    Default
+                  </label>
+                </div>
+              </div>
+            <?php endforeach; ?>
           </div>
         </div>
 
@@ -1513,11 +2042,13 @@ require_once __DIR__ . '/layout.php';
     const prodEditorBack = document.getElementById('prodEditorBack');
     const prodEditId = document.getElementById('prodEditId');
     const prodEditName = document.getElementById('prodEditName');
-    const prodEditPrice = document.getElementById('prodEditPrice');
     const prodEditCategory = document.getElementById('prodEditCategory');
     const prodEditAvailability = document.getElementById('prodEditAvailability');
     const prodEditDescription = document.getElementById('prodEditDescription');
     const prodEditCurrentImage = document.getElementById('prodEditCurrentImage');
+    const prodEditBasePrice = document.getElementById('prodEditBasePrice');
+    const prodEditMatrixJson = document.getElementById('prodEditMatrixJson');
+    const prodEditMatrix = document.getElementById('prodEditMatrix');
     const prodEditImage = document.getElementById('prodEditImage');
     const prodEditPreview = document.getElementById('prodEditPreview');
     const prodEditImage2 = document.getElementById('prodEditImage2');
@@ -1527,6 +2058,73 @@ require_once __DIR__ . '/layout.php';
     const prodEditorAnchor = prodEditor ? prodEditor.parentNode : null;
     let prodDropdownRow = null;
     let prodCardSlot = null;
+
+    function getMatrixRows() {
+      if (!prodEditMatrix) {
+        return [];
+      }
+
+      return Array.from(prodEditMatrix.querySelectorAll('[data-matrix-row]')).map((row) => {
+        const priceInput = row.querySelector('[data-matrix-price]');
+        const stockInput = row.querySelector('[data-matrix-stock]');
+        const skuInput = row.querySelector('[data-matrix-sku]');
+        const defaultInput = row.querySelector('[data-matrix-default]');
+        return {
+          size_id: Number(row.getAttribute('data-size-id') || '0'),
+          label: row.getAttribute('data-size-label') || '',
+          price: priceInput ? Number(priceInput.value || '0') : 0,
+          stock_quantity: stockInput ? Number(stockInput.value || '0') : 0,
+          sku: skuInput ? String(skuInput.value || '').trim() : '',
+          is_default: defaultInput && defaultInput.checked ? 1 : 0,
+        };
+      });
+    }
+
+    function applyMatrixRows(matrixRows) {
+      if (!prodEditMatrix || !Array.isArray(matrixRows)) {
+        return;
+      }
+
+      const rows = Array.from(prodEditMatrix.querySelectorAll('[data-matrix-row]'));
+      rows.forEach((row) => {
+        const label = row.getAttribute('data-size-label') || '';
+        const incoming = matrixRows.find((item) => String(item.label || '') === label);
+        const priceInput = row.querySelector('[data-matrix-price]');
+        const stockInput = row.querySelector('[data-matrix-stock]');
+        const skuInput = row.querySelector('[data-matrix-sku]');
+        const defaultInput = row.querySelector('[data-matrix-default]');
+        if (priceInput) priceInput.value = incoming ? String(incoming.price ?? 0) : '0';
+        if (stockInput) stockInput.value = incoming ? String(incoming.stock_quantity ?? 0) : '0';
+        if (skuInput) skuInput.value = incoming ? String(incoming.sku ?? '') : '';
+        if (defaultInput) defaultInput.checked = Boolean(incoming && Number(incoming.is_default || 0) === 1);
+      });
+
+      const defaultRow = rows.find((row) => {
+        const defaultInput = row.querySelector('[data-matrix-default]');
+        return defaultInput && defaultInput.checked;
+      });
+      if (!defaultRow && rows.length > 0) {
+        const firstDefault = rows[0].querySelector('[data-matrix-default]');
+        if (firstDefault) firstDefault.checked = true;
+      }
+    }
+
+    function updateMatrixCompatibilityPrice() {
+      const rows = getMatrixRows();
+      const firstPriced = rows.find((row) => Number(row.price || 0) > 0);
+      const price = firstPriced ? Number(firstPriced.price || 0) : 0;
+      if (prodEditBasePrice) {
+        prodEditBasePrice.value = price > 0 ? price.toFixed(2) : '0';
+      }
+      if (prodEditMatrixJson) {
+        prodEditMatrixJson.value = JSON.stringify(rows);
+      }
+    }
+
+    if (prodEditMatrix) {
+      prodEditMatrix.addEventListener('input', updateMatrixCompatibilityPrice);
+      prodEditMatrix.addEventListener('change', updateMatrixCompatibilityPrice);
+    }
 
     function normalizeImagePath(path) {
       const value = String(path || '').trim();
@@ -1577,7 +2175,6 @@ require_once __DIR__ . '/layout.php';
       const id = Number(button.getAttribute('data-id') || '0');
       prodEditId.value = String(id);
       prodEditName.value = button.getAttribute('data-name') || '';
-      prodEditPrice.value = String(button.getAttribute('data-base-price') || '0');
       prodEditCategory.value = String(button.getAttribute('data-category-id') || '');
       prodEditAvailability.value = button.getAttribute('data-availability') || 'in_stock';
       prodEditDescription.value = button.getAttribute('data-description') || '';
@@ -1604,6 +2201,15 @@ require_once __DIR__ . '/layout.php';
       if (prodEditDietary) prodEditDietary.value = button.getAttribute('data-dietary') || 'regular';
       if (prodEditTopperEnabled) prodEditTopperEnabled.checked = Number(button.getAttribute('data-topper-enabled') ?? '1') === 1;
       if (prodEditNoteEnabled) prodEditNoteEnabled.checked = Number(button.getAttribute('data-note-enabled') ?? '1') === 1;
+
+      try {
+        const matrixJson = button.getAttribute('data-variant-matrix') || '[]';
+        const parsedMatrix = JSON.parse(matrixJson);
+        applyMatrixRows(Array.isArray(parsedMatrix) ? parsedMatrix : []);
+      } catch (error) {
+        applyMatrixRows([]);
+      }
+      updateMatrixCompatibilityPrice();
 
       const triggerRow = button.closest('tr');
       if (triggerRow && triggerRow.parentNode) {
@@ -1684,6 +2290,19 @@ require_once __DIR__ . '/layout.php';
       });
     }
 
+    const prodEditForm = document.getElementById('prodEditForm');
+    if (prodEditForm) {
+      prodEditForm.addEventListener('submit', function () {
+        updateMatrixCompatibilityPrice();
+        const saveBtn = prodEditForm.querySelector('.prod-editor-save');
+        if (saveBtn) {
+          saveBtn.disabled = true;
+          saveBtn.classList.add('is-saving');
+          saveBtn.textContent = 'Saving…';
+        }
+      });
+    }
+
     function normalize(v) {
       return String(v || '').toLowerCase().trim();
     }
@@ -1746,18 +2365,6 @@ require_once __DIR__ . '/layout.php';
       }
     }
 
-    // Save spinner — disable button while form submits to prevent double-saves
-    const prodEditForm = document.getElementById('prodEditForm');
-    if (prodEditForm) {
-      prodEditForm.addEventListener('submit', function () {
-        const saveBtn = prodEditForm.querySelector('.prod-editor-save');
-        if (saveBtn) {
-          saveBtn.disabled = true;
-          saveBtn.classList.add('is-saving');
-          saveBtn.textContent = 'Saving…';
-        }
-      });
-    }
   })();
 </script>
 
